@@ -1,0 +1,19 @@
+# Options: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    ignore:
+      # Major bumps can need migration work, so they stay manual.
+      - dependency-name: "*"
+        update-types: [ "version-update:semver-major" ]
