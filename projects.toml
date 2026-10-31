@@ -1,0 +1,9 @@
+projects = [
+  "butcherless/aero-hex-ai",
+  "butcherless/aero-ui-ai",
+  "butcherless/dependency-analyzer",
+  "butcherless/tapir-learn",
+  "butcherless/scala-3",
+  "butcherless/incubator",
+  "butcherless/scala",
+]
