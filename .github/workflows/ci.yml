@@ -5,7 +5,13 @@ on:
     branches:
       - 'main'
   pull_request:
-    types: [ opened ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,5 +23,12 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - run: rustup update
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - run: cargo build --verbose
     - run: cargo test --verbose
