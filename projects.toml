@@ -6,4 +6,5 @@ projects = [
   "butcherless/scala-3",
   "butcherless/incubator",
   "butcherless/scala",
+  "butcherless/rust-learn",
 ]
