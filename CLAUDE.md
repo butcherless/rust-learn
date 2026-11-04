@@ -45,3 +45,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
 - **comfy-table 8** removed `load_preset` and `apply_modifier`. Use `load_style(PRESET.with_rounded_corners())`.
 - **reqwest 0.13** puts `RequestBuilder::query` behind an optional feature that isn't enabled. Build query strings with `reqwest::Url` instead.
 - **`serde_json`** is a dev-dependency only. Decode responses with reqwest's `.json()`.
+
+## Git
+
+Work, commit and push directly on `main`. Don't create feature branches unless the user asks for one.
