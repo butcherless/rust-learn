@@ -18,11 +18,14 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     - run: rustup update
+    - run: cargo fmt --check
     - uses: actions/cache@v6
       with:
         path: |
@@ -30,5 +33,6 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - run: cargo clippy --all-targets -- -D warnings
     - run: cargo build --verbose
     - run: cargo test --verbose

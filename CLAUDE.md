@@ -16,7 +16,7 @@ cargo fmt --check
 GITHUB_TOKEN=<token> cargo run -- --config <path>   # real GitHub API; --config defaults to ./projects.toml
 ```
 
-CI (`.github/workflows/ci.yml`) only runs `cargo build` and `cargo test`, so run clippy and fmt locally. It triggers on pushes to `main` and on PRs (opened, new commits, reopened), with read-only token permissions, a Cargo cache keyed on `Cargo.lock`, and cancellation of superseded runs.
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo build` and `cargo test`; `rust-toolchain.toml` installs the clippy and rustfmt components. It triggers on pushes to `main` and on PRs (opened, new commits, reopened), with read-only token permissions, a Cargo cache keyed on `Cargo.lock`, and cancellation of superseded runs.
 
 ## Architecture
 
