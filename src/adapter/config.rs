@@ -40,11 +40,12 @@ struct ProjectsFile {
 
 /// Loads the project list from the file at `path`.
 pub fn load_projects(path: &Path) -> Result<Vec<Project>, ConfigError> {
-    let content = fs::read_to_string(path).map_err(|source| ConfigError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    parse_projects(&content)
+    fs::read_to_string(path)
+        .map_err(|source| ConfigError::Io {
+            path: path.to_path_buf(),
+            source,
+        })
+        .and_then(|content| parse_projects(&content))
 }
 
 /// Parses the content of a projects file.

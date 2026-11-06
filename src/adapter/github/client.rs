@@ -62,15 +62,14 @@ pub struct GithubClient {
 impl GithubClient {
     /// Creates a client for the API at `base_url`.
     pub fn new(base_url: &str, token: GithubToken) -> Result<Self, GithubClientError> {
-        let invalid = || GithubClientError::InvalidBaseUrl(base_url.to_owned());
-        let parsed = Url::parse(base_url).map_err(|_| invalid())?;
-        if parsed.cannot_be_a_base() {
-            return Err(invalid());
-        }
+        let base_url = Url::parse(base_url)
+            .ok()
+            .filter(|url| !url.cannot_be_a_base())
+            .ok_or_else(|| GithubClientError::InvalidBaseUrl(base_url.to_owned()))?;
         let http = Client::builder().timeout(REQUEST_TIMEOUT).build()?;
         Ok(Self {
             http,
-            base_url: parsed,
+            base_url,
             token,
         })
     }
@@ -108,7 +107,6 @@ impl GithubClient {
         if !status.is_success() {
             return Err(map_status(status, ratelimit_remaining(response.headers())));
         }
-
         response
             .json::<Vec<PullRequestDto>>()
             .await

@@ -19,24 +19,26 @@ const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let args = Args::parse();
-    let reports = match startup(&args) {
-        Ok((client, projects)) if args.tui => tui::run(&client, projects)
-            .await
-            .context("cannot run the terminal UI"),
-        Ok((client, projects)) => {
-            let reports = list_open_prs(&client, projects, MAX_CONCURRENCY).await;
-            println!("{}", render(&reports));
-            Ok(reports)
-        }
-        Err(error) => Err(error),
-    };
-    match reports {
+    match run(&Args::parse()).await {
         Ok(reports) => exit_code(&reports),
         Err(error) => {
             eprintln!("error: {error:#}");
             ExitCode::from(EXIT_STARTUP)
         }
+    }
+}
+
+/// Wires the adapters and shows the reports in the requested mode.
+async fn run(args: &Args) -> anyhow::Result<Vec<ProjectReport>> {
+    let (client, projects) = startup(args)?;
+    if args.tui {
+        tui::run(&client, projects)
+            .await
+            .context("cannot run the terminal UI")
+    } else {
+        let reports = list_open_prs(&client, projects, MAX_CONCURRENCY).await;
+        println!("{}", render(&reports));
+        Ok(reports)
     }
 }
 
@@ -50,8 +52,7 @@ fn exit_code(reports: &[ProjectReport]) -> ExitCode {
 
 fn startup(args: &Args) -> anyhow::Result<(GithubClient, Vec<Project>)> {
     let projects = load_projects(&args.config).context("cannot load the project list")?;
-    let token = read_token()?;
-    let client = GithubClient::new(DEFAULT_BASE_URL, token)?;
+    let client = GithubClient::new(DEFAULT_BASE_URL, read_token()?)?;
     Ok((client, projects))
 }
 

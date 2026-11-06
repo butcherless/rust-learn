@@ -1,4 +1,6 @@
 //! Inbound and presentation adapter: an interactive terminal UI.
+//!
+//! [`app`] holds the pure model; this module is the event loop that performs its effects.
 
 pub mod app;
 
@@ -8,8 +10,8 @@ use crossterm::event::EventStream;
 use futures::StreamExt;
 use ratatui::DefaultTerminal;
 
-use crate::adapter::tui::app::{Action, App};
-use crate::domain::model::Project;
+use crate::adapter::tui::app::{App, Effect, Message, message};
+use crate::domain::model::{PrUrl, Project};
 use crate::domain::port::PullRequestSource;
 use crate::service::{MAX_CONCURRENCY, ProjectReport, list_open_prs};
 
@@ -23,8 +25,7 @@ pub async fn run<S: PullRequestSource>(
     let mut terminal = ratatui::try_init()?;
     let result = event_loop(&mut terminal, source, &projects).await;
     let restored = ratatui::try_restore();
-    let reports = result?;
-    restored.map(|()| reports)
+    result.and_then(|reports| restored.map(|()| reports))
 }
 
 async fn event_loop<S: PullRequestSource>(
@@ -32,40 +33,49 @@ async fn event_loop<S: PullRequestSource>(
     source: &S,
     projects: &[Project],
 ) -> io::Result<Vec<ProjectReport>> {
-    let mut app = App::new();
     let mut events = EventStream::new();
-    fetch(terminal, &mut app, source, projects).await?;
+    let (mut app, mut effect) = (App::new(), Effect::Fetch);
     loop {
-        terminal.draw(|frame| app.draw(frame))?;
-        let Some(event) = events.next().await.transpose()? else {
-            break;
+        let next = match effect {
+            Effect::Quit => return Ok(app.into_reports()),
+            Effect::Fetch => Some(fetch(terminal, &app, source, projects).await?),
+            Effect::Open(url) => Some(open_in_browser(url)),
+            Effect::None => next_message(terminal, &app, &mut events).await?,
         };
-        let Some(key) = event.as_key_press_event() else {
-            continue;
+        (app, effect) = match next {
+            Some(message) => app.update(message),
+            None => (app, Effect::None),
         };
-        match app.handle_key(key) {
-            Action::None => {}
-            Action::Quit => break,
-            Action::Refresh => fetch(terminal, &mut app, source, projects).await?,
-            Action::Open(url) => {
-                let result = open::that_detached(url.as_str());
-                app.opened(&url, result);
-            }
-        }
     }
-    Ok(app.into_reports())
 }
 
-/// Shows the loading state, then fetches every project.
+/// Draws the loading state, then fetches every project.
 async fn fetch<S: PullRequestSource>(
     terminal: &mut DefaultTerminal,
-    app: &mut App,
+    app: &App,
     source: &S,
     projects: &[Project],
-) -> io::Result<()> {
-    app.start_loading();
-    terminal.draw(|frame| app.draw(frame))?;
+) -> io::Result<Message> {
+    terminal.draw(|frame| app.view(frame))?;
     let reports = list_open_prs(source, projects.to_vec(), MAX_CONCURRENCY).await;
-    app.set_reports(reports);
-    Ok(())
+    Ok(Message::Loaded(reports))
+}
+
+fn open_in_browser(url: PrUrl) -> Message {
+    let result = open::that_detached(url.as_str()).map_err(|error| error.to_string());
+    Message::Opened(url, result)
+}
+
+/// Draws `app` and waits for the next event. Events without a message, such as a resize or an
+/// unbound key, give `None` so the screen is redrawn. A closed event stream means quit.
+async fn next_message(
+    terminal: &mut DefaultTerminal,
+    app: &App,
+    events: &mut EventStream,
+) -> io::Result<Option<Message>> {
+    terminal.draw(|frame| app.view(frame))?;
+    Ok(match events.next().await.transpose()? {
+        Some(event) => event.as_key_press_event().and_then(message),
+        None => Some(Message::Quit),
+    })
 }

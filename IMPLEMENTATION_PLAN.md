@@ -39,8 +39,9 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | `service::list_open_prs` | `list_open_prs` uses `buffered`, not `buffer_unordered`, to keep order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
 | `adapter::config` | `load_projects` (reads the file) and `parse_projects` (pure) |
 | `adapter::github` | `GithubClient`, `GithubToken` (redacted `Debug`), wire DTO, pure mapper and status mapping |
-| `adapter::cli` | `Args` (clap), pure `rows` (`DisplayRow`: kind, cells, URL), and `render` (colors) |
-| `adapter::tui` | `App` (pure state, key handling to `Action`, drawing, tested with `TestBackend`) and `run` (crossterm `EventStream` loop, terminal setup and restore, `open::that_detached`) |
+| `adapter::view` | Pure presentation model shared by both outputs: `rows` (`DisplayRow`: kind, cells, URL), `HEADER`, `ORANGE` |
+| `adapter::cli` | `Args` (clap) and `render` (comfy-table and colors) |
+| `adapter::tui` | `app`: The Elm Architecture (`message`, `App::update` returning the next state and an `Effect`, `App::view`), tested with `TestBackend`. `run`: the `EventStream` loop that performs effects, terminal setup and restore, `open::that_detached` |
 | `main.rs` | Composition root. The only place `anyhow` is used |
 
 ### HTTP

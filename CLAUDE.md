@@ -10,7 +10,7 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 cargo build
 cargo test                                          # offline, no token needed
 cargo test --test github_client_wiremock maps_404   # one integration test, filtered by name
-cargo test --lib render::                           # unit tests of one module
+cargo test --lib view::                             # unit tests of one module
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 GITHUB_TOKEN=<token> cargo run -- --config <path>   # real GitHub API; --config defaults to ./projects.toml
@@ -25,12 +25,12 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
 
 - **`domain`** defines the types and the `PullRequestSource` port. It may import only `std` and `thiserror`.
 - **`service::list_open_prs`** is generic over the port and never fails as a whole: each `ProjectReport` holds its own `Result`. It uses `buffered`, not `buffer_unordered`, because output must follow config order (FR5).
-- **`adapter`** holds `config` (TOML to `Vec<Project>`), `github` (implements the port), `cli` (arguments and table) and `tui` (the `--tui` terminal UI).
+- **`adapter`** holds `config` (TOML to `Vec<Project>`), `github` (implements the port), `view` (presentation model shared by both outputs), `cli` (arguments and table) and `tui` (the `--tui` terminal UI).
 - **`main.rs`** is the composition root. It maps startup errors to exit code 2 and project failures to exit code 1.
 
-`render::rows` is pure and holds all display logic, so tests assert on it rather than on ANSI output. `render` only applies colors, and comfy-table drops them when stdout is not a TTY. The TUI reuses `rows`; each `DisplayRow` carries the PR's URL.
+`view::rows` is pure and holds all display logic (text, `RowKind`, PR URL, `HEADER`, the shared `ORANGE`), so tests assert on it rather than on ANSI output. `cli::render` and `tui::app` only map it to their library's widgets and colors; comfy-table drops colors when stdout is not a TTY. Shared unit-test builders live in `view::fixtures` (`#[cfg(test)]`).
 
-`tui::app::App` is pure: `handle_key` returns an `Action` (`Quit`, `Refresh`, `Open(url)`) and `tui::run` performs it, so tests never open a browser or a terminal. Rendering is tested with ratatui's `TestBackend`. Use `ratatui::try_init`/`try_restore`, not `init`, which panics. `crossterm` is a direct dependency only for `EventStream` (`event-stream` feature) and must stay on the same version as ratatui's (0.29), or two copies get compiled.
+`tui::app` follows The Elm Architecture recommended by ratatui: `message(key)` maps keys to a `Message`, `App::update(self, Message) -> (App, Effect)` consumes the state and returns the next one, and `App::view(&self)` only draws. The selection is plain data; `view` builds a fresh `TableState` from it. `tui::run` is the only place with side effects: it performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and feeds the result back as a `Message`, so tests never open a browser or a terminal. Rendering is tested with ratatui's `TestBackend`. Use `ratatui::try_init`/`try_restore`, not `init`, which panics. `crossterm` is a direct dependency only for `EventStream` (`event-stream` feature) and must stay on the same version as ratatui's (0.29), or two copies get compiled.
 
 `main.rs` hardcodes `DEFAULT_BASE_URL`, so the binary can't be pointed at a mock server. Tests exercise `GithubClient` directly through `GithubClient::new(&server.uri(), ...)`.
 
