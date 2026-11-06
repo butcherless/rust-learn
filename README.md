@@ -16,22 +16,60 @@ table.
 ╰────────────────┴───────┴──────────────────────────────┴───────╯
 ```
 
-## Quick start
+## Running
 
 Requires [Rust](https://www.rust-lang.org/tools/install). The stable toolchain is selected by
-`rust-toolchain.toml`.
+`rust-toolchain.toml`. Run the commands from the project folder.
+
+**1. Set the token.** Export a GitHub token:
 
 ```bash
 export GITHUB_TOKEN=<your token>
-cargo run
 ```
 
-If you use the GitHub CLI, you can get the token from
+If you use the GitHub CLI, you can take it from
 [`gh auth token`](https://cli.github.com/manual/gh_auth_token) instead:
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) cargo run
+export GITHUB_TOKEN=$(gh auth token)
 ```
+
+**2. Choose how to see the results.**
+
+| Mode | Command | What you get |
+|---|---|---|
+| Table (default) | `cargo run` | Prints the colored table once and exits |
+| Interactive UI | `cargo run -- --tui` | A full-screen view you can browse, refresh, and open PRs from |
+
+The `--` passes the flags that follow to the program instead of to `cargo`. Flags can be
+combined, for example `cargo run -- --tui --config path/to/projects.toml`.
+
+To run the compiled binary directly, without `cargo run`:
+
+```bash
+cargo build --release
+./target/release/rust-learn          # table
+./target/release/rust-learn --tui    # interactive UI
+```
+
+### Table mode
+
+Prints the table to stdout, so it also works in scripts and pipes. Colors only appear when stdout
+is a terminal.
+
+### Interactive UI mode
+
+`--tui` shows the same rows and colors in a full-screen view. It needs a real terminal: if
+output is piped or redirected, it stops with exit code `2`.
+
+| Key | Action |
+|---|---|
+| `↑` `↓` / `j` `k` | Move the selection (`g` `G` / `Home` `End` jump to the first or last row) |
+| `Enter` / `o` | Open the selected pull request in your browser |
+| `r` | Fetch the pull requests again |
+| `q` / `Esc` / `Ctrl+C` | Quit |
+
+When you quit, the exit code reflects the last fetch, as in the table below.
 
 ## Configuration
 
@@ -66,7 +104,7 @@ if it is fine-grained, or the `repo` scope if it is classic.
 |---|---|
 | `0` | Every project succeeded |
 | `1` | At least one project failed (the table is still printed) |
-| `2` | Startup error (configuration or token) |
+| `2` | Startup error (configuration or token), or the terminal UI could not start |
 
 ### Limitations
 

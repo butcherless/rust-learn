@@ -88,6 +88,23 @@ impl fmt::Display for PrTitle {
     }
 }
 
+/// The web address of a pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrUrl(pub String);
+
+impl PrUrl {
+    /// The address as text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// The state of an open pull request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrState {
@@ -115,6 +132,8 @@ pub struct PullRequest {
     pub title: PrTitle,
     /// The pull request state.
     pub state: PrState,
+    /// The pull request's page on the web.
+    pub url: PrUrl,
 }
 
 #[cfg(test)]

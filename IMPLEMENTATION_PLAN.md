@@ -21,6 +21,7 @@ closed unmerged. A run against the real GitHub API has not been recorded.
 | FR8 | The table columns are Project, PR #, Title, State. |
 | FR9 | Green: no open PRs (one row, `no open pull requests`). Orange: one row per open PR. Red: fetch failed (one row, the error message). |
 | FR10 | State is `open`, or `draft` when the API's `draft` flag is true. |
+| FR11 | `--tui` shows the same rows and colors in an interactive terminal UI: `↑`/`↓` (or `j`/`k`, `g`/`G`) move, `Enter`/`o` opens the selected PR's `html_url` in the browser (only `https://` addresses), `r` fetches again, `q`/`Esc`/`Ctrl+C` quits. Exit codes follow FR7 using the last fetch; a terminal that cannot be set up exits with `2`. |
 
 **Out of scope:** pagination, GitHub Enterprise, closed or merged PRs, review or CI status, JSON
 output, caching, retries, release packaging.
@@ -32,13 +33,14 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 
 | Module | Responsibility |
 |---|---|
-| `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState` |
+| `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `PrUrl` |
 | `domain::port` | `PullRequestSource`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
 | `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`) |
 | `service::list_open_prs` | `list_open_prs` uses `buffered`, not `buffer_unordered`, to keep order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
 | `adapter::config` | `load_projects` (reads the file) and `parse_projects` (pure) |
 | `adapter::github` | `GithubClient`, `GithubToken` (redacted `Debug`), wire DTO, pure mapper and status mapping |
-| `adapter::cli` | `Args` (clap), pure `rows`, and `render` (colors) |
+| `adapter::cli` | `Args` (clap), pure `rows` (`DisplayRow`: kind, cells, URL), and `render` (colors) |
+| `adapter::tui` | `App` (pure state, key handling to `Action`, drawing, tested with `TestBackend`) and `run` (crossterm `EventStream` loop, terminal setup and restore, `open::that_detached`) |
 | `main.rs` | Composition root. The only place `anyhow` is used |
 
 ### HTTP

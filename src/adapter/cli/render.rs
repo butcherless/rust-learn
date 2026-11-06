@@ -3,10 +3,11 @@
 use comfy_table::presets::UTF8_FULL_CONDENSED;
 use comfy_table::{Cell, Color, Table};
 
-use crate::domain::model::PullRequest;
+use crate::domain::model::{PrUrl, PullRequest};
 use crate::service::ProjectReport;
 
-const HEADER: [&str; 4] = ["Project", "PR #", "Title", "State"];
+/// The column titles.
+pub const HEADER: [&str; 4] = ["Project", "PR #", "Title", "State"];
 const NO_VALUE: &str = "—";
 const NO_PULL_REQUESTS: &str = "no open pull requests";
 const ORANGE: Color = Color::Rgb {
@@ -26,31 +27,43 @@ pub enum RowKind {
     Failed,
 }
 
-/// Computes the text of every table row, in report order.
-pub fn rows(reports: &[ProjectReport]) -> Vec<(RowKind, [String; 4])> {
+/// One table row: its text, what it represents and, for a pull request, its address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisplayRow {
+    /// What the row represents.
+    pub kind: RowKind,
+    /// The text of each column, in [`HEADER`] order.
+    pub cells: [String; 4],
+    /// The pull request's web page. Only set for [`RowKind::OpenPullRequest`].
+    pub url: Option<PrUrl>,
+}
+
+/// Computes every table row, in report order.
+pub fn rows(reports: &[ProjectReport]) -> Vec<DisplayRow> {
     reports.iter().flat_map(report_rows).collect()
 }
 
-fn report_rows(report: &ProjectReport) -> Vec<(RowKind, [String; 4])> {
+fn report_rows(report: &ProjectReport) -> Vec<DisplayRow> {
     let project = report.project.to_string();
     match &report.outcome {
-        Ok(pull_requests) if pull_requests.is_empty() => vec![(
-            RowKind::NoPullRequests,
-            message_cells(project, NO_PULL_REQUESTS.to_owned()),
-        )],
+        Ok(pull_requests) if pull_requests.is_empty() => vec![DisplayRow {
+            kind: RowKind::NoPullRequests,
+            cells: message_cells(project, NO_PULL_REQUESTS.to_owned()),
+            url: None,
+        }],
         Ok(pull_requests) => pull_requests
             .iter()
-            .map(|pull_request| {
-                (
-                    RowKind::OpenPullRequest,
-                    pull_request_cells(project.clone(), pull_request),
-                )
+            .map(|pull_request| DisplayRow {
+                kind: RowKind::OpenPullRequest,
+                cells: pull_request_cells(project.clone(), pull_request),
+                url: Some(pull_request.url.clone()),
             })
             .collect(),
-        Err(error) => vec![(
-            RowKind::Failed,
-            message_cells(project, format!("error: {error}")),
-        )],
+        Err(error) => vec![DisplayRow {
+            kind: RowKind::Failed,
+            cells: message_cells(project, format!("error: {error}")),
+            url: None,
+        }],
     }
 }
 
@@ -81,8 +94,9 @@ pub fn render(reports: &[ProjectReport]) -> Table {
     table
         .load_style(UTF8_FULL_CONDENSED.with_rounded_corners())
         .set_header(HEADER);
-    rows(reports).into_iter().for_each(|(kind, cells)| {
-        table.add_row(cells.map(|text| Cell::new(text).fg(color(kind))));
+    rows(reports).into_iter().for_each(|row| {
+        let color = color(row.kind);
+        table.add_row(row.cells.map(|text| Cell::new(text).fg(color)));
     });
     table
 }
@@ -92,6 +106,14 @@ mod tests {
     use super::*;
     use crate::domain::error::SourceError;
     use crate::domain::model::{PrNumber, PrState, PrTitle};
+
+    fn row(kind: RowKind, cells: [&str; 4], url: Option<&str>) -> DisplayRow {
+        DisplayRow {
+            kind,
+            cells: cells.map(String::from),
+            url: url.map(|url| PrUrl(url.to_owned())),
+        }
+    }
 
     fn report(project: &str, outcome: Result<Vec<PullRequest>, SourceError>) -> ProjectReport {
         ProjectReport {
@@ -105,6 +127,7 @@ mod tests {
             number: PrNumber(number),
             title: PrTitle(format!("title {number}")),
             state,
+            url: PrUrl(format!("https://github.com/a/b/pull/{number}")),
         }
     }
 
@@ -112,9 +135,10 @@ mod tests {
     fn no_pull_requests_gives_one_row() {
         assert_eq!(
             rows(&[report("a/b", Ok(vec![]))]),
-            [(
+            [row(
                 RowKind::NoPullRequests,
-                ["a/b", "—", "no open pull requests", "—"].map(String::from)
+                ["a/b", "—", "no open pull requests", "—"],
+                None
             )]
         );
     }
@@ -131,13 +155,15 @@ mod tests {
         assert_eq!(
             rows(&reports),
             [
-                (
+                row(
                     RowKind::OpenPullRequest,
-                    ["a/b", "1", "title 1", "open"].map(String::from)
+                    ["a/b", "1", "title 1", "open"],
+                    Some("https://github.com/a/b/pull/1")
                 ),
-                (
+                row(
                     RowKind::OpenPullRequest,
-                    ["a/b", "2", "title 2", "draft"].map(String::from)
+                    ["a/b", "2", "title 2", "draft"],
+                    Some("https://github.com/a/b/pull/2")
                 ),
             ]
         );
@@ -147,9 +173,10 @@ mod tests {
     fn error_gives_one_failed_row_with_message() {
         assert_eq!(
             rows(&[report("a/b", Err(SourceError::NotFound))]),
-            [(
+            [row(
                 RowKind::Failed,
-                ["a/b", "—", "error: repository not found", "—"].map(String::from)
+                ["a/b", "—", "error: repository not found", "—"],
+                None
             )]
         );
     }
@@ -163,7 +190,12 @@ mod tests {
         ];
         let projects: Vec<String> = rows(&reports)
             .into_iter()
-            .map(|(_, [project, ..])| project)
+            .map(
+                |DisplayRow {
+                     cells: [project, ..],
+                     ..
+                 }| project,
+            )
             .collect();
         assert_eq!(projects, ["z/z", "a/a", "m/m"]);
     }

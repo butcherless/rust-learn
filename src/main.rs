@@ -9,8 +9,9 @@ use rust_learn::adapter::cli::args::Args;
 use rust_learn::adapter::cli::render::render;
 use rust_learn::adapter::config::load_projects;
 use rust_learn::adapter::github::{DEFAULT_BASE_URL, GithubClient, GithubToken};
+use rust_learn::adapter::tui;
 use rust_learn::domain::model::Project;
-use rust_learn::service::{MAX_CONCURRENCY, has_failures, list_open_prs};
+use rust_learn::service::{MAX_CONCURRENCY, ProjectReport, has_failures, list_open_prs};
 
 const EXIT_FAILURES: u8 = 1;
 const EXIT_STARTUP: u8 = 2;
@@ -18,20 +19,32 @@ const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    match startup(&Args::parse()) {
+    let args = Args::parse();
+    let reports = match startup(&args) {
+        Ok((client, projects)) if args.tui => tui::run(&client, projects)
+            .await
+            .context("cannot run the terminal UI"),
         Ok((client, projects)) => {
             let reports = list_open_prs(&client, projects, MAX_CONCURRENCY).await;
             println!("{}", render(&reports));
-            if has_failures(&reports) {
-                ExitCode::from(EXIT_FAILURES)
-            } else {
-                ExitCode::SUCCESS
-            }
+            Ok(reports)
         }
+        Err(error) => Err(error),
+    };
+    match reports {
+        Ok(reports) => exit_code(&reports),
         Err(error) => {
             eprintln!("error: {error:#}");
             ExitCode::from(EXIT_STARTUP)
         }
+    }
+}
+
+fn exit_code(reports: &[ProjectReport]) -> ExitCode {
+    if has_failures(reports) {
+        ExitCode::from(EXIT_FAILURES)
+    } else {
+        ExitCode::SUCCESS
     }
 }
 

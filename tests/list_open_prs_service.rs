@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrNumber, PrState, PrTitle, Project, PullRequest};
+use rust_learn::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
 use rust_learn::domain::port::PullRequestSource;
 use rust_learn::service::{ProjectReport, has_failures, list_open_prs};
 
@@ -17,6 +17,7 @@ fn pull_request(number: u64) -> PullRequest {
         number: PrNumber(number),
         title: PrTitle(format!("title {number}")),
         state: PrState::Open,
+        url: PrUrl(format!("https://github.com/o/r/pull/{number}")),
     }
 }
 

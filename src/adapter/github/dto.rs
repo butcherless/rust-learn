@@ -11,6 +11,8 @@ pub struct PullRequestDto {
     pub title: String,
     /// The API state. Unused by the mapper: only open pull requests are requested.
     pub state: String,
+    /// The pull request's page on github.com.
+    pub html_url: String,
     /// Whether the pull request is a draft.
     #[serde(default)]
     pub draft: bool,

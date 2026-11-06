@@ -2,7 +2,7 @@
 
 use rust_learn::adapter::github::{GithubClient, GithubToken};
 use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrNumber, PrState, PrTitle, Project, PullRequest};
+use rust_learn::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
 use rust_learn::domain::port::PullRequestSource;
 use serde_json::json;
 use wiremock::matchers::{header, header_exists, method, path, query_param};
@@ -31,8 +31,8 @@ async fn fetch(response: ResponseTemplate) -> Result<Vec<PullRequest>, SourceErr
 #[tokio::test]
 async fn maps_pull_requests() {
     let body = json!([
-        {"number": 1, "title": "first", "state": "open", "draft": false, "ignored": "field"},
-        {"number": 2, "title": "second", "state": "open", "draft": true},
+        {"number": 1, "title": "first", "state": "open", "html_url": "https://github.com/o/r/pull/1", "draft": false, "ignored": "field"},
+        {"number": 2, "title": "second", "state": "open", "html_url": "https://github.com/o/r/pull/2", "draft": true},
     ]);
 
     let result = fetch(ResponseTemplate::new(200).set_body_json(body)).await;
@@ -44,11 +44,13 @@ async fn maps_pull_requests() {
                 number: PrNumber(1),
                 title: PrTitle("first".to_owned()),
                 state: PrState::Open,
+                url: PrUrl("https://github.com/o/r/pull/1".to_owned()),
             },
             PullRequest {
                 number: PrNumber(2),
                 title: PrTitle("second".to_owned()),
                 state: PrState::Draft,
+                url: PrUrl("https://github.com/o/r/pull/2".to_owned()),
             },
         ])
     );

@@ -14,6 +14,7 @@ cargo test --lib render::                           # unit tests of one module
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 GITHUB_TOKEN=<token> cargo run -- --config <path>   # real GitHub API; --config defaults to ./projects.toml
+GITHUB_TOKEN=<token> cargo run -- --tui             # interactive terminal UI (needs a real terminal)
 ```
 
 CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` (no separate `cargo build`: those two compile every target); `rust-toolchain.toml` installs the clippy and rustfmt components. It triggers on pushes to `main` and on PRs (opened, new commits, reopened), with read-only token permissions, a Cargo cache keyed on `Cargo.lock`, and cancellation of superseded runs.
@@ -24,10 +25,12 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
 
 - **`domain`** defines the types and the `PullRequestSource` port. It may import only `std` and `thiserror`.
 - **`service::list_open_prs`** is generic over the port and never fails as a whole: each `ProjectReport` holds its own `Result`. It uses `buffered`, not `buffer_unordered`, because output must follow config order (FR5).
-- **`adapter`** holds `config` (TOML to `Vec<Project>`), `github` (implements the port) and `cli` (arguments and table).
+- **`adapter`** holds `config` (TOML to `Vec<Project>`), `github` (implements the port), `cli` (arguments and table) and `tui` (the `--tui` terminal UI).
 - **`main.rs`** is the composition root. It maps startup errors to exit code 2 and project failures to exit code 1.
 
-`render::rows` is pure and holds all display logic, so tests assert on it rather than on ANSI output. `render` only applies colors, and comfy-table drops them when stdout is not a TTY.
+`render::rows` is pure and holds all display logic, so tests assert on it rather than on ANSI output. `render` only applies colors, and comfy-table drops them when stdout is not a TTY. The TUI reuses `rows`; each `DisplayRow` carries the PR's URL.
+
+`tui::app::App` is pure: `handle_key` returns an `Action` (`Quit`, `Refresh`, `Open(url)`) and `tui::run` performs it, so tests never open a browser or a terminal. Rendering is tested with ratatui's `TestBackend`. Use `ratatui::try_init`/`try_restore`, not `init`, which panics. `crossterm` is a direct dependency only for `EventStream` (`event-stream` feature) and must stay on the same version as ratatui's (0.29), or two copies get compiled.
 
 `main.rs` hardcodes `DEFAULT_BASE_URL`, so the binary can't be pointed at a mock server. Tests exercise `GithubClient` directly through `GithubClient::new(&server.uri(), ...)`.
 
