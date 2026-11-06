@@ -159,55 +159,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn maps_404_to_not_found() {
-        assert_eq!(
-            map_status(StatusCode::NOT_FOUND, None),
-            SourceError::NotFound
-        );
-    }
-
-    #[test]
-    fn maps_401_to_unauthorized() {
-        assert_eq!(
-            map_status(StatusCode::UNAUTHORIZED, None),
-            SourceError::Unauthorized
-        );
-    }
-
-    #[test]
-    fn maps_403_with_exhausted_rate_limit_to_rate_limited() {
-        assert_eq!(
-            map_status(StatusCode::FORBIDDEN, Some("0")),
-            SourceError::RateLimited
-        );
-    }
-
-    #[test]
-    fn maps_403_without_exhausted_rate_limit_to_unauthorized() {
-        assert_eq!(
-            map_status(StatusCode::FORBIDDEN, None),
-            SourceError::Unauthorized
-        );
-        assert_eq!(
-            map_status(StatusCode::FORBIDDEN, Some("10")),
-            SourceError::Unauthorized
-        );
-    }
-
-    #[test]
-    fn maps_429_to_rate_limited() {
-        assert_eq!(
-            map_status(StatusCode::TOO_MANY_REQUESTS, None),
-            SourceError::RateLimited
-        );
-    }
-
-    #[test]
-    fn maps_500_to_unavailable() {
-        assert_eq!(
-            map_status(StatusCode::INTERNAL_SERVER_ERROR, None),
-            SourceError::Unavailable("HTTP 500".to_owned())
-        );
+    fn maps_statuses_to_errors() {
+        [
+            (StatusCode::NOT_FOUND, None, SourceError::NotFound),
+            (StatusCode::UNAUTHORIZED, None, SourceError::Unauthorized),
+            (StatusCode::FORBIDDEN, Some("0"), SourceError::RateLimited),
+            (StatusCode::FORBIDDEN, None, SourceError::Unauthorized),
+            (StatusCode::FORBIDDEN, Some("10"), SourceError::Unauthorized),
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                None,
+                SourceError::RateLimited,
+            ),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                None,
+                SourceError::Unavailable("HTTP 500".to_owned()),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(status, remaining, expected)| {
+            assert_eq!(
+                map_status(status, remaining),
+                expected,
+                "status {status}, x-ratelimit-remaining {remaining:?}"
+            );
+        });
     }
 
     #[test]

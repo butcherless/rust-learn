@@ -1,57 +1,73 @@
 //! `GithubClient` against a local mock server. No real network is used.
+//!
+//! The full status-to-error table is unit tested next to `map_status`; these tests check the
+//! wiring: the request sent, the body decoded, and the status and headers reaching the mapping.
 
+mod common;
+
+use common::{project, pull_request};
+use futures::future::join_all;
 use rust_learn::adapter::github::{GithubClient, GithubToken};
 use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
+use rust_learn::domain::model::{PrState, PullRequest};
 use rust_learn::domain::port::PullRequestSource;
-use serde_json::json;
+use serde_json::{Value, json};
 use wiremock::matchers::{header, header_exists, method, path, query_param};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockBuilder, MockServer, ResponseTemplate};
 
 const PULLS_PATH: &str = "/repos/acme/widgets/pulls";
+const TOKEN: &str = "test-token";
 
-fn project() -> Project {
-    "acme/widgets".parse().unwrap()
+/// A mock of the pulls endpoint, to refine with more matchers.
+fn pulls() -> MockBuilder {
+    Mock::given(method("GET")).and(path(PULLS_PATH))
+}
+
+/// Fetches the project from a server that only knows `mock`. Expectations set on `mock` are
+/// verified when the server is dropped at the end.
+async fn fetch_from(mock: Mock) -> Result<Vec<PullRequest>, SourceError> {
+    let server = MockServer::start().await;
+    mock.mount(&server).await;
+    GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
+        .unwrap()
+        .open_pull_requests(&project("acme/widgets"))
+        .await
 }
 
 /// Fetches the project from a server that always answers with `response`.
 async fn fetch(response: ResponseTemplate) -> Result<Vec<PullRequest>, SourceError> {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path(PULLS_PATH))
-        .respond_with(response)
-        .mount(&server)
-        .await;
-    GithubClient::new(&server.uri(), GithubToken::new("test-token"))
-        .unwrap()
-        .open_pull_requests(&project())
-        .await
+    fetch_from(pulls().respond_with(response)).await
+}
+
+/// The API's JSON for `pull_request(number, …)`.
+fn pull_request_json(number: u64, draft: bool) -> Value {
+    json!({
+        "number": number,
+        "title": format!("title {number}"),
+        "state": "open",
+        "html_url": format!("https://github.com/o/r/pull/{number}"),
+        "draft": draft,
+    })
+}
+
+/// `object` with one more field, such as one the client does not know.
+fn with_field(mut object: Value, key: &str, value: Value) -> Value {
+    object[key] = value;
+    object
 }
 
 #[tokio::test]
 async fn maps_pull_requests() {
     let body = json!([
-        {"number": 1, "title": "first", "state": "open", "html_url": "https://github.com/o/r/pull/1", "draft": false, "ignored": "field"},
-        {"number": 2, "title": "second", "state": "open", "html_url": "https://github.com/o/r/pull/2", "draft": true},
+        with_field(pull_request_json(1, false), "ignored", json!("unknown")),
+        pull_request_json(2, true),
     ]);
 
-    let result = fetch(ResponseTemplate::new(200).set_body_json(body)).await;
-
     assert_eq!(
-        result,
+        fetch(ResponseTemplate::new(200).set_body_json(body)).await,
         Ok(vec![
-            PullRequest {
-                number: PrNumber(1),
-                title: PrTitle("first".to_owned()),
-                state: PrState::Open,
-                url: PrUrl("https://github.com/o/r/pull/1".to_owned()),
-            },
-            PullRequest {
-                number: PrNumber(2),
-                title: PrTitle("second".to_owned()),
-                state: PrState::Draft,
-                url: PrUrl("https://github.com/o/r/pull/2".to_owned()),
-            },
+            pull_request(1, PrState::Open),
+            pull_request(2, PrState::Draft)
         ])
     );
 }
@@ -64,56 +80,37 @@ async fn empty_array_gives_empty_vec() {
 
 #[tokio::test]
 async fn sends_expected_request() {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path(PULLS_PATH))
+    let mock = pulls()
         .and(query_param("state", "open"))
         .and(query_param("per_page", "100"))
-        .and(header("authorization", "Bearer test-token"))
+        .and(header("authorization", format!("Bearer {TOKEN}").as_str()))
         .and(header("accept", "application/vnd.github+json"))
         .and(header("x-github-api-version", "2022-11-28"))
         .and(header_exists("user-agent"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
-        .expect(1)
-        .mount(&server)
-        .await;
+        .expect(1);
 
-    let result = GithubClient::new(&server.uri(), GithubToken::new("test-token"))
-        .unwrap()
-        .open_pull_requests(&project())
-        .await;
-
-    assert_eq!(result, Ok(vec![]));
+    assert_eq!(fetch_from(mock).await, Ok(vec![]));
 }
 
 #[tokio::test]
-async fn maps_404_to_not_found() {
-    assert_eq!(
-        fetch(ResponseTemplate::new(404)).await,
-        Err(SourceError::NotFound)
-    );
-}
+async fn maps_error_statuses() {
+    let cases = [
+        (ResponseTemplate::new(404), SourceError::NotFound),
+        (
+            ResponseTemplate::new(403).insert_header("x-ratelimit-remaining", "0"),
+            SourceError::RateLimited,
+        ),
+    ];
 
-#[tokio::test]
-async fn maps_401_to_unauthorized() {
-    assert_eq!(
-        fetch(ResponseTemplate::new(401)).await,
-        Err(SourceError::Unauthorized)
-    );
-}
+    let results = join_all(
+        cases.map(|(response, expected)| async move { (fetch(response).await, expected) }),
+    )
+    .await;
 
-#[tokio::test]
-async fn maps_403_with_exhausted_rate_limit_to_rate_limited() {
-    let response = ResponseTemplate::new(403).insert_header("x-ratelimit-remaining", "0");
-    assert_eq!(fetch(response).await, Err(SourceError::RateLimited));
-}
-
-#[tokio::test]
-async fn maps_500_to_unavailable() {
-    assert_eq!(
-        fetch(ResponseTemplate::new(500)).await,
-        Err(SourceError::Unavailable("HTTP 500".to_owned()))
-    );
+    results
+        .into_iter()
+        .for_each(|(result, expected)| assert_eq!(result, Err(expected)));
 }
 
 #[tokio::test]

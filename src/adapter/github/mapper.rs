@@ -21,30 +21,35 @@ pub fn to_domain(dto: PullRequestDto) -> PullRequest {
 mod tests {
     use super::*;
 
-    fn decode(json: &str) -> PullRequestDto {
-        serde_json::from_str(json).unwrap()
+    const URL: &str = "https://github.com/o/r/pull/2";
+
+    /// Decodes an API pull request whose JSON ends with `draft_field`.
+    fn decode(draft_field: &str) -> PullRequestDto {
+        serde_json::from_str(&format!(
+            r#"{{"number":2,"title":"t","state":"open","html_url":"{URL}"{draft_field}}}"#
+        ))
+        .unwrap()
     }
 
     #[test]
-    fn draft_true_maps_to_draft() {
-        let dto = decode(
-            r#"{"number":1,"title":"t","state":"open","html_url":"https://github.com/o/r/pull/1","draft":true}"#,
-        );
-        assert_eq!(to_domain(dto).state, PrState::Draft);
-    }
-
-    #[test]
-    fn missing_draft_maps_to_open() {
-        let dto = decode(
-            r#"{"number":2,"title":"t","state":"open","html_url":"https://github.com/o/r/pull/2"}"#,
-        );
-        let pull_request = to_domain(dto);
-        assert_eq!(pull_request.state, PrState::Open);
-        assert_eq!(pull_request.number, PrNumber(2));
-        assert_eq!(pull_request.title, PrTitle("t".to_owned()));
-        assert_eq!(
-            pull_request.url,
-            PrUrl("https://github.com/o/r/pull/2".to_owned())
-        );
+    fn maps_every_field_and_the_draft_flag() {
+        [
+            (r#","draft":true"#, PrState::Draft),
+            (r#","draft":false"#, PrState::Open),
+            ("", PrState::Open),
+        ]
+        .into_iter()
+        .for_each(|(draft_field, state)| {
+            assert_eq!(
+                to_domain(decode(draft_field)),
+                PullRequest {
+                    number: PrNumber(2),
+                    title: PrTitle("t".to_owned()),
+                    state,
+                    url: PrUrl(URL.to_owned()),
+                },
+                "draft field: {draft_field:?}"
+            );
+        });
     }
 }

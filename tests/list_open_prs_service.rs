@@ -1,23 +1,20 @@
-//! The use case against an in-memory fake of the port.
+//! The use case against in-memory fakes of the port.
+
+mod common;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use common::{project, pull_request};
 use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
+use rust_learn::domain::model::{PrState, Project, PullRequest};
 use rust_learn::domain::port::PullRequestSource;
 use rust_learn::service::{ProjectReport, has_failures, list_open_prs};
 
-fn project(name: &str) -> Project {
-    name.parse().unwrap()
-}
-
-fn pull_request(number: u64) -> PullRequest {
-    PullRequest {
-        number: PrNumber(number),
-        title: PrTitle(format!("title {number}")),
-        state: PrState::Open,
-        url: PrUrl(format!("https://github.com/o/r/pull/{number}")),
+fn report(name: &str, outcome: Result<Vec<PullRequest>, SourceError>) -> ProjectReport {
+    ProjectReport {
+        project: project(name),
+        outcome,
     }
 }
 
@@ -29,7 +26,7 @@ impl PullRequestSource for ScriptedSource {
         match project.repo().as_str() {
             "success" => {
                 tokio::time::sleep(Duration::from_millis(30)).await;
-                Ok(vec![pull_request(1)])
+                Ok(vec![pull_request(1, PrState::Open)])
             }
             "empty" => {
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -62,29 +59,14 @@ impl PullRequestSource for TrackingSource {
 
 #[tokio::test]
 async fn mixed_outcomes_keep_input_order() {
-    let projects = vec![
-        project("a/success"),
-        project("a/empty"),
-        project("a/failure"),
-    ];
-
-    let reports = list_open_prs(&ScriptedSource, projects, 2).await;
+    let projects = ["a/success", "a/empty", "a/failure"].map(project).to_vec();
 
     assert_eq!(
-        reports,
+        list_open_prs(&ScriptedSource, projects, 2).await,
         [
-            ProjectReport {
-                project: project("a/success"),
-                outcome: Ok(vec![pull_request(1)]),
-            },
-            ProjectReport {
-                project: project("a/empty"),
-                outcome: Ok(vec![]),
-            },
-            ProjectReport {
-                project: project("a/failure"),
-                outcome: Err(SourceError::NotFound),
-            },
+            report("a/success", Ok(vec![pull_request(1, PrState::Open)])),
+            report("a/empty", Ok(vec![])),
+            report("a/failure", Err(SourceError::NotFound)),
         ]
     );
 }
@@ -102,14 +84,8 @@ async fn concurrency_is_capped() {
 
 #[test]
 fn has_failures_detects_errors() {
-    let succeeded = ProjectReport {
-        project: project("a/ok"),
-        outcome: Ok(vec![]),
-    };
-    let failed = ProjectReport {
-        project: project("a/ko"),
-        outcome: Err(SourceError::RateLimited),
-    };
+    let succeeded = report("a/ok", Ok(vec![]));
+    let failed = report("a/ko", Err(SourceError::RateLimited));
 
     assert!(!has_failures(&[]));
     assert!(!has_failures(std::slice::from_ref(&succeeded)));

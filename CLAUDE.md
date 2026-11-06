@@ -9,7 +9,7 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 ```bash
 cargo build
 cargo test                                          # offline, no token needed
-cargo test --test github_client_wiremock maps_404   # one integration test, filtered by name
+cargo test --test github_client_wiremock maps_error_statuses   # one integration test, filtered by name
 cargo test --lib view::                             # unit tests of one module
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
@@ -37,6 +37,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
 ## Conventions
 
 - Tests must not use the real network or need `GITHUB_TOKEN`: use wiremock for the client and an in-memory fake for the port.
+- Test builders are shared, not copied: `view::fixtures` for unit tests, `tests/common/mod.rs` (included with `mod common;`) for integration tests. Prefer table-driven tests (an array of cases folded with `for_each` and an `assert_eq!` naming the case) over near-identical test functions. The status-to-error table is unit tested on `map_status`; wiremock tests only check the wiring.
 - No `unwrap`, `expect` or `panic!` outside tests, and no `_` wildcard when matching domain enums.
 - Dependency injection uses generics with `S: PullRequestSource`, not `dyn` or the `async-trait` crate.
 - `anyhow` is allowed only in `main.rs`; library modules use `thiserror` enums.
