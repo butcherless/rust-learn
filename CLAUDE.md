@@ -12,11 +12,12 @@ cargo test --lib view::                                       # unit tests of on
 cargo test --test github_client_wiremock maps_error_statuses  # one integration test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+cargo llvm-cov                                                # tests with a per-file coverage summary; --open for HTML
 GITHUB_TOKEN=$(gh auth token) cargo run                       # real API; --config <path> defaults to ./projects.toml
 GITHUB_TOKEN=$(gh auth token) cargo run -- --tui              # interactive UI, needs a real terminal
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and test on pushes to `main` and on PRs. There is no separate `cargo build` step, because clippy and test compile every target.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and `cargo llvm-cov --fail-under-lines 85` on pushes to `main` and on PRs, and uploads the HTML report as the `coverage-html` artifact. `cargo llvm-cov` replaces `cargo test` there: it runs the same unit and integration tests (but not doctests, which need nightly; there are none today). There is no separate `cargo build` step, because clippy and the tests compile every target. `main.rs` and `tui/mod.rs` are I/O shells with no tests and stay in the report at 0%; keep logic out of them so the minimum holds. Raise the minimum when coverage grows rather than lowering it.
 
 ## Architecture
 

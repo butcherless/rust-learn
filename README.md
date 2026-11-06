@@ -101,7 +101,13 @@ In the interactive UI, the exit code reflects the last fetch before quitting.
 cargo test                                 # offline: no token or network needed
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+cargo llvm-cov --open                      # run the tests and open an HTML coverage report
 ```
 
-CI runs the same three checks. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for requirements
+Coverage uses [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov). Install it once with
+`brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`; `rust-toolchain.toml`
+already installs the `llvm-tools-preview` component it needs.
+
+CI runs fmt, clippy, and the tests with coverage. It fails if line coverage drops below 85%, and
+attaches the HTML report to each run as the `coverage-html` artifact. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for requirements
 and design, and [CLAUDE.md](CLAUDE.md) for architecture and code rules.
