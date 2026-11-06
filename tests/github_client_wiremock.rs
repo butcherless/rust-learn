@@ -5,6 +5,8 @@
 
 mod common;
 
+use std::net::TcpListener;
+
 use common::{project, pull_request};
 use futures::future::join_all;
 use rust_learn::adapter::github::{GithubClient, GithubToken};
@@ -23,15 +25,20 @@ fn pulls() -> MockBuilder {
     Mock::given(method("GET")).and(path(PULLS_PATH))
 }
 
+/// Fetches the project from the API at `base_url`.
+async fn fetch_at(base_url: &str) -> Result<Vec<PullRequest>, SourceError> {
+    GithubClient::new(base_url, GithubToken::new(TOKEN))
+        .unwrap()
+        .open_pull_requests(&project("acme/widgets"))
+        .await
+}
+
 /// Fetches the project from a server that only knows `mock`. Expectations set on `mock` are
 /// verified when the server is dropped at the end.
 async fn fetch_from(mock: Mock) -> Result<Vec<PullRequest>, SourceError> {
     let server = MockServer::start().await;
     mock.mount(&server).await;
-    GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
-        .unwrap()
-        .open_pull_requests(&project("acme/widgets"))
-        .await
+    fetch_at(&server.uri()).await
 }
 
 /// Fetches the project from a server that always answers with `response`.
@@ -120,4 +127,23 @@ async fn malformed_json_is_invalid_response() {
         matches!(result, Err(SourceError::InvalidResponse(_))),
         "result: {result:?}"
     );
+}
+
+#[tokio::test]
+async fn unreachable_server_is_unavailable_without_leaking_the_url() {
+    // Bind a free port, then close it, so connecting is refused.
+    let address = TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .unwrap();
+    let base_url = format!("http://{address}");
+
+    let result = fetch_at(&base_url).await;
+
+    match result {
+        Err(SourceError::Unavailable(message)) => assert!(
+            !message.contains(&address.to_string()),
+            "the message must not include the URL: {message}"
+        ),
+        other => panic!("expected Unavailable, got {other:?}"),
+    }
 }

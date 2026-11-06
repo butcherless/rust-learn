@@ -17,7 +17,7 @@ GITHUB_TOKEN=$(gh auth token) cargo run                       # real API; --conf
 GITHUB_TOKEN=$(gh auth token) cargo run -- --tui              # interactive UI, needs a real terminal
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and `cargo llvm-cov --fail-under-lines 85` on pushes to `main` and on PRs, and uploads the HTML report as the `coverage-html` artifact. `cargo llvm-cov` replaces `cargo test` there: it runs the same unit and integration tests (but not doctests, which need nightly; there are none today). There is no separate `cargo build` step, because clippy and the tests compile every target. `main.rs` and `tui/mod.rs` are I/O shells with no tests and stay in the report at 0%; keep logic out of them so the minimum holds. Raise the minimum when coverage grows rather than lowering it.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and `cargo llvm-cov --fail-under-lines 90` on pushes to `main` and on PRs, and uploads the HTML report as the `coverage-html` artifact. `cargo llvm-cov` replaces `cargo test` there: it runs the same unit and integration tests (but not doctests, which need nightly; there are none today). There is no separate `cargo build` step, because clippy and the tests compile every target. `tui/mod.rs` (the event loop, 0%) and the success path of `main.rs` (it always calls the real API) are untested I/O shells that stay in the report; keep logic out of them so the minimum holds. Raise the minimum when coverage grows rather than lowering it.
 
 ## Architecture
 
@@ -55,6 +55,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
 - Share test builders instead of copying them: `view::fixtures` (`#[cfg(test)]`) for unit tests, and `tests/common/mod.rs` (included with `mod common;`) for integration tests.
 - Prefer table-driven tests over near-identical test functions: an array of cases, run with `for_each`, and an `assert_eq!` message naming the case.
 - The full status-to-error table is unit tested on `map_status`. Wiremock tests only check the wiring.
+- `tests/cli_exit_codes.rs` runs the compiled binary (`CARGO_BIN_EXE_rust-learn`) for startup errors only, which stop before any HTTP call. Config files used by tests live in `tests/fixtures/`.
 
 ## Library versions
 

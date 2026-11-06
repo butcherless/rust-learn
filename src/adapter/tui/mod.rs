@@ -34,7 +34,7 @@ async fn event_loop<S: PullRequestSource>(
     projects: &[Project],
 ) -> io::Result<Vec<ProjectReport>> {
     let mut events = EventStream::new();
-    let (mut app, mut effect) = (App::new(), Effect::Fetch);
+    let (mut app, mut effect) = (App::default(), Effect::Fetch);
     loop {
         let next = match effect {
             Effect::Quit => return Ok(app.into_reports()),

@@ -67,8 +67,9 @@ pub enum Effect {
 }
 
 /// What the status line reports.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 enum Status {
+    #[default]
     Loading,
     Summary,
     Opened(PrUrl),
@@ -78,7 +79,9 @@ enum Status {
 }
 
 /// The terminal UI's state. Each update consumes it and returns the next one.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// The default state has no reports, no selection, and shows that loading is in progress.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct App {
     reports: Vec<ProjectReport>,
     selected: Option<usize>,
@@ -100,22 +103,7 @@ pub fn message(key: KeyEvent) -> Option<Message> {
     }
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl App {
-    /// An empty UI that is waiting for its first reports.
-    pub fn new() -> Self {
-        Self {
-            reports: Vec::new(),
-            selected: None,
-            status: Status::Loading,
-        }
-    }
-
     /// The index of the selected row.
     pub fn selected(&self) -> Option<usize> {
         self.selected
@@ -321,7 +309,7 @@ mod tests {
     }
 
     fn loaded() -> App {
-        run(App::new(), [Message::Loaded(reports())]).0
+        run(App::default(), [Message::Loaded(reports())]).0
     }
 
     fn moves(steps: impl IntoIterator<Item = Move>) -> App {
@@ -365,7 +353,7 @@ mod tests {
 
     #[test]
     fn starts_loading_without_selection() {
-        let app = App::new();
+        let app = App::default();
         assert_eq!(app.status(), LOADING);
         assert_eq!(app.selected(), None);
     }
@@ -380,7 +368,7 @@ mod tests {
     #[test]
     fn summary_omits_failures_when_there_are_none() {
         let app = run(
-            App::new(),
+            App::default(),
             [Message::Loaded(vec![report("c/d", Ok(vec![]))])],
         )
         .0;
@@ -398,7 +386,7 @@ mod tests {
 
     #[test]
     fn movement_without_rows_selects_nothing() {
-        let (app, effect) = App::new().update(Message::Move(Move::Down));
+        let (app, effect) = App::default().update(Message::Move(Move::Down));
         assert_eq!(app.selected(), None);
         assert_eq!(effect, Effect::None);
     }
@@ -428,6 +416,13 @@ mod tests {
         let (app, effect) = loaded().update(Message::Refresh);
         assert_eq!(effect, Effect::Fetch);
         assert_eq!(app.status(), LOADING);
+    }
+
+    #[test]
+    fn into_reports_returns_the_last_loaded_reports() {
+        let shorter = vec![report("c/d", Ok(vec![]))];
+        let app = run(loaded(), [Message::Loaded(shorter.clone())]).0;
+        assert_eq!(app.into_reports(), shorter);
     }
 
     #[test]

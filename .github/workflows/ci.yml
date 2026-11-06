@@ -43,7 +43,7 @@ jobs:
       with:
         tool: cargo-llvm-cov
     # Runs the tests once with coverage, prints the per-file summary, and fails below the minimum.
-    - run: cargo llvm-cov --fail-under-lines 85
+    - run: cargo llvm-cov --fail-under-lines 90
     # The HTML report is built from the data above, without running the tests again.
     - if: ${{ !cancelled() }}
       run: cargo llvm-cov report --html

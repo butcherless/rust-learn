@@ -83,7 +83,7 @@ User-facing limitations are in the README. These only affect unusual input:
 - [x] `cargo build` and `cargo build --release` succeed with no warnings.
 - [x] `cargo test` passes offline without a token.
 - [x] `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` are clean.
-- [x] Line coverage (`cargo llvm-cov`) is at least 85%, enforced in CI.
+- [x] Line coverage (`cargo llvm-cov`) is at least 90%, enforced in CI.
 - [x] `cargo run` without a token exits 2 with a clear message.
 - [x] The domain has no HTTP, serialization or CLI imports.
 - [x] `README.md` is updated and `projects.toml` is present.

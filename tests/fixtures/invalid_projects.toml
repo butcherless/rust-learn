@@ -1,0 +1,2 @@
+# Used by tests: the second entry is not owner/repo.
+projects = ["acme/widgets", "not-a-project"]

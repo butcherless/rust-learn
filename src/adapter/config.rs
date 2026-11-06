@@ -91,6 +91,17 @@ mod tests {
     }
 
     #[test]
+    fn loads_and_parses_a_file() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projects.toml");
+        let names: Vec<String> = load_projects(&path)
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(names, ["acme/widgets", "acme/gadgets"]);
+    }
+
+    #[test]
     fn missing_file_is_an_io_error() {
         let error = load_projects(Path::new("does-not-exist.toml")).unwrap_err();
         assert!(matches!(error, ConfigError::Io { .. }));

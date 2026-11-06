@@ -1,0 +1,2 @@
+# Used by tests: never fetched, because the tests stop before any HTTP call.
+projects = ["acme/widgets", " acme/gadgets "]

@@ -108,6 +108,6 @@ Coverage uses [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov). Insta
 `brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`; `rust-toolchain.toml`
 already installs the `llvm-tools-preview` component it needs.
 
-CI runs fmt, clippy, and the tests with coverage. It fails if line coverage drops below 85%, and
+CI runs fmt, clippy, and the tests with coverage. It fails if line coverage drops below 90%, and
 attaches the HTML report to each run as the `coverage-html` artifact. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for requirements
 and design, and [CLAUDE.md](CLAUDE.md) for architecture and code rules.
