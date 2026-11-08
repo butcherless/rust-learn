@@ -39,7 +39,8 @@ cargo run -- year 2026                             # RF-07; necesita unas 90 col
 cargo run -- summary 2026                          # RF-08, RF-14: incluye las horas por mes y el acumulado
 cargo run -- hours laborable-verano 8,5            # RF-09; con coma o punto
 cargo run -- quota 2026 23                         # RF-10
-cargo run -- month 2026 6 > junio.txt              # sin color al redirigir; también con NO_COLOR=1
+cargo run -- month 2026 6 > junio.txt              # sin color al redirigir y con letras en lugar de puntos; también con NO_COLOR=1
+CLICOLOR_FORCE=1 cargo run -- month 2026 6 | less -R   # fuerza el color (puntos) aunque la salida no sea un terminal
 ```
 
 ### Verificar
@@ -101,6 +102,8 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Los textos de error propios de clap siguen en inglés.
   - `render`: todo el texto de consola, en español.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
+    - `Marker` (RN-20): `Dot` pinta un `●` del color del tipo a la derecha del número sin color, y `Letter` usa la letra. `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.
+    - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Dot`.
     - Cada mes ocupa 27 columnas; la vista de año pone 3 por fila, separados por 3 espacios.
     - Las horas llevan coma decimal (`decimal`).
   - `json`: DTOs con serde; el dominio no conoce serde.

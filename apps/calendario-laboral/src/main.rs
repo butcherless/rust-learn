@@ -10,6 +10,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 use calendario_laboral::adapters::cli::Args;
+use calendario_laboral::adapters::render::Marker;
 use calendario_laboral::adapters::{json, render};
 use calendario_laboral::application::{Command, Event, Outcome, execute};
 
@@ -35,9 +36,20 @@ fn run(path: &Path, command: Command) -> Result<(), Box<dyn Error>> {
             show(&event);
         }
         Outcome::Unchanged(event) => show(&event),
-        Outcome::Report(report) => anstream::print!("{}", render::report(&report)),
+        Outcome::Report(report) => anstream::print!("{}", render::report(&report, marker())),
     }
     Ok(())
+}
+
+/// El punto de color si stdout tendrá color, y la letra si no: al redirigir o con `NO_COLOR`
+/// (RN-20).
+fn marker() -> Marker {
+    Marker::for_color(match anstream::AutoStream::choice(&std::io::stdout()) {
+        anstream::ColorChoice::Never => false,
+        anstream::ColorChoice::Auto
+        | anstream::ColorChoice::AlwaysAnsi
+        | anstream::ColorChoice::Always => true,
+    })
 }
 
 fn show(event: &Event) {

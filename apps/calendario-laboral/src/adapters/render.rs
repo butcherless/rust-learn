@@ -21,6 +21,30 @@ const MONTHS_PER_ROW: usize = 3;
 const HEADER: &str = "Lu  Ma  Mi  Ju  Vi  Sá  Do";
 const BLANK_CELL: &str = "   ";
 
+/// Cómo se identifica el tipo de cada día junto a su número (RN-20).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Marker {
+    /// Un punto `●` del color del tipo, a la derecha del número: `15●`. Solo con color.
+    Dot,
+    /// La letra del tipo: `15F`. Para la salida sin color, donde un punto no distingue nada.
+    Letter,
+}
+
+impl Marker {
+    /// El punto si la salida tendrá color, y la letra si no.
+    pub const fn for_color(color: bool) -> Self {
+        if color { Self::Dot } else { Self::Letter }
+    }
+
+    /// El símbolo de `kind`, pintado de su color.
+    fn symbol(self, kind: DayKind) -> String {
+        match self {
+            Self::Dot => paint(kind, "●"),
+            Self::Letter => paint(kind, &kind.letter().to_string()),
+        }
+    }
+}
+
 /// El texto de un cambio y un aviso que se muestra aparte.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
@@ -116,16 +140,10 @@ fn mark_line(mark: &Mark) -> String {
         .map_or(text.clone(), |description| format!("{text}  {description}"))
 }
 
-fn legend() -> String {
+fn legend(marker: Marker) -> String {
     let items: Vec<String> = DayKind::ALL
         .into_iter()
-        .map(|kind| {
-            format!(
-                "{} {}",
-                paint(kind, &kind.letter().to_string()),
-                kind.label()
-            )
-        })
+        .map(|kind| format!("{} {}", marker.symbol(kind), kind.label()))
         .collect();
     format!("Leyenda: {}", items.join(" · "))
 }
@@ -142,21 +160,19 @@ fn vacation_line(summary: &Summary) -> String {
     }
 }
 
-fn cell(day: &ResolvedDay) -> String {
-    paint(
-        day.kind,
-        &format!("{:>2}{}", day.date.day(), day.kind.letter()),
-    )
+/// Un día de la cuadrícula: el número sin color y, a su derecha, el símbolo de su tipo (RN-20).
+fn cell(day: &ResolvedDay, marker: Marker) -> String {
+    format!("{:>2}{}", day.date.day(), marker.symbol(day.kind))
 }
 
 /// Las líneas de un mes, de [`MONTH_WIDTH`] caracteres, completadas hasta `weeks` semanas.
-fn month_grid(view: &MonthView, weeks: usize) -> Vec<String> {
+fn month_grid(view: &MonthView, weeks: usize, marker: Marker) -> Vec<String> {
     let leading = view
         .days
         .first()
         .map_or(0, |day| day.date.weekday().num_days_from_monday() as usize);
     let cells: Vec<String> = iter::repeat_n(BLANK_CELL.to_owned(), leading)
-        .chain(view.days.iter().map(cell))
+        .chain(view.days.iter().map(|day| cell(day, marker)))
         .collect();
     let rows: Vec<String> = cells
         .chunks(7)
@@ -250,7 +266,7 @@ fn month_hours_table(summary: &Summary) -> Vec<String> {
     .collect()
 }
 
-fn month(view: &MonthView, summary: &Summary) -> String {
+fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
     let marks = (!view.marks.is_empty())
         .then(|| {
             iter::once(String::new())
@@ -264,22 +280,22 @@ fn month(view: &MonthView, summary: &Summary) -> String {
         .into_iter()
         .flatten();
     lines(
-        month_grid(view, 0)
+        month_grid(view, 0, marker)
             .into_iter()
             .chain(marks)
             .chain(iter::once(String::new()))
             .chain(default_vacation_note(&view.days))
             .chain(summary.month(view.month).map(month_hours_line))
-            .chain([legend(), vacation_line(summary)]),
+            .chain([legend(marker), vacation_line(summary)]),
     )
 }
 
-fn year(months: &[MonthView], summary: &Summary) -> String {
+fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
     let rows = months.chunks(MONTHS_PER_ROW).flat_map(|row| {
         let grids: Vec<Vec<String>> = row
             .iter()
             .map(|view| {
-                month_grid(view, MAX_WEEKS)
+                month_grid(view, MAX_WEEKS, marker)
                     .into_iter()
                     .chain(iter::once(month_hours_cell(summary, view.month)))
                     .collect()
@@ -299,15 +315,15 @@ fn year(months: &[MonthView], summary: &Summary) -> String {
     let all_days: Vec<ResolvedDay> = months.iter().flat_map(|view| view.days.clone()).collect();
     lines(
         rows.chain(default_vacation_note(&all_days))
-            .chain([legend(), vacation_line(summary)]),
+            .chain([legend(marker), vacation_line(summary)]),
     )
 }
 
-fn summary(summary: &Summary) -> String {
+fn summary(summary: &Summary, marker: Marker) -> String {
     let counts = summary.counts.iter().map(|(kind, count)| {
         format!(
             "  {} {:<17}{:>4}",
-            paint(*kind, &kind.letter().to_string()),
+            marker.symbol(*kind),
             kind.label(),
             count
         )
@@ -329,13 +345,10 @@ fn summary(summary: &Summary) -> String {
     )
 }
 
-fn day(day: &ResolvedDay) -> String {
+fn day(day: &ResolvedDay, marker: Marker) -> String {
     let parts = [
         format!("{} ({})", day.date, weekday_name(day.date.weekday())),
-        paint(
-            day.kind,
-            &format!("{} {}", day.kind.letter(), day.kind.label()),
-        ),
+        format!("{} {}", marker.symbol(day.kind), day.kind.label()),
         format!("{} h", decimal(day.hours)),
         origin(day),
     ];
@@ -349,15 +362,16 @@ fn day(day: &ResolvedDay) -> String {
     ))
 }
 
-/// El texto del resultado de una consulta, terminado en salto de línea.
-pub fn report(report: &Report) -> String {
+/// El texto del resultado de una consulta, terminado en salto de línea. `marker` decide cómo se
+/// identifica el tipo de cada día (RN-20).
+pub fn report(report: &Report, marker: Marker) -> String {
     match report {
         Report::Marks(marks) if marks.is_empty() => lines(iter::once("No hay marcas.".to_owned())),
         Report::Marks(marks) => lines(marks.iter().map(mark_line)),
-        Report::Day(resolved) => day(resolved),
-        Report::Month(view, totals) => month(view, totals),
-        Report::Year(months, totals) => year(months, totals),
-        Report::Summary(totals) => summary(totals),
+        Report::Day(resolved) => day(resolved, marker),
+        Report::Month(view, totals) => month(view, totals, marker),
+        Report::Year(months, totals) => year(months, totals, marker),
+        Report::Summary(totals) => summary(totals, marker),
     }
 }
 
@@ -408,7 +422,7 @@ mod tests {
     use super::*;
     use crate::application::{Command, Outcome, execute};
     use crate::domain::fixtures::{calendar, date, marked};
-    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Shift};
+    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, Shift};
 
     fn plain(text: &str) -> String {
         anstream::adapter::strip_str(text).to_string()
@@ -416,7 +430,7 @@ mod tests {
 
     fn shown(calendar: Calendar, command: Command) -> String {
         match execute(calendar, command) {
-            Ok(Outcome::Report(result)) => plain(&report(&result)),
+            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Letter)),
             other => format!("{other:?}"),
         }
     }
@@ -478,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn rf_06_colors_identify_each_kind() {
+    fn rf_06_rn_20_colors_identify_each_kind_with_a_dot_next_to_a_plain_number() {
         let calendar = marked(&[
             (MarkKind::Reduced, "2026-07-01", "2026-07-01"),
             (MarkKind::Reduced, "2026-06-01", "2026-06-01"),
@@ -486,20 +500,71 @@ mod tests {
             (MarkKind::Vacation, "2026-06-03", "2026-06-03"),
         ]);
         let colored = match execute(calendar, Command::Year(2026)) {
-            Ok(Outcome::Report(result)) => report(&result),
+            Ok(Outcome::Report(result)) => report(&result, Marker::Dot),
             other => format!("{other:?}"),
         };
         [
-            ("\u{1b}[32m 4L\u{1b}[0m", "verde"),
-            ("\u{1b}[33m 1R\u{1b}[0m", "amarillo"),
-            ("\u{1b}[36m 2l\u{1b}[0m", "cian"),
-            ("\u{1b}[34m 1r\u{1b}[0m", "azul"),
-            ("\u{1b}[90m 6S\u{1b}[0m", "gris"),
-            ("\u{1b}[31m 2F\u{1b}[0m", "rojo"),
-            ("\u{1b}[35m 3V\u{1b}[0m", "magenta"),
+            (" 4\u{1b}[32m●\u{1b}[0m", "verde"),
+            (" 1\u{1b}[33m●\u{1b}[0m", "amarillo"),
+            (" 2\u{1b}[36m●\u{1b}[0m", "cian"),
+            (" 1\u{1b}[34m●\u{1b}[0m", "azul"),
+            (" 6\u{1b}[90m●\u{1b}[0m", "gris"),
+            (" 2\u{1b}[31m●\u{1b}[0m", "rojo"),
+            (" 3\u{1b}[35m●\u{1b}[0m", "magenta"),
         ]
         .into_iter()
         .for_each(|(code, name)| assert!(colored.contains(code), "{name}"));
+    }
+
+    #[test]
+    fn rn_20_with_color_a_dot_follows_the_number_and_without_color_the_letter() {
+        let calendar = marked(&[(MarkKind::Holiday, "2026-06-15", "2026-06-15")]);
+        let month = |marker| match execute(
+            calendar.clone(),
+            Command::Month {
+                year: 2026,
+                month: Month::June,
+            },
+        ) {
+            Ok(Outcome::Report(result)) => plain(&report(&result, marker)),
+            other => format!("{other:?}"),
+        };
+        let dots = month(Marker::Dot);
+        let letters = month(Marker::Letter);
+        [
+            (&dots, " 1●  2●  3●  4●  5●  6●  7●"),
+            (&dots, "15● 16● 17● 18● 19● 20● 21●"),
+            (&letters, " 1L  2L  3L  4L  5R  6S  7S"),
+            (&letters, "15F 16L 17L 18L 19R 20S 21S"),
+        ]
+        .into_iter()
+        .for_each(|(text, line)| assert!(text.lines().any(|l| l == line), "{line}\n{text}"));
+        assert!(
+            dots.contains("Leyenda: ● Laborable · ● Reducido · ● Laborable verano"),
+            "{dots}"
+        );
+        assert_eq!(Marker::for_color(true), Marker::Dot);
+        assert_eq!(Marker::for_color(false), Marker::Letter);
+    }
+
+    #[test]
+    fn rn_20_day_and_summary_use_the_marker() {
+        let day = match execute(calendar(), Command::Day(date(2026, 6, 5))) {
+            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Dot)),
+            other => format!("{other:?}"),
+        };
+        assert_eq!(
+            day,
+            "2026-06-05 (viernes) · ● Reducido · 6,0 h · jornada reducida de los viernes\n"
+        );
+        let summary = match execute(calendar(), Command::Summary(2026)) {
+            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Dot)),
+            other => format!("{other:?}"),
+        };
+        assert!(
+            summary.contains("\n  ● Fin de semana     104\n"),
+            "{summary}"
+        );
     }
 
     #[test]

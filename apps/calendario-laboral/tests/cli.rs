@@ -79,6 +79,25 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
 }
 
 #[test]
+fn rn_20_a_terminal_with_color_shows_dots_and_redirected_output_letters() {
+    let file = TempFile::new("marker");
+    run(&file, &["add-year", "2026"]);
+    let colored = Command::new(env!("CARGO_BIN_EXE_calendario"))
+        .args(["month", "2026", "junio", "--file"])
+        .arg(&file.0)
+        .env("CLICOLOR_FORCE", "1")
+        .env_remove("NO_COLOR")
+        .output()
+        .expect("the binary runs");
+    let colored = stdout(&colored);
+    assert!(colored.contains(" 1\u{1b}[32m●\u{1b}[0m"), "{colored}");
+    assert!(!colored.contains(" 1L"), "{colored}");
+    let plain = stdout(&run(&file, &["month", "2026", "junio"]));
+    assert!(plain.contains(" 1L  2L"), "{plain}");
+    assert!(!plain.contains('●'), "{plain}");
+}
+
+#[test]
 fn rf_03_rf_04_rf_05_list_day_and_unmark() {
     let file = TempFile::new("unmark");
     run(&file, &["add-year", "2026"]);
