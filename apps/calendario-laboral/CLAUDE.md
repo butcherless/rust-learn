@@ -35,7 +35,7 @@ cargo run -- list                                  # RF-04; --year 2026 para un 
 cargo run -- unmark 1                              # RF-03, con el id que muestra `list`
 cargo run -- day 2026-06-08                        # RF-05
 cargo run -- month 2026 junio                      # RF-06, RF-14; o `month 2026 6`; sin argumentos, el mes actual
-cargo run -- year 2026                             # RF-07; necesita unas 90 columnas
+cargo run -- year 2026                             # RF-07; necesita unas 126 columnas
 cargo run -- summary 2026                          # RF-08, RF-14: incluye las horas por mes y el acumulado
 cargo run -- hours laborable-verano 8,5            # RF-09; con coma o punto
 cargo run -- quota 2026 23                         # RF-10
@@ -102,9 +102,9 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Los textos de error propios de clap siguen en inglés.
   - `render`: todo el texto de consola, en español.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
-    - `Marker` (RN-20): `Dot` pinta un `●` del color del tipo a la derecha del número sin color, y `Letter` usa la letra. `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.
-    - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Dot`.
-    - Cada mes ocupa 27 columnas; la vista de año pone 3 por fila, separados por 3 espacios.
+    - `Marker` (RN-20): `Bar` pinta una `▎` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.
+    - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
+    - Cada mes ocupa `MONTH_WIDTH` = 40 columnas; la vista de año pone 3 por fila, separados por 3 espacios (~126 columnas).
     - Las horas llevan coma decimal (`decimal`).
   - `json`: DTOs con serde; el dominio no conoce serde.
     - `decode` valida a través de los constructores del dominio.

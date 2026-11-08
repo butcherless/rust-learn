@@ -29,8 +29,8 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Mark` | Un `MarkKind` sobre un `DateRange`, con id y descripción opcional | «marca», `mark`, `unmark` |
 | `MarkKind` | Lo que fija un `Mark`: `Reduced`, `Holiday` o `Vacation` | `reducido`, `festivo`, `vacaciones` |
 | `DateRange` | Rango de días `[from, to]`, ambos incluidos | `<fecha> [<hasta>]` |
-| `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y punto `●` o letra |
-| `Marker` | Cómo se identifica el tipo junto al número del día: `Dot` (punto de color) o `Letter` (RN-20) | `15●` o `15F` |
+| `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y barra `▎` o letra |
+| `Marker` | Cómo se identifica el tipo junto al número del día: `Bar` (barra de color) o `Letter` (RN-20) | `15 ▎` o `15 F` |
 | `Category` | Clase de un `DayKind`: `Working`, `NonWorking` o `Absence` | laborable, no laborable, ausencia |
 | `Shift` | Una de las cuatro jornadas con horas configurables | `<jornada>` de `hours` |
 | `Hours` | Las horas de los cuatro `Shift` | `hours` |
@@ -98,7 +98,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-17 | Las horas de un `Shift` están entre 0 y 24. |
 | RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Solo se cambian editando `reduced_days` en el fichero; con una lista vacía no hay días reducidos por regla. |
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
-| RN-20 | En las vistas, el número del día va sin color y a su derecha un símbolo con el color del `DayKind`. Si la salida tiene color, el símbolo es un punto `●` (`15●`), que deja leer mejor los números. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), el punto no distinguiría nada, así que se usa la letra del `DayKind` (`15F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
+| RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra vertical `▎` (`15 ▎`), que deja leer mejor los números. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
 
 ## 4. Requisitos funcionales
 
@@ -146,16 +146,16 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
   - Códigos de salida: 0 si todo va bien, 1 si la operación falla y 2 si los argumentos no son válidos.
 - **Ayuda:** `calendario --help` y `calendario <comando> --help`.
 
-Cada día se muestra con su número y, a la derecha, un punto `●` del color de su tipo. Sin color (al redirigir la salida o con `NO_COLOR`), el punto se sustituye por la letra del tipo (RN-20). El ejemplo muestra la salida sin color: Cada mes ocupa 27 columnas, y la vista de año necesita unas 90.
+Cada día se muestra con su número, un espacio y una barra `▎` del color de su tipo (`15 ▎`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila, necesita unas 126. El ejemplo muestra la salida sin color:
 
 ```
-        Junio 2026
-Lu  Ma  Mi  Ju  Vi  Sá  Do
- 1L  2L  3L  4L  5V  6S  7S
- 8V  9V 10V 11V 12V 13S 14S
-15L 16L 17L 18L 19R 20S 21S
-22L 23L 24L 25L 26R 27S 28S
-29L 30L
+               Junio 2026
+Lu    Ma    Mi    Ju    Vi    Sá    Do
+ 1 L   2 L   3 L   4 L   5 V   6 S   7 S
+ 8 V   9 V  10 V  11 V  12 V  13 S  14 S
+15 L  16 L  17 L  18 L  19 R  20 S  21 S
+22 L  23 L  24 L  25 L  26 R  27 S  28 S
+29 L  30 L
 
 Marcas:
   #1   vacaciones 2026-06-05 → 2026-06-12  Viaje
@@ -245,7 +245,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-08 | Los ids se reutilizan si se borra el `Mark` con el id más alto (RN-16). |
 | 2026-11-08 | RF-12 y RF-13 quedan fuera de la v1. |
 | 2026-11-08 | Documentación en español; conceptos y código en inglés (RNF-07). |
-| 2026-11-08 | RN-20: punto de color `●` a la derecha del número en lugar de la letra (`15●` en vez de `15F`), para leer mejor los números. La letra se mantiene sin color. |
+| 2026-11-08 | RN-20: símbolo de color a la derecha del número en lugar de la letra pegada (`15F`), para leer mejor los números. Se probó un punto pegado (`15●`) y se eligió una barra separada por un espacio, con dos espacios entre días (`15 ▎  16 ▎`). La letra se mantiene sin color, en el mismo sitio. La vista de año sigue con 3 meses por fila (~126 columnas). |
 | 2026-11-08 | Enumeraciones antes que códigos numéricos (RNF-08): el mes es la enumeración `Month` del dominio. RN-14 empieza en `Month::July` y el `Summer` es `Month::July` y `Month::August`. La CLI acepta el mes por nombre o por número. |
 | 2026-11-08 | RF-14: horas teóricas, no registradas; columnas de días, horas y acumulado; se calcula en el dominio (`Summary.months`) y se muestra en `summary`, `month` y `year`. No se muestran horas de ausencias, ni objetivo anual, ni CSV (queda para RF-13). Un mes a 0 h por las vacaciones por defecto se muestra tal cual. |
 | 2026-11-08 | Todos los viernes son reducidos (RN-18). Se reutilizan los `Shift` `Reduced` y `SummerReduced` en lugar de crear jornadas nuevas, y los días son configurables en el JSON como el `Weekend`. |

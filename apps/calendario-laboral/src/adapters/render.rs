@@ -12,34 +12,41 @@ use chrono::{Datelike, Weekday};
 use crate::application::{Event, MonthView, Report};
 use crate::domain::{DayKind, Mark, Month, MonthTotal, Origin, ResolvedDay, Summary};
 
-/// Ancho visible de un mes en la cuadrícula: siete celdas de tres caracteres y seis espacios.
-const MONTH_WIDTH: usize = 27;
+/// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
+const CELL_WIDTH: usize = 4;
+/// Separación entre dos días, mayor que la del número y su símbolo para que se vea de qué
+/// número es cada símbolo (RN-20).
+const CELL_GAP: &str = "  ";
+/// Ancho visible de un mes en la cuadrícula: siete celdas y seis separaciones.
+const MONTH_WIDTH: usize = 7 * CELL_WIDTH + 6 * CELL_GAP.len();
 /// Semanas que puede ocupar un mes, para que todos los meses de la vista de año midan lo mismo.
 const MAX_WEEKS: usize = 6;
 /// Meses por fila en la vista de año.
 const MONTHS_PER_ROW: usize = 3;
-const HEADER: &str = "Lu  Ma  Mi  Ju  Vi  Sá  Do";
-const BLANK_CELL: &str = "   ";
+/// Los días de la semana, alineados con el número de cada celda.
+const HEADER: &str = "Lu    Ma    Mi    Ju    Vi    Sá    Do";
+const BLANK_CELL: &str = "    ";
 
 /// Cómo se identifica el tipo de cada día junto a su número (RN-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Marker {
-    /// Un punto `●` del color del tipo, a la derecha del número: `15●`. Solo con color.
-    Dot,
-    /// La letra del tipo: `15F`. Para la salida sin color, donde un punto no distingue nada.
+    /// Una barra `▎` del color del tipo, separada del número: `15 ▎`. Solo con color.
+    Bar,
+    /// La letra del tipo en el mismo sitio: `15 F`. Para la salida sin color, donde la barra no
+    /// distingue nada.
     Letter,
 }
 
 impl Marker {
-    /// El punto si la salida tendrá color, y la letra si no.
+    /// La barra si la salida tendrá color, y la letra si no.
     pub const fn for_color(color: bool) -> Self {
-        if color { Self::Dot } else { Self::Letter }
+        if color { Self::Bar } else { Self::Letter }
     }
 
     /// El símbolo de `kind`, pintado de su color.
     fn symbol(self, kind: DayKind) -> String {
         match self {
-            Self::Dot => paint(kind, "●"),
+            Self::Bar => paint(kind, "▎"),
             Self::Letter => paint(kind, &kind.letter().to_string()),
         }
     }
@@ -162,7 +169,7 @@ fn vacation_line(summary: &Summary) -> String {
 
 /// Un día de la cuadrícula: el número sin color y, a su derecha, el símbolo de su tipo (RN-20).
 fn cell(day: &ResolvedDay, marker: Marker) -> String {
-    format!("{:>2}{}", day.date.day(), marker.symbol(day.kind))
+    format!("{:>2} {}", day.date.day(), marker.symbol(day.kind))
 }
 
 /// Las líneas de un mes, de [`MONTH_WIDTH`] caracteres, completadas hasta `weeks` semanas.
@@ -181,7 +188,7 @@ fn month_grid(view: &MonthView, weeks: usize, marker: Marker) -> Vec<String> {
                 .cloned()
                 .chain(iter::repeat_n(BLANK_CELL.to_owned(), 7 - week.len()))
                 .collect::<Vec<_>>()
-                .join(" ")
+                .join(CELL_GAP)
         })
         .collect();
     let blank_rows = weeks.saturating_sub(rows.len());
@@ -448,13 +455,13 @@ mod tests {
             .expect("mark")
             .0;
         let expected = [
-            "        Junio 2026",
-            "Lu  Ma  Mi  Ju  Vi  Sá  Do",
-            " 1L  2L  3L  4L  5V  6S  7S",
-            " 8V  9V 10V 11V 12V 13S 14S",
-            "15L 16L 17L 18L 19R 20S 21S",
-            "22L 23L 24L 25L 26R 27S 28S",
-            "29L 30L",
+            "               Junio 2026",
+            "Lu    Ma    Mi    Ju    Vi    Sá    Do",
+            " 1 L   2 L   3 L   4 L   5 V   6 S   7 S",
+            " 8 V   9 V  10 V  11 V  12 V  13 S  14 S",
+            "15 L  16 L  17 L  18 L  19 R  20 S  21 S",
+            "22 L  23 L  24 L  25 L  26 R  27 S  28 S",
+            "29 L  30 L",
             "",
             "Marcas:",
             "  #1   vacaciones 2026-06-05 → 2026-06-12  Viaje",
@@ -487,12 +494,20 @@ mod tests {
             },
         );
         let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines.get(2), Some(&"                         1F"), "{text}");
-        assert_eq!(lines.get(3), Some(&" 2L  3L  4L  5L  6R  7S  8S"), "{text}");
+        assert_eq!(
+            lines.get(2),
+            Some(&"                                     1 F"),
+            "{text}"
+        );
+        assert_eq!(
+            lines.get(3),
+            Some(&" 2 L   3 L   4 L   5 L   6 R   7 S   8 S"),
+            "{text}"
+        );
     }
 
     #[test]
-    fn rf_06_rn_20_colors_identify_each_kind_with_a_dot_next_to_a_plain_number() {
+    fn rf_06_rn_20_colors_identify_each_kind_with_a_bar_next_to_a_plain_number() {
         let calendar = marked(&[
             (MarkKind::Reduced, "2026-07-01", "2026-07-01"),
             (MarkKind::Reduced, "2026-06-01", "2026-06-01"),
@@ -500,24 +515,24 @@ mod tests {
             (MarkKind::Vacation, "2026-06-03", "2026-06-03"),
         ]);
         let colored = match execute(calendar, Command::Year(2026)) {
-            Ok(Outcome::Report(result)) => report(&result, Marker::Dot),
+            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
             other => format!("{other:?}"),
         };
         [
-            (" 4\u{1b}[32m●\u{1b}[0m", "verde"),
-            (" 1\u{1b}[33m●\u{1b}[0m", "amarillo"),
-            (" 2\u{1b}[36m●\u{1b}[0m", "cian"),
-            (" 1\u{1b}[34m●\u{1b}[0m", "azul"),
-            (" 6\u{1b}[90m●\u{1b}[0m", "gris"),
-            (" 2\u{1b}[31m●\u{1b}[0m", "rojo"),
-            (" 3\u{1b}[35m●\u{1b}[0m", "magenta"),
+            (" 4 \u{1b}[32m▎\u{1b}[0m", "verde"),
+            (" 1 \u{1b}[33m▎\u{1b}[0m", "amarillo"),
+            (" 2 \u{1b}[36m▎\u{1b}[0m", "cian"),
+            (" 1 \u{1b}[34m▎\u{1b}[0m", "azul"),
+            (" 6 \u{1b}[90m▎\u{1b}[0m", "gris"),
+            (" 2 \u{1b}[31m▎\u{1b}[0m", "rojo"),
+            (" 3 \u{1b}[35m▎\u{1b}[0m", "magenta"),
         ]
         .into_iter()
         .for_each(|(code, name)| assert!(colored.contains(code), "{name}"));
     }
 
     #[test]
-    fn rn_20_with_color_a_dot_follows_the_number_and_without_color_the_letter() {
+    fn rn_20_with_color_a_bar_follows_the_number_and_without_color_the_letter() {
         let calendar = marked(&[(MarkKind::Holiday, "2026-06-15", "2026-06-15")]);
         let month = |marker| match execute(
             calendar.clone(),
@@ -529,40 +544,40 @@ mod tests {
             Ok(Outcome::Report(result)) => plain(&report(&result, marker)),
             other => format!("{other:?}"),
         };
-        let dots = month(Marker::Dot);
+        let bars = month(Marker::Bar);
         let letters = month(Marker::Letter);
         [
-            (&dots, " 1●  2●  3●  4●  5●  6●  7●"),
-            (&dots, "15● 16● 17● 18● 19● 20● 21●"),
-            (&letters, " 1L  2L  3L  4L  5R  6S  7S"),
-            (&letters, "15F 16L 17L 18L 19R 20S 21S"),
+            (&bars, " 1 ▎   2 ▎   3 ▎   4 ▎   5 ▎   6 ▎   7 ▎"),
+            (&bars, "15 ▎  16 ▎  17 ▎  18 ▎  19 ▎  20 ▎  21 ▎"),
+            (&letters, " 1 L   2 L   3 L   4 L   5 R   6 S   7 S"),
+            (&letters, "15 F  16 L  17 L  18 L  19 R  20 S  21 S"),
         ]
         .into_iter()
         .for_each(|(text, line)| assert!(text.lines().any(|l| l == line), "{line}\n{text}"));
         assert!(
-            dots.contains("Leyenda: ● Laborable · ● Reducido · ● Laborable verano"),
-            "{dots}"
+            bars.contains("Leyenda: ▎ Laborable · ▎ Reducido · ▎ Laborable verano"),
+            "{bars}"
         );
-        assert_eq!(Marker::for_color(true), Marker::Dot);
+        assert_eq!(Marker::for_color(true), Marker::Bar);
         assert_eq!(Marker::for_color(false), Marker::Letter);
     }
 
     #[test]
     fn rn_20_day_and_summary_use_the_marker() {
         let day = match execute(calendar(), Command::Day(date(2026, 6, 5))) {
-            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Dot)),
+            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Bar)),
             other => format!("{other:?}"),
         };
         assert_eq!(
             day,
-            "2026-06-05 (viernes) · ● Reducido · 6,0 h · jornada reducida de los viernes\n"
+            "2026-06-05 (viernes) · ▎ Reducido · 6,0 h · jornada reducida de los viernes\n"
         );
         let summary = match execute(calendar(), Command::Summary(2026)) {
-            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Dot)),
+            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Bar)),
             other => format!("{other:?}"),
         };
         assert!(
-            summary.contains("\n  ● Fin de semana     104\n"),
+            summary.contains("\n  ▎ Fin de semana     104\n"),
             "{summary}"
         );
     }
@@ -576,25 +591,27 @@ mod tests {
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
             lines.first(),
-            Some(&"        Enero 2026                   Febrero 2026                   Marzo 2026")
+            Some(
+                &"               Enero 2026                                Febrero 2026                                Marzo 2026"
+            )
         );
         assert_eq!(
             lines.get(1),
             Some(
-                &"Lu  Ma  Mi  Ju  Vi  Sá  Do    Lu  Ma  Mi  Ju  Vi  Sá  Do    Lu  Ma  Mi  Ju  Vi  Sá  Do"
+                &"Lu    Ma    Mi    Ju    Vi    Sá    Do     Lu    Ma    Mi    Ju    Vi    Sá    Do     Lu    Ma    Mi    Ju    Vi    Sá    Do"
             )
         );
         assert_eq!(
             lines.get(2),
             Some(
-                &"             1L  2R  3S  4S                            1S                            1S"
+                &"                   1 L   2 R   3 S   4 S                                        1 S                                        1 S"
             )
         );
         // Cuatro filas de tres meses, de 8 líneas, la de horas (RF-14) y una en blanco; después,
         // leyenda y cupo.
         assert_eq!(lines.len(), 4 * 10 + 2, "{text}");
         let hours = format!(
-            "{a:^27}   {b:^27}   {c:^27}",
+            "{a:^40}   {b:^40}   {c:^40}",
             a = "174,5 h · 22 días",
             b = "160,0 h · 20 días",
             c = "177,0 h · 22 días"
@@ -605,7 +622,7 @@ mod tests {
         assert_eq!(
             lines.get(30),
             Some(
-                &"       Octubre 2026                 Noviembre 2026                Diciembre 2026"
+                &"              Octubre 2026                              Noviembre 2026                             Diciembre 2026"
             )
         );
     }
@@ -619,7 +636,7 @@ mod tests {
                 month: Month::July,
             },
         );
-        assert!(text.contains(" 1V  2V  3V  4S  5S"), "{text}");
+        assert!(text.contains(" 1 V   2 V   3 V   4 S   5 S"), "{text}");
         assert!(
             text.contains(
                 "Vacaciones por defecto desde el 1 de julio: el año no tiene marcas de vacaciones."

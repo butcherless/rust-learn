@@ -63,7 +63,7 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
     assert!(!month.contains('\u{1b}'), "{month}");
     assert!(
         month.starts_with(
-            "        Junio 2026\nLu  Ma  Mi  Ju  Vi  Sá  Do\n 1L  2L  3L  4L  5V  6S  7S\n 8V  9V 10V 11V 12V 13S 14S\n"
+            "               Junio 2026\nLu    Ma    Mi    Ju    Vi    Sá    Do\n 1 L   2 L   3 L   4 L   5 V   6 S   7 S\n 8 V   9 V  10 V  11 V  12 V  13 S  14 S\n"
         ),
         "{month}"
     );
@@ -79,7 +79,7 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
 }
 
 #[test]
-fn rn_20_a_terminal_with_color_shows_dots_and_redirected_output_letters() {
+fn rn_20_a_terminal_with_color_shows_bars_and_redirected_output_letters() {
     let file = TempFile::new("marker");
     run(&file, &["add-year", "2026"]);
     let colored = Command::new(env!("CARGO_BIN_EXE_calendario"))
@@ -90,11 +90,14 @@ fn rn_20_a_terminal_with_color_shows_dots_and_redirected_output_letters() {
         .output()
         .expect("the binary runs");
     let colored = stdout(&colored);
-    assert!(colored.contains(" 1\u{1b}[32m●\u{1b}[0m"), "{colored}");
-    assert!(!colored.contains(" 1L"), "{colored}");
+    assert!(
+        colored.contains(" 1 \u{1b}[32m▎\u{1b}[0m   2 "),
+        "{colored}"
+    );
+    assert!(!colored.contains(" 1 L"), "{colored}");
     let plain = stdout(&run(&file, &["month", "2026", "junio"]));
-    assert!(plain.contains(" 1L  2L"), "{plain}");
-    assert!(!plain.contains('●'), "{plain}");
+    assert!(plain.contains(" 1 L   2 L"), "{plain}");
+    assert!(!plain.contains('▎'), "{plain}");
 }
 
 #[test]
