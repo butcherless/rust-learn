@@ -134,3 +134,9 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 - Se importa abriendo la carpeta del proyecto (`Cargo.toml` en la raíz) con el plugin de Rust.
 - `.idea/` no está en `.gitignore`, igual que en el proyecto hermano.
 - Para ejecutar desde el IDE, crea una configuración Cargo con `run -- <subcomando>`. Conviene añadir la variable `CALENDARIO_FILE`, para no crear `calendario.json` en la raíz.
+
+## Git
+
+- Repositorio local en la rama `main`, todavía sin remoto; se subirá más adelante. La identidad (`user.name`, `user.email`) está configurada solo en este repositorio.
+- Un commit por cambio de requisito, con el documento, los tests y el código juntos, y solo con `cargo fmt --check`, clippy y `cargo llvm-cov --fail-under-lines 90` en verde.
+- No se versionan `target/`, `.idea/` ni el `calendario.json` de la raíz, que es el calendario de uso real.
