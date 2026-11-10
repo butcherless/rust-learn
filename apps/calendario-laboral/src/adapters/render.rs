@@ -6,7 +6,7 @@
 
 use std::iter;
 
-use anstyle::{AnsiColor, Style};
+use anstyle::{Ansi256Color, AnsiColor, Color, Style};
 use chrono::{Datelike, Weekday};
 
 use crate::application::{Event, MonthView, Report};
@@ -34,7 +34,7 @@ const BLANK_CELL: &str = "    ";
 /// Cómo se identifica el tipo de cada día junto a su número (RN-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Marker {
-    /// Una barra `▎` del color del tipo, separada del número: `15 ▎`. Solo con color.
+    /// Una barra `▌` del color del tipo, separada del número: `15 ▌`. Solo con color.
     Bar,
     /// La letra del tipo en el mismo sitio: `15 F`. Para la salida sin color, donde la barra no
     /// distingue nada.
@@ -50,7 +50,7 @@ impl Marker {
     /// El símbolo de `kind`, pintado de su color.
     fn symbol(self, kind: DayKind) -> String {
         match self {
-            Self::Bar => paint(kind, "▎"),
+            Self::Bar => paint(kind, "▌"),
             Self::Letter => paint(kind, &kind.letter().to_string()),
         }
     }
@@ -65,20 +65,22 @@ pub struct Message {
     pub warning: Option<String>,
 }
 
-const fn color(kind: DayKind) -> AnsiColor {
+/// El color de cada `DayKind`. En cada pareja laborable, la jornada reducida es más tenue que la
+/// completa: cian frente a azul y, en `Summer`, un verde pálido de la paleta de 256 frente al verde.
+const fn color(kind: DayKind) -> Color {
     match kind {
-        DayKind::Working => AnsiColor::Green,
-        DayKind::Reduced => AnsiColor::Yellow,
-        DayKind::SummerWorking => AnsiColor::Cyan,
-        DayKind::SummerReduced => AnsiColor::Blue,
-        DayKind::Weekend => AnsiColor::BrightBlack,
-        DayKind::Holiday => AnsiColor::Red,
-        DayKind::Vacation => AnsiColor::Magenta,
+        DayKind::Working => Color::Ansi(AnsiColor::Blue),
+        DayKind::Reduced => Color::Ansi(AnsiColor::Cyan),
+        DayKind::SummerWorking => Color::Ansi(AnsiColor::Green),
+        DayKind::SummerReduced => Color::Ansi256(Ansi256Color(151)),
+        DayKind::Weekend => Color::Ansi(AnsiColor::BrightBlack),
+        DayKind::Holiday => Color::Ansi(AnsiColor::Red),
+        DayKind::Vacation => Color::Ansi(AnsiColor::BrightWhite),
     }
 }
 
 fn paint(kind: DayKind, text: &str) -> String {
-    let style = Style::new().fg_color(Some(color(kind).into()));
+    let style = Style::new().fg_color(Some(color(kind)));
     format!("{style}{text}{style:#}")
 }
 
@@ -565,13 +567,16 @@ mod tests {
             other => format!("{other:?}"),
         };
         [
-            (" 4 \u{1b}[32m▎\u{1b}[0m", "verde"),
-            (" 1 \u{1b}[33m▎\u{1b}[0m", "amarillo"),
-            (" 2 \u{1b}[36m▎\u{1b}[0m", "cian"),
-            (" 1 \u{1b}[34m▎\u{1b}[0m", "azul"),
-            (" 6 \u{1b}[90m▎\u{1b}[0m", "gris"),
-            (" 2 \u{1b}[31m▎\u{1b}[0m", "rojo"),
-            (" 3 \u{1b}[35m▎\u{1b}[0m", "magenta"),
+            (" 4 \u{1b}[34m▌\u{1b}[0m", "laborable: azul"),
+            (" 1 \u{1b}[36m▌\u{1b}[0m", "reducido: cian"),
+            (" 2 \u{1b}[32m▌\u{1b}[0m", "laborable verano: verde"),
+            (
+                " 1 \u{1b}[38;5;151m▌\u{1b}[0m",
+                "reducido verano: verde pálido",
+            ),
+            (" 6 \u{1b}[90m▌\u{1b}[0m", "gris"),
+            (" 2 \u{1b}[31m▌\u{1b}[0m", "rojo"),
+            (" 3 \u{1b}[97m▌\u{1b}[0m", "blanco"),
         ]
         .into_iter()
         .for_each(|(code, name)| assert!(colored.contains(code), "{name}"));
@@ -593,15 +598,15 @@ mod tests {
         let bars = month(Marker::Bar);
         let letters = month(Marker::Letter);
         [
-            (&bars, " 1 ▎   2 ▎   3 ▎   4 ▎   5 ▎   6 ▎   7 ▎"),
-            (&bars, "15 ▎  16 ▎  17 ▎  18 ▎  19 ▎  20 ▎  21 ▎"),
+            (&bars, " 1 ▌   2 ▌   3 ▌   4 ▌   5 ▌   6 ▌   7 ▌"),
+            (&bars, "15 ▌  16 ▌  17 ▌  18 ▌  19 ▌  20 ▌  21 ▌"),
             (&letters, " 1 L   2 L   3 L   4 L   5 R   6 S   7 S"),
             (&letters, "15 F  16 L  17 L  18 L  19 R  20 S  21 S"),
         ]
         .into_iter()
         .for_each(|(text, line)| assert!(text.lines().any(|l| l == line), "{line}\n{text}"));
         assert!(
-            bars.contains("Leyenda: ▎ Laborable · ▎ Reducido · ▎ Laborable verano"),
+            bars.contains("Leyenda: ▌ Laborable · ▌ Reducido · ▌ Laborable verano"),
             "{bars}"
         );
         assert_eq!(Marker::for_color(true), Marker::Bar);
@@ -616,14 +621,14 @@ mod tests {
         };
         assert_eq!(
             day,
-            "2026-06-05 (viernes) · ▎ Reducido · 6,0 h · jornada reducida de los viernes\n"
+            "2026-06-05 (viernes) · ▌ Reducido · 6,0 h · jornada reducida de los viernes\n"
         );
         let summary = match execute(calendar(), Command::Summary(2026)) {
             Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Bar)),
             other => format!("{other:?}"),
         };
         assert!(
-            summary.contains("\n  ▎ Fin de semana     104\n"),
+            summary.contains("\n  ▌ Fin de semana     104\n"),
             "{summary}"
         );
     }

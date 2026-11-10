@@ -91,13 +91,13 @@ fn rn_20_a_terminal_with_color_shows_bars_and_redirected_output_letters() {
         .expect("the binary runs");
     let colored = stdout(&colored);
     assert!(
-        colored.contains(" 1 \u{1b}[32m▎\u{1b}[0m   2 "),
+        colored.contains(" 1 \u{1b}[34m▌\u{1b}[0m   2 "),
         "{colored}"
     );
     assert!(!colored.contains(" 1 L"), "{colored}");
     let plain = stdout(&run(&file, &["month", "2026", "junio"]));
     assert!(plain.contains(" 1 L   2 L"), "{plain}");
-    assert!(!plain.contains('▎'), "{plain}");
+    assert!(!plain.contains('▌'), "{plain}");
 }
 
 #[test]

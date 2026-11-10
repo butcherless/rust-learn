@@ -29,8 +29,8 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Mark` | Un `MarkKind` sobre un `DateRange`, con id y descripción opcional | «marca», `mark`, `unmark` |
 | `MarkKind` | Lo que fija un `Mark`: `Reduced`, `Holiday` o `Vacation` | `reducido`, `festivo`, `vacaciones` |
 | `DateRange` | Rango de días `[from, to]`, ambos incluidos | `<fecha> [<hasta>]` |
-| `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y barra `▎` o letra |
-| `Marker` | Cómo se identifica el tipo junto al número del día: `Bar` (barra de color) o `Letter` (RN-20) | `15 ▎` o `15 F` |
+| `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y barra `▌` o letra |
+| `Marker` | Cómo se identifica el tipo junto al número del día: `Bar` (barra de color) o `Letter` (RN-20) | `15 ▌` o `15 F` |
 | `Category` | Clase de un `DayKind`: `Working`, `NonWorking` o `Absence` | laborable, no laborable, ausencia |
 | `Shift` | Una de las cuatro jornadas con horas configurables | `<jornada>` de `hours` |
 | `Hours` | Las horas de los cuatro `Shift` | `hours` |
@@ -49,13 +49,13 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 
 | `DayKind` | `Category` | Origen | `Shift` (horas por defecto) | Se muestra como | Letra | Color |
 |---|---|---|---|---|---|---|
-| `Working` | `Working` | Por defecto fuera del `Summer` | `Working` (8,5 h) | Laborable | L | Verde |
-| `Reduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, fuera del `Summer` | `Reduced` (6,0 h) | Reducido | R | Amarillo |
-| `SummerWorking` | `Working` | Por defecto en `Summer` | `SummerWorking` (8,5 h) | Laborable verano | l | Cian |
-| `SummerReduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, en `Summer` | `SummerReduced` (6,0 h) | Reducido verano | r | Azul |
+| `Working` | `Working` | Por defecto fuera del `Summer` | `Working` (8,5 h) | Laborable | L | Azul marino |
+| `Reduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, fuera del `Summer` | `Reduced` (6,0 h) | Reducido | R | Cian |
+| `SummerWorking` | `Working` | Por defecto en `Summer` | `SummerWorking` (8,5 h) | Laborable verano | l | Verde |
+| `SummerReduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, en `Summer` | `SummerReduced` (6,0 h) | Reducido verano | r | Verde pálido |
 | `Weekend` | `NonWorking` | Regla `Weekend` | — (0 h) | Fin de semana | S | Gris |
 | `Holiday` | `Absence` | `Mark` `Holiday` | — (0 h) | Festivo | F | Rojo |
-| `Vacation` | `Absence` | `Mark` `Vacation` o `DefaultVacation`; consume `quota` | — (0 h) | Vacaciones | V | Magenta |
+| `Vacation` | `Absence` | `Mark` `Vacation` o `DefaultVacation`; consume `quota` | — (0 h) | Vacaciones | V | Blanco |
 
 ### 2.3 Resolución del `DayKind` efectivo
 
@@ -98,7 +98,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-17 | Las horas de un `Shift` están entre 0 y 24. |
 | RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Solo se cambian editando `reduced_days` en el fichero; con una lista vacía no hay días reducidos por regla. |
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
-| RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra vertical `▎` (`15 ▎`), que deja leer mejor los números. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
+| RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra gruesa `▌` (media celda, `15 ▌`), que deja leer mejor los números y muestra bastante color para distinguir los tonos. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
 | RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
 
 ## 4. Requisitos funcionales
@@ -147,7 +147,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
   - Códigos de salida: 0 si todo va bien, 1 si la operación falla y 2 si los argumentos no son válidos.
 - **Ayuda:** `calendario --help` y `calendario <comando> --help`.
 
-Cada día se muestra con su número, un espacio y una barra `▎` del color de su tipo (`15 ▎`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21), necesita 130. El ejemplo muestra la salida sin color:
+Cada día se muestra con su número, un espacio y una barra `▌` del color de su tipo (`15 ▌`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21), necesita 130. El ejemplo muestra la salida sin color:
 
 ```
                Junio 2026
@@ -251,6 +251,8 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-08 | RF-14: horas teóricas, no registradas; columnas de días, horas y acumulado; se calcula en el dominio (`Summary.months`) y se muestra en `summary`, `month` y `year`. No se muestran horas de ausencias, ni objetivo anual, ni CSV (queda para RF-13). Un mes a 0 h por las vacaciones por defecto se muestra tal cual. |
 | 2026-11-08 | Todos los viernes son reducidos (RN-18). Se reutilizan los `Shift` `Reduced` y `SummerReduced` en lugar de crear jornadas nuevas, y los días son configurables en el JSON como el `Weekend`. |
 | 2026-11-10 | RN-21: rejilla gris punteada entre los meses de la vista de año (`┊`, `┈` y `┼`). Se probó primero solo con líneas interiores y se añadió el marco exterior (arriba, abajo, izquierda y derecha), aunque la vista pasa de ~126 a 130 columnas. |
+| 2026-11-10 | RN-20: la barra fina `▎` pasa a `▌` (media celda), porque con tan poca superficie de color se confundían el rojo de `Holiday` y el magenta de `Vacation`; se descartaron `║` (igual de fina) y `▎▎` (la vista de año pasaba a ~151 columnas). `Vacation` pasa de magenta a blanco brillante, el único color ANSI básico libre; en un terminal de fondo claro se verá poco. |
+| 2026-11-10 | Colores de los `DayKind` laborables por parejas, con la jornada completa más oscura que la reducida: `Working` en azul marino (el azul ANSI, que cada tema pinta a su manera; se descartó el azul marino de la paleta de 256, que apenas se ve sobre fondo oscuro) y `Reduced` en cian; en `Summer`, `SummerWorking` en verde y `SummerReduced` en un verde pálido, más tenue (color 151 de la paleta de 256; el verde brillante ANSI resultaba más intenso que el normal), para que ningún tipo comparta color. |
 
 ### Pendiente o posibles ampliaciones
 
