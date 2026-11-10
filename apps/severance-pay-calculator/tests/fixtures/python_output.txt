@@ -1,0 +1,18 @@
+
+*******************************
+SEVERANCE PAY CALCULATOR REPORT
+*******************************
+
+Annual Pay ·············> 53,000
+Type of dismissal  ·····> 33
+Severance per day pay ··> 13.128
+
+Initial date  ··········> 2021-10-11
+Current date  ··········> 2026-11-07
+Days between dates  ····> 1,854
+
+Total severance pay·····> 24,340
+
+Good luck!
+
+Disclaimer: Humans and AI can make mistakes. Check your data, please :-)

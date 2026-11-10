@@ -1,0 +1,11 @@
+[package]
+name = "severance-pay-calculator"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = "0.4.45"
+clap.workspace = true
+ratatui.workspace = true
+thiserror.workspace = true

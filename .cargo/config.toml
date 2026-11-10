@@ -1,3 +1,4 @@
 [alias]
-# Run from the workspace root: `cargo pr`, `cargo pr --tui`.
+# One run alias per app, used from the workspace root: `cargo pr --tui`, `cargo sev --print`.
 pr = "run -p pr-checker -- --config apps/pr-checker/projects.toml"
+sev = "run -p severance-pay-calculator --"

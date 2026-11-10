@@ -11,6 +11,7 @@ and README, and they share one `Cargo.lock`, one `target/` folder, the toolchain
 | Project | Description | Run from the root |
 |---|---|---|
 | [pr-checker](apps/pr-checker) | Lists the open pull requests of a set of GitHub repositories, as a table or an interactive terminal UI | `cargo pr` |
+| [severance-pay-calculator](apps/severance-pay-calculator) | Calculates Spanish severance pay, in an interactive terminal UI or as a printed report (`--print`) | `cargo sev` |
 
 ## Usage
 
