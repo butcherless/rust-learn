@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-Este fichero orienta a Claude Code (claude.ai/code) cuando trabaja con el código de este repositorio.
+Este fichero orienta a Claude Code (claude.ai/code) cuando trabaja en el proyecto `calendario-laboral` de este workspace. Los comandos comunes, la CI y las convenciones compartidas están en el `CLAUDE.md` raíz (en inglés); este fichero añade lo propio del proyecto.
 
 Aplicación de consola en Rust, `calendario`, que gestiona el `Calendar` laboral de uno o varios `Year` en un fichero JSON.
 - La fuente de verdad es `requisitos-calendario-laboral.md`: reglas (RN-xx), requisitos funcionales (RF-xx), decisiones y el glosario de conceptos (§2.1).
-- Las librerías y las convenciones siguen el proyecto hermano `../severance-pay-calculator`.
+- Las librerías y las convenciones siguen `apps/severance-pay-calculator`. Las versiones compartidas están en `[workspace.dependencies]` del `Cargo.toml` raíz.
 
 **Idiomas (RNF-07):**
 - En español: la documentación (este fichero, los requisitos, el rustdoc `///`/`//!` y los comentarios) y todo lo que ve el usuario.
@@ -12,50 +12,59 @@ Aplicación de consola en Rust, `calendario`, que gestiona el `Calendar` laboral
 
 ## Comandos
 
+Todos los comandos se ejecutan desde la raíz del workspace. El paquete es `calendario-laboral` (para `-p`) y el binario, `calendario`.
+
 ### Construir y ejecutar
 
 ```bash
-cargo build                                        # build de desarrollo → target/debug/calendario
-cargo build --release                              # build optimizado → target/release/calendario
-cargo install --path .                             # instala `calendario` en ~/.cargo/bin
-cargo run -- --help                                # ayuda del programa; `cargo run -- mark --help` para un subcomando
-cargo run --release -- month                       # cualquier `cargo run`, optimizado
-cargo doc --no-deps --open                         # rustdoc del crate
+cargo build -p calendario-laboral                  # build de desarrollo → target/debug/calendario (target/ de la raíz)
+cargo build --release -p calendario-laboral        # build optimizado → target/release/calendario
+cargo install --path apps/calendario-laboral       # instala `calendario` en ~/.cargo/bin
+cargo cal --help                                   # ayuda del programa; `cargo cal mark --help` para un subcomando
+cargo run --release -p calendario-laboral -- --file apps/calendario-laboral/calendario.json month   # optimizado
+cargo doc -p calendario-laboral --no-deps --open   # rustdoc del crate
 ```
 
-El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si tampoco, `./calendario.json` (ignorado por git). Si el fichero no existe, se parte de un `Calendar` vacío y el primer cambio lo crea.
+El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si tampoco, `./calendario.json`, relativo al directorio actual. Si el fichero no existe, se parte de un `Calendar` vacío y el primer cambio lo crea.
+
+El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (ignorado por git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
+
+Las consultas se pueden lanzar sobre el calendario real:
 
 ```bash
-export CALENDARIO_FILE=/tmp/calendario.json        # o pasa --file en cada comando
-cargo run -- add-year 2026                         # RF-01
-cargo run -- mark festivo 2026-03-03 --desc "Fiesta local"           # RF-02, un día
-cargo run -- mark vacaciones 2026-06-05 2026-06-12                   # RF-02, un rango
-cargo run -- mark reducido 2026-12-24
-cargo run -- list                                  # RF-04; --year 2026 para un año
-cargo run -- unmark 1                              # RF-03, con el id que muestra `list`
-cargo run -- day 2026-06-08                        # RF-05
-cargo run -- month 2026 junio                      # RF-06, RF-14; o `month 2026 6`; sin argumentos, el mes actual
-cargo run -- year 2026                             # RF-07; necesita 130 columnas
-cargo run -- summary 2026                          # RF-08, RF-14: incluye las horas por mes y el acumulado
-cargo run -- hours laborable-verano 8,5            # RF-09; con coma o punto
-cargo run -- quota 2026 23                         # RF-10
-cargo run -- month 2026 6 > junio.txt              # sin color al redirigir y con letras en lugar de puntos; también con NO_COLOR=1
-CLICOLOR_FORCE=1 cargo run -- month 2026 6 | less -R   # fuerza el color (puntos) aunque la salida no sea un terminal
+cargo cal list                                     # RF-04; --year 2026 para un año
+cargo cal day 2026-06-08                           # RF-05
+cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026 6`; sin argumentos, el mes actual
+cargo cal year 2026                                # RF-07; necesita 130 columnas
+cargo cal summary 2026                             # RF-08, RF-14: incluye las horas por mes y el acumulado
+cargo cal month 2026 6 > junio.txt                 # sin color al redirigir y con letras en lugar de puntos; también con NO_COLOR=1
+CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color (puntos) aunque la salida no sea un terminal
+```
+
+Los cambios escriben en el fichero; para probarlos sin tocar el calendario real, usa otro:
+
+```bash
+cal() { cargo run -q -p calendario-laboral -- --file /tmp/calendario.json "$@"; }
+cal add-year 2026                                  # RF-01
+cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
+cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
+cal mark reducido 2026-12-24
+cal unmark 1                                       # RF-03, con el id que muestra `list`
+cal hours laborable-verano 8,5                     # RF-09; con coma o punto
+cal quota 2026 23                                  # RF-10
 ```
 
 ### Verificar
 
 ```bash
-cargo test                                         # unitarios, tests/cli.rs (ejecuta el binario) y tests/traceability.rs
-cargo test rn_14                                   # los tests de un requisito
-cargo test --lib domain::                          # los tests de un módulo
-cargo test --test cli                              # solo los que ejecutan el binario
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
-cargo llvm-cov --fail-under-lines 90               # requisito de build (RNF-06); --open para el HTML
+cargo test -p calendario-laboral                   # unitarios, tests/cli.rs (ejecuta el binario) y tests/traceability.rs
+cargo test -p calendario-laboral rn_14             # los tests de un requisito
+cargo test -p calendario-laboral --lib domain::    # los tests de un módulo
+cargo test -p calendario-laboral --test cli        # solo los que ejecutan el binario
+cargo llvm-cov -p calendario-laboral --fail-under-lines 90   # requisito de build (RNF-06); --open para el HTML
 ```
 
-No hay CI. Antes de dar un cambio por terminado, ejecuta `cargo fmt --check`, clippy y `cargo llvm-cov --fail-under-lines 90`. La cobertura está en torno al 99 %: sube el mínimo en lugar de bajarlo.
+La CI del workspace ejecuta fmt, clippy y la cobertura con un mínimo del 90 % sobre el total del workspace. RNF-06 exige el 90 % a este proyecto, así que antes de dar un cambio por terminado ejecuta `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` y el `cargo llvm-cov -p calendario-laboral` de arriba. La cobertura está en torno al 99 %: sube el mínimo en lugar de bajarlo.
 
 ## Flujo para hacer cambios
 
@@ -134,12 +143,11 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 
 ## IntelliJ
 
-- Se importa abriendo la carpeta del proyecto (`Cargo.toml` en la raíz) con el plugin de Rust.
-- `.idea/` no está en `.gitignore`, igual que en el proyecto hermano.
-- Para ejecutar desde el IDE, crea una configuración Cargo con `run -- <subcomando>`. Conviene añadir la variable `CALENDARIO_FILE`, para no crear `calendario.json` en la raíz.
+- Se importa abriendo la carpeta raíz del workspace (el `Cargo.toml` raíz) con el plugin de Rust.
+- Para ejecutar desde el IDE, crea una configuración Cargo con `run -p calendario-laboral -- <subcomando>`. Conviene añadir `--file` o la variable `CALENDARIO_FILE`, para no crear `calendario.json` en la raíz.
 
 ## Git
 
-- Repositorio local en la rama `main`, todavía sin remoto; se subirá más adelante. La identidad (`user.name`, `user.email`) está configurada solo en este repositorio.
-- Un commit por cambio de requisito, con el documento, los tests y el código juntos, y solo con `cargo fmt --check`, clippy y `cargo llvm-cov --fail-under-lines 90` en verde.
-- No se versionan `target/`, `.idea/` ni el `calendario.json` de la raíz, que es el calendario de uso real.
+- Las reglas de Git son las del `CLAUDE.md` raíz: se trabaja y se sube directamente en `main`.
+- Un commit por cambio de requisito, con el documento, los tests y el código juntos, y solo con fmt, clippy y la cobertura en verde.
+- No se versiona `apps/calendario-laboral/calendario.json`, el calendario de uso real; lo ignora el `.gitignore` raíz.

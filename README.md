@@ -12,6 +12,7 @@ and README, and they share one `Cargo.lock`, one `target/` folder, the toolchain
 |---|---|---|
 | [pr-checker](apps/pr-checker) | Lists the open pull requests of a set of GitHub repositories, as a table or an interactive terminal UI | `cargo pr` |
 | [severance-pay-calculator](apps/severance-pay-calculator) | Calculates Spanish severance pay, in an interactive terminal UI or as a printed report (`--print`) | `cargo sev` |
+| [calendario-laboral](apps/calendario-laboral) | Calendario laboral de consola: festivos, vacaciones, jornadas y horas por año, guardado en JSON (binario `calendario`) | `cargo cal` |
 
 ## Usage
 

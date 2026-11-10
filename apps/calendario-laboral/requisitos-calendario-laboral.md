@@ -213,7 +213,7 @@ En el fichero JSON solo se guardan la configuración y los `Mark`. El `Weekend`,
 | RNF-03 | Aplicar buenas prácticas: `rustfmt`, `cargo clippy -- -D warnings`, errores tipados con `thiserror`, sin `unwrap`/`expect` fuera de los tests, sin `unsafe`, documentación `///` en la API pública. |
 | RNF-04 | Usar programación funcional al máximo: un núcleo de dominio puro e inmutable, sin E/S, y una capa imperativa fina en los bordes (CLI y fichero). Preferir iteradores y combinadores (`map`, `filter`, `fold`), `Option`/`Result` y funciones que devuelvan valores nuevos frente a la mutación. Evitar el estado mutable compartido. |
 | RNF-05 | Organizar el código por capas: `domain` (tipos, reglas, resolución), `application` (casos de uso), `adapters` (CLI, consola y JSON). |
-| RNF-06 | Tener tests para cada regla RN y cada caso de uso RF, con una cobertura de líneas **≥ 90 %** medida con `cargo llvm-cov --fail-under-lines 90`. |
+| RNF-06 | Tener tests para cada regla RN y cada caso de uso RF, con una cobertura de líneas **≥ 90 %** medida con `cargo llvm-cov -p calendario-laboral --fail-under-lines 90`. |
 | RNF-07 | **Idiomas.** En inglés: los conceptos y el código (identificadores, nombres de tests). En español: la documentación (este documento, `CLAUDE.md`, rustdoc `///`/`//!` y comentarios) y todo lo que ve el usuario (mensajes, ayuda y valores de la CLI y del JSON). Los subcomandos se llaman como en §5. |
 | RNF-08 | **Enumeraciones de negocio.** Siempre que sea posible, el código usa enumeraciones en lugar de códigos numéricos: `Month` en lugar de 1–12, `DayKind`, `MarkKind`, `Shift`, `Category`, `Origin` o `Weekday`. Los números solo aparecen en los bordes (la entrada de la CLI y las fechas de chrono). |
 
@@ -221,7 +221,7 @@ En el fichero JSON solo se guardan la configuración y los `Mark`. El `Weekend`,
 
 Cada requisito tiene al menos un test que actúa como regresión ante cambios futuros.
 
-- **Nombres:** el test lleva en el nombre el ID que comprueba: `rn_05_…`, `rf_02_…`, o `rn_09_rn_10_rf_08_…` si comprueba varios. `cargo test rn_14` ejecuta los de una regla.
+- **Nombres:** el test lleva en el nombre el ID que comprueba: `rn_05_…`, `rf_02_…`, o `rn_09_rn_10_rf_08_…` si comprueba varios. `cargo test -p calendario-laboral rn_14` ejecuta los de una regla.
 - **Comprobación automática:** `tests/traceability.rs` lee las tablas de §3 y §4. Falla si una RN, o una RF que no sea *Could*, no tiene ningún test con su ID.
 - **Niveles de test:**
   - Unitarios en cada módulo.

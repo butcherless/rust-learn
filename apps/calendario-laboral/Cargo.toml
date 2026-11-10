@@ -1,7 +1,8 @@
 [package]
 name = "calendario-laboral"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Calendario laboral de consola"
 
 [[bin]]
@@ -11,8 +12,8 @@ path = "src/main.rs"
 [dependencies]
 anstream = "1.0.0"
 anstyle = "1.0.14"
-chrono = "0.4.45"
-clap = { version = "4.6.7", features = ["derive", "env"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.154"
-thiserror = "2.0.21"
+chrono.workspace = true
+clap = { workspace = true, features = ["env"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

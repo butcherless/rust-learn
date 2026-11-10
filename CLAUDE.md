@@ -9,10 +9,11 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 - `apps/<name>/`: one binary package per project, with its own `README.md` and `CLAUDE.md` (architecture, library notes, project-specific rules). Read it before working on that project.
   - `apps/pr-checker`: lists the open pull requests of GitHub repositories, as a table or a TUI.
   - `apps/severance-pay-calculator`: calculates Spanish severance pay, in a TUI or as a printed report.
+  - `apps/calendario-laboral` (binary `calendario`): a console work calendar stored in JSON. Its docs and user-facing text are in Spanish (RNF-07).
 - `libs/<name>/`: shared libraries, without a `main`. None exist yet. Create one only when two projects really need the same code, keep it pure domain (no I/O), and declare it in `[workspace.dependencies]`.
-- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: clap, ratatui, thiserror). A member can add features on top with `dep = { workspace = true, features = [...] }`.
+- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: chrono, clap, ratatui, serde, serde_json, thiserror). A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
-- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`). Add one for each new app.
+- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`). Add one for each new app.
 
 ## Commands
 
@@ -34,6 +35,7 @@ Run aliases:
 ```bash
 GITHUB_TOKEN=$(gh auth token) cargo pr [--tui]                # pr-checker with apps/pr-checker/projects.toml
 cargo sev [--print]                                           # severance-pay-calculator
+cargo cal <subcomando>                                        # calendario-laboral with apps/calendario-laboral/calendario.json
 ```
 
 Check:
