@@ -144,8 +144,8 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 
 ## IntelliJ
 
-- Se importa abriendo la carpeta raíz del workspace (el `Cargo.toml` raíz) con el plugin de Rust.
-- Para ejecutar desde el IDE, crea una configuración Cargo con `run -p calendario-laboral -- <subcomando>`. Conviene añadir `--file` o la variable `CALENDARIO_FILE`, para no crear `calendario.json` en la raíz.
+- Cómo abrir el workspace y crear configuraciones de ejecución: README raíz, apartado IntelliJ IDEA.
+- En las configuraciones de este proyecto pasa siempre `--file` (o la variable `CALENDARIO_FILE`); si no, se crea un `calendario.json` en la raíz del workspace.
 
 ## Git
 

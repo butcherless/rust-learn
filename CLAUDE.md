@@ -14,7 +14,8 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 - Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: chrono, clap, ratatui, serde, serde_json, thiserror). A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
 - Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`.
-- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`). Add one for each new app.
+- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`).
+- `.idea/` is ignored. The README explains how to open the workspace in IntelliJ.
 
 ## Commands
 
@@ -61,6 +62,15 @@ CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on PRs, with `--loc
 The 90% minimum applies to each project on its own, so a new project needs its own tests. Check it locally with `cargo llvm-cov -p <package> --fail-under-lines 90`. Raise the minimum when coverage grows rather than lowering it.
 
 Dependabot (`.github/dependabot.yml`, `directory: "/"`) covers every member through the root `Cargo.lock`. It groups minor and patch bumps into one weekly PR, because separate ones would conflict in the shared lockfile, plus one for GitHub Actions. Major bumps and crossterm minor bumps (it must match ratatui's crossterm) stay manual. For 0.x crates a "minor" bump can break the API, so read the CI result of that PR before merging it.
+
+## Adding a project
+
+1. Put it in `apps/<name>/`, where `<name>` is its package name. Bring its history with `git filter-branch` or `git filter-repo` onto `apps/<name>/` and merge it with `--allow-unrelated-histories`, or copy it if it has none.
+2. Delete its `Cargo.lock`, `target/`, `rust-toolchain.toml`, `.gitignore`, `.idea/` and CI files; the root ones apply. Add any file it must ignore (such as real data) to the root `.gitignore`.
+3. In its `Cargo.toml`, inherit `version`, `edition` and `publish` with `.workspace = true`. Move each dependency that another member already uses to `[workspace.dependencies]`, at the latest version, and check `cargo tree --workspace -d`.
+4. Add a run alias to `.cargo/config.toml`, passing any data file by its path from the root.
+5. Give it a `README.md` (usage) and a `CLAUDE.md` (commands, architecture, project rules) that link to the root ones instead of repeating them. Add it to the projects table in the root `README.md` and to the list under Layout above.
+6. Run fmt, clippy and `cargo llvm-cov -p <name> --fail-under-lines 90`. CI picks it up by itself.
 
 ## Conventions
 

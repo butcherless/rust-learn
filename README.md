@@ -32,7 +32,9 @@ Run every command from this folder. `-p` takes the package name, which is the fo
 cargo build                          # every project → target/debug/
 cargo build --release -p <project>   # one project, optimized → target/release/
 cargo run -p <project> -- <args>     # build and run one project; the args after `--` go to it
-cargo pr | cargo sev | cargo cal     # the same through each project's alias
+cargo pr                             # the same through each project's alias:
+cargo sev                            #   pr, sev and cal
+cargo cal
 ```
 
 The aliases live in [`.cargo/config.toml`](.cargo/config.toml). `cargo pr` and `cargo cal` also pass
@@ -59,6 +61,21 @@ CI runs on pushes to `main` and on pull requests:
 
 Dependabot opens one weekly pull request with the minor and patch updates of every project, and
 another for the GitHub Actions.
+
+## IntelliJ IDEA
+
+With the Rust plugin (or RustRover), use **File → Open** on this folder, the one with the workspace
+`Cargo.toml`, not on `apps/<project>`. The **Cargo** tool window then lists every project; after
+moving or adding one, use its **Refresh Cargo Projects** button. `.idea/` is not versioned.
+
+- **Run configurations:** a **Cargo** configuration with this folder as the working directory and a
+  command such as `run -p calendario-laboral -- --file apps/calendario-laboral/calendario.json month`
+  or `run -p pr-checker -- --config apps/pr-checker/projects.toml` (with `GITHUB_TOKEN` in its
+  environment variables).
+- **Tests:** the gutter icons next to each test or module run it, and **Run with Coverage** shows
+  the coverage in the editor.
+- **Terminal UIs and colors:** `cargo pr --tui`, `cargo sev` and the colored views of `cargo cal`
+  need a real terminal. Use the built-in **Terminal**, not the Run console.
 
 ## Layout
 
