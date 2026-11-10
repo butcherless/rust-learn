@@ -5,13 +5,13 @@ use std::process::ExitCode;
 
 use anyhow::{Context, bail};
 use clap::Parser;
-use rust_learn::adapter::cli::args::Args;
-use rust_learn::adapter::cli::render::render;
-use rust_learn::adapter::config::load_projects;
-use rust_learn::adapter::github::{DEFAULT_BASE_URL, GithubClient, GithubToken};
-use rust_learn::adapter::tui;
-use rust_learn::domain::model::Project;
-use rust_learn::service::{MAX_CONCURRENCY, ProjectReport, has_failures, list_open_prs};
+use pr_checker::adapter::cli::args::Args;
+use pr_checker::adapter::cli::render::render;
+use pr_checker::adapter::config::load_projects;
+use pr_checker::adapter::github::{DEFAULT_BASE_URL, GithubClient, GithubToken};
+use pr_checker::adapter::tui;
+use pr_checker::domain::model::Project;
+use pr_checker::service::{MAX_CONCURRENCY, ProjectReport, has_failures, list_open_prs};
 
 const EXIT_FAILURES: u8 = 1;
 const EXIT_STARTUP: u8 = 2;

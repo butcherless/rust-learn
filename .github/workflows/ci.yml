@@ -25,7 +25,7 @@ jobs:
       with:
         persist-credentials: false
     - run: rustup update
-    - run: cargo fmt --check
+    - run: cargo fmt --all --check
     - uses: actions/cache@v6
       with:
         path: |
@@ -38,12 +38,13 @@ jobs:
           ${{ runner.os }}-cargo-
     # No separate `cargo build`: clippy --all-targets and `cargo llvm-cov` already compile every
     # target, including the binary the integration tests run against.
-    - run: cargo clippy --all-targets -- -D warnings
+    - run: cargo clippy --workspace --all-targets -- -D warnings
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-llvm-cov
-    # Runs the tests once with coverage, prints the per-file summary, and fails below the minimum.
-    - run: cargo llvm-cov --fail-under-lines 90
+    # Runs the tests of every member once with coverage, prints the per-file summary, and fails
+    # below the minimum, which applies to the whole workspace.
+    - run: cargo llvm-cov --workspace --fail-under-lines 90
     # The HTML report is built from the data above, without running the tests again.
     - if: ${{ !cancelled() }}
       run: cargo llvm-cov report --html

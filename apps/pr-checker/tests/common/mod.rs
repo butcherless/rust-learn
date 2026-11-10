@@ -1,7 +1,7 @@
 //! Builders shared by the integration tests. Each test file is its own crate, so it includes this
 //! module with `mod common;`.
 
-use rust_learn::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
+use pr_checker::domain::model::{PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest};
 
 /// Parses an `owner/repo` project.
 pub fn project(name: &str) -> Project {

@@ -50,7 +50,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 - Endpoint: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests).
 - One `reqwest::Client` is reused, with a 10-second timeout.
 - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
-  `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: rust-learn/<crate version>`.
+  `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: pr-checker/<crate version>`.
 
 | Response | `SourceError` |
 |---|---|

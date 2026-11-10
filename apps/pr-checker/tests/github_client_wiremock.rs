@@ -9,10 +9,10 @@ use std::net::TcpListener;
 
 use common::{project, pull_request};
 use futures::future::join_all;
-use rust_learn::adapter::github::{GithubClient, GithubToken};
-use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrState, PullRequest};
-use rust_learn::domain::port::PullRequestSource;
+use pr_checker::adapter::github::{GithubClient, GithubToken};
+use pr_checker::domain::error::SourceError;
+use pr_checker::domain::model::{PrState, PullRequest};
+use pr_checker::domain::port::PullRequestSource;
 use serde_json::{Value, json};
 use wiremock::matchers::{header, header_exists, method, path, query_param};
 use wiremock::{Mock, MockBuilder, MockServer, ResponseTemplate};

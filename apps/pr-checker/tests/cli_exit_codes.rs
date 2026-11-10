@@ -4,7 +4,7 @@
 
 use std::process::{Command, Output};
 
-const BINARY: &str = env!("CARGO_BIN_EXE_rust-learn");
+const BINARY: &str = env!("CARGO_BIN_EXE_pr-checker");
 const STARTUP_ERROR: i32 = 2;
 const VALID_CONFIG: &str = "tests/fixtures/projects.toml";
 

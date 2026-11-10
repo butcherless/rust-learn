@@ -21,7 +21,7 @@ const API_VERSION_HEADER: &str = "x-github-api-version";
 const API_VERSION: &str = "2022-11-28";
 const ACCEPT_VALUE: &str = "application/vnd.github+json";
 const RATE_LIMIT_REMAINING_HEADER: &str = "x-ratelimit-remaining";
-const USER_AGENT_VALUE: &str = concat!("rust-learn/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT_VALUE: &str = concat!("pr-checker/", env!("CARGO_PKG_VERSION"));
 
 /// A GitHub API token. Its `Debug` output is redacted.
 #[derive(Clone)]

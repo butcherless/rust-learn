@@ -6,10 +6,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use common::{project, pull_request};
-use rust_learn::domain::error::SourceError;
-use rust_learn::domain::model::{PrState, Project, PullRequest};
-use rust_learn::domain::port::PullRequestSource;
-use rust_learn::service::{ProjectReport, has_failures, list_open_prs};
+use pr_checker::domain::error::SourceError;
+use pr_checker::domain::model::{PrState, Project, PullRequest};
+use pr_checker::domain::port::PullRequestSource;
+use pr_checker::service::{ProjectReport, has_failures, list_open_prs};
 
 fn report(name: &str, outcome: Result<Vec<PullRequest>, SourceError>) -> ProjectReport {
     ProjectReport {
