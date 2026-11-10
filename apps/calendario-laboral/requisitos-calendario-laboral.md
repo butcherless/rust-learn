@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-08 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-20 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-21 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -99,6 +99,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Solo se cambian editando `reduced_days` en el fichero; con una lista vacía no hay días reducidos por regla. |
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
 | RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra vertical `▎` (`15 ▎`), que deja leer mejor los números. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
+| RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
 
 ## 4. Requisitos funcionales
 
@@ -146,7 +147,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
   - Códigos de salida: 0 si todo va bien, 1 si la operación falla y 2 si los argumentos no son válidos.
 - **Ayuda:** `calendario --help` y `calendario <comando> --help`.
 
-Cada día se muestra con su número, un espacio y una barra `▎` del color de su tipo (`15 ▎`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila, necesita unas 126. El ejemplo muestra la salida sin color:
+Cada día se muestra con su número, un espacio y una barra `▎` del color de su tipo (`15 ▎`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21), necesita 130. El ejemplo muestra la salida sin color:
 
 ```
                Junio 2026
@@ -249,6 +250,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-08 | Enumeraciones antes que códigos numéricos (RNF-08): el mes es la enumeración `Month` del dominio. RN-14 empieza en `Month::July` y el `Summer` es `Month::July` y `Month::August`. La CLI acepta el mes por nombre o por número. |
 | 2026-11-08 | RF-14: horas teóricas, no registradas; columnas de días, horas y acumulado; se calcula en el dominio (`Summary.months`) y se muestra en `summary`, `month` y `year`. No se muestran horas de ausencias, ni objetivo anual, ni CSV (queda para RF-13). Un mes a 0 h por las vacaciones por defecto se muestra tal cual. |
 | 2026-11-08 | Todos los viernes son reducidos (RN-18). Se reutilizan los `Shift` `Reduced` y `SummerReduced` en lugar de crear jornadas nuevas, y los días son configurables en el JSON como el `Weekend`. |
+| 2026-11-10 | RN-21: rejilla gris punteada entre los meses de la vista de año (`┊`, `┈` y `┼`). Se probó primero solo con líneas interiores y se añadió el marco exterior (arriba, abajo, izquierda y derecha), aunque la vista pasa de ~126 a 130 columnas. |
 
 ### Pendiente o posibles ampliaciones
 

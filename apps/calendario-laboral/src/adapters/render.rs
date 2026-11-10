@@ -23,6 +23,10 @@ const MONTH_WIDTH: usize = 7 * CELL_WIDTH + 6 * CELL_GAP.len();
 const MAX_WEEKS: usize = 6;
 /// Meses por fila en la vista de año.
 const MONTHS_PER_ROW: usize = 3;
+/// La línea punteada vertical entre dos meses y en los lados de la vista de año (RN-21).
+const GRID_VERTICAL: &str = "┊";
+/// La línea punteada horizontal entre dos filas de meses y arriba y abajo (RN-21).
+const GRID_HORIZONTAL: &str = "┈";
 /// Los días de la semana, alineados con el número de cada celda.
 const HEADER: &str = "Lu    Ma    Mi    Ju    Vi    Sá    Do";
 const BLANK_CELL: &str = "    ";
@@ -76,6 +80,32 @@ const fn color(kind: DayKind) -> AnsiColor {
 fn paint(kind: DayKind, text: &str) -> String {
     let style = Style::new().fg_color(Some(color(kind).into()));
     format!("{style}{text}{style:#}")
+}
+
+/// Las líneas de la rejilla de la vista de año, en gris para que no compitan con los días (RN-21).
+fn paint_grid(text: &str) -> String {
+    let style = Style::new().fg_color(Some(AnsiColor::BrightBlack.into()));
+    format!("{style}{text}{style:#}")
+}
+
+/// Una línea de la vista de año: los meses separados por la línea vertical, con un espacio a
+/// cada lado, y entre las dos líneas del marco (RN-21).
+fn grid_row(cells: &[String]) -> String {
+    let vertical = paint_grid(GRID_VERTICAL);
+    format!(
+        "{vertical} {} {vertical}",
+        cells.join(&format!(" {vertical} "))
+    )
+}
+
+/// Una línea horizontal de la rejilla para `months` meses: `left` y `right` en los extremos y
+/// `cross` bajo cada separación entre meses (RN-21).
+fn grid_rule(months: usize, [left, cross, right]: [char; 3]) -> String {
+    let segment = GRID_HORIZONTAL.repeat(MONTH_WIDTH);
+    let inner = vec![segment; months].join(&format!("{GRID_HORIZONTAL}{cross}{GRID_HORIZONTAL}"));
+    paint_grid(&format!(
+        "{left}{GRID_HORIZONTAL}{inner}{GRID_HORIZONTAL}{right}"
+    ))
 }
 
 /// Horas con coma decimal y uno o dos decimales: `8,5`, `6,0`, `7,25` (RN-15).
@@ -297,31 +327,47 @@ fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
     )
 }
 
+/// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21).
 fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
-    let rows = months.chunks(MONTHS_PER_ROW).flat_map(|row| {
-        let grids: Vec<Vec<String>> = row
-            .iter()
-            .map(|view| {
-                month_grid(view, MAX_WEEKS, marker)
-                    .into_iter()
-                    .chain(iter::once(month_hours_cell(summary, view.month)))
-                    .collect()
-            })
-            .collect();
-        let height = grids.first().map_or(0, Vec::len);
-        (0..height)
-            .map(move |index| {
-                grids
-                    .iter()
-                    .filter_map(|grid| grid.get(index).cloned())
-                    .collect::<Vec<_>>()
-                    .join("   ")
-            })
-            .chain(iter::once(String::new()))
-    });
+    let row_count = months.chunks(MONTHS_PER_ROW).len();
+    let columns = months.len().min(MONTHS_PER_ROW);
+    let top = grid_rule(columns, ['┌', '┬', '┐']);
+    let rows = months
+        .chunks(MONTHS_PER_ROW)
+        .enumerate()
+        .flat_map(|(position, row)| {
+            let grids: Vec<Vec<String>> = row
+                .iter()
+                .map(|view| {
+                    month_grid(view, MAX_WEEKS, marker)
+                        .into_iter()
+                        .chain(iter::once(month_hours_cell(summary, view.month)))
+                        .collect()
+                })
+                .collect();
+            let height = grids.first().map_or(0, Vec::len);
+            let corners = if position + 1 < row_count {
+                ['├', '┼', '┤']
+            } else {
+                ['└', '┴', '┘']
+            };
+            (0..height)
+                .map(move |index| {
+                    grid_row(
+                        &grids
+                            .iter()
+                            .filter_map(|grid| grid.get(index).cloned())
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .chain(iter::once(grid_rule(row.len(), corners)))
+        });
     let all_days: Vec<ResolvedDay> = months.iter().flat_map(|view| view.days.clone()).collect();
     lines(
-        rows.chain(default_vacation_note(&all_days))
+        iter::once(top)
+            .chain(rows)
+            .chain(iter::once(String::new()))
+            .chain(default_vacation_note(&all_days))
             .chain([legend(marker), vacation_line(summary)]),
     )
 }
@@ -590,40 +636,84 @@ mod tests {
         );
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
-            lines.first(),
-            Some(
-                &"               Enero 2026                                Febrero 2026                                Marzo 2026"
-            )
-        );
-        assert_eq!(
             lines.get(1),
             Some(
-                &"Lu    Ma    Mi    Ju    Vi    Sá    Do     Lu    Ma    Mi    Ju    Vi    Sá    Do     Lu    Ma    Mi    Ju    Vi    Sá    Do"
+                &"┊                Enero 2026                ┊               Febrero 2026               ┊                Marzo 2026                ┊"
             )
         );
         assert_eq!(
             lines.get(2),
             Some(
-                &"                   1 L   2 R   3 S   4 S                                        1 S                                        1 S"
+                &"┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊"
             )
         );
-        // Cuatro filas de tres meses, de 8 líneas, la de horas (RF-14) y una en blanco; después,
-        // leyenda y cupo.
-        assert_eq!(lines.len(), 4 * 10 + 2, "{text}");
+        assert_eq!(
+            lines.get(3),
+            Some(
+                &"┊                    1 L   2 R   3 S   4 S ┊                                      1 S ┊                                      1 S ┊"
+            )
+        );
+        // El marco superior (RN-21); cuatro filas de tres meses, de 8 líneas, la de horas (RF-14)
+        // y la línea de la rejilla debajo; una en blanco y, después, leyenda y cupo.
+        assert_eq!(lines.len(), 1 + 4 * 10 + 3, "{text}");
         let hours = format!(
-            "{a:^40}   {b:^40}   {c:^40}",
+            "┊ {a:^40} ┊ {b:^40} ┊ {c:^40} ┊",
             a = "174,5 h · 22 días",
             b = "160,0 h · 20 días",
             c = "177,0 h · 22 días"
         );
-        assert_eq!(lines.get(8), Some(&hours.trim_end()));
-        assert_eq!(lines.get(40), Some(&LEGEND));
-        assert_eq!(lines.get(41), Some(&"Vacaciones restantes: 24 / 25"));
+        assert_eq!(lines.get(9), Some(&hours.as_str()));
+        assert_eq!(lines.get(42), Some(&LEGEND));
+        assert_eq!(lines.get(43), Some(&"Vacaciones restantes: 24 / 25"));
         assert_eq!(
-            lines.get(30),
+            lines.get(31),
             Some(
-                &"              Octubre 2026                              Noviembre 2026                             Diciembre 2026"
+                &"┊               Octubre 2026               ┊              Noviembre 2026              ┊              Diciembre 2026              ┊"
             )
+        );
+    }
+
+    #[test]
+    fn rn_21_year_frames_the_months_in_a_grey_dotted_grid() {
+        let colored = match execute(calendar(), Command::Year(2026)) {
+            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
+            other => format!("{other:?}"),
+        };
+        let text = plain(&colored);
+        let lines: Vec<&str> = text.lines().collect();
+        let segment = "┈".repeat(40);
+        let rule = |[left, cross, right]: [char; 3]| {
+            format!("{left}┈{segment}┈{cross}┈{segment}┈{cross}┈{segment}┈{right}")
+        };
+        [
+            (0, rule(['┌', '┬', '┐']), "marco superior"),
+            (10, rule(['├', '┼', '┤']), "entre la 1.ª y la 2.ª fila"),
+            (20, rule(['├', '┼', '┤']), "entre la 2.ª y la 3.ª fila"),
+            (30, rule(['├', '┼', '┤']), "entre la 3.ª y la 4.ª fila"),
+            (40, rule(['└', '┴', '┘']), "marco inferior"),
+            (41, String::new(), "línea en blanco tras el marco"),
+        ]
+        .into_iter()
+        .for_each(|(index, expected, case)| {
+            assert_eq!(lines.get(index), Some(&expected.as_str()), "{case}");
+        });
+        lines
+            .iter()
+            .enumerate()
+            .skip(1)
+            .take(9)
+            .for_each(|(index, line)| {
+                let positions: Vec<usize> = line
+                    .chars()
+                    .enumerate()
+                    .filter_map(|(position, c)| (c == '┊').then_some(position))
+                    .collect();
+                assert_eq!(positions, [0, 43, 86, 129], "línea {index}: {line}");
+            });
+        assert!(colored.contains(" \u{1b}[90m┊\u{1b}[0m "), "{colored}");
+        assert!(
+            colored.contains(&format!("\u{1b}[90m{}\u{1b}[0m", rule(['┌', '┬', '┐']))),
+            "{colored}"
         );
     }
 
