@@ -16,9 +16,8 @@ table or in an interactive terminal UI.
 
 ## Quick start
 
-Requires [Rust](https://www.rust-lang.org/tools/install); `rust-toolchain.toml`, at the workspace
-root, selects the stable toolchain. From the workspace root, the `cargo pr` alias runs this project
-with `apps/pr-checker/projects.toml`:
+From the workspace root (see its [README](../../README.md) for requirements), the `cargo pr` alias
+runs this project with `apps/pr-checker/projects.toml`:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)   # or: export GITHUB_TOKEN=<your token>
@@ -26,16 +25,14 @@ cargo pr                               # print the table
 cargo pr --tui                         # open the interactive UI
 ```
 
-[`gh auth token`](https://cli.github.com/manual/gh_auth_token) prints the GitHub CLI's token. From
-this folder, `cargo run` and `cargo run -- --tui` do the same with `./projects.toml`; the `--` passes
-the flags after it to the program instead of to `cargo`.
+[`gh auth token`](https://cli.github.com/manual/gh_auth_token) prints the GitHub CLI's token.
 
-To run the compiled binary instead (the workspace builds into the root `target/`):
+To run the compiled binary instead:
 
 ```bash
 cargo build --release -p pr-checker
-./target/release/pr-checker            # table, reads ./projects.toml
-./target/release/pr-checker --tui      # interactive UI
+./target/release/pr-checker --config apps/pr-checker/projects.toml          # table
+./target/release/pr-checker --config apps/pr-checker/projects.toml --tui    # interactive UI
 ```
 
 ## Usage
@@ -46,7 +43,9 @@ cargo build --release -p pr-checker
 | `--tui` | Show the same rows in a full-screen view. Needs a real terminal. |
 | `--config <path>` | Read the repositories from `<path>` instead of `./projects.toml`. |
 
-Flags can be combined, for example `cargo pr --tui` or `cargo run -p pr-checker -- --tui --config path/to/projects.toml`.
+Flags can be combined. The alias already passes `--config`, so for another file run
+`cargo run -p pr-checker -- --tui --config path/to/projects.toml`; the `--` passes the flags after it
+to the program instead of to `cargo`.
 
 ### Interactive UI keys
 
@@ -97,18 +96,7 @@ In the interactive UI, the exit code reflects the last fetch before quitting.
 
 ## Development
 
-```bash
-cargo test -p pr-checker                   # offline: no token or network needed
-cargo clippy -p pr-checker --all-targets -- -D warnings
-cargo fmt -p pr-checker --check
-cargo llvm-cov -p pr-checker --open        # run the tests and open an HTML coverage report
-```
-
-Coverage uses [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov). Install it once with
-`brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`; `rust-toolchain.toml`
-already installs the `llvm-tools-preview` component it needs.
-
-CI runs fmt, clippy, and the tests with coverage for the whole workspace. It fails if line coverage
-drops below 90%, and
-attaches the HTML report to each run as the `coverage-html` artifact. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for requirements
-and design, and [CLAUDE.md](CLAUDE.md) for architecture and code rules.
+Tests run offline, with no token or network: `cargo test -p pr-checker`. The workspace
+[README](../../README.md) has the rest of the commands and CI.
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) holds the requirements and design, and
+[CLAUDE.md](CLAUDE.md) the architecture and code rules.

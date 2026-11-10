@@ -6,7 +6,7 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 
 ## Commands
 
-Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. From the workspace root:
+Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
 
 Build and run:
 

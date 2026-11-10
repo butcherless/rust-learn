@@ -3,6 +3,7 @@
 Este fichero orienta a Claude Code (claude.ai/code) cuando trabaja en el proyecto `calendario-laboral` de este workspace. Los comandos comunes, la CI y las convenciones compartidas están en el `CLAUDE.md` raíz (en inglés); este fichero añade lo propio del proyecto.
 
 Aplicación de consola en Rust, `calendario`, que gestiona el `Calendar` laboral de uno o varios `Year` en un fichero JSON.
+- `README.md` es la guía de uso breve y remite a los requisitos.
 - La fuente de verdad es `requisitos-calendario-laboral.md`: reglas (RN-xx), requisitos funcionales (RF-xx), decisiones y el glosario de conceptos (§2.1).
 - Las librerías y las convenciones siguen `apps/severance-pay-calculator`. Las versiones compartidas están en `[workspace.dependencies]` del `Cargo.toml` raíz.
 
@@ -126,13 +127,13 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 
 ## Convenciones
 
+Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror`, tests con tabla de casos…) están en el `CLAUDE.md` raíz. En este proyecto, además:
+
 - **Enumeraciones antes que números (RNF-08):** modela los conceptos de negocio con enums (`Month`, `DayKind`, `Shift`…), nunca con códigos numéricos. Los números solo aparecen en los bordes: los alias `6`/`06` de `MonthArg` en la CLI y `Month::number` para chrono.
-- Sin `unwrap`, `expect` ni `panic!` fuera de los tests, sin `unsafe`, y sin comodín `_` al hacer `match` sobre enums del dominio o de la aplicación.
-- Estilo funcional: cadenas de iteradores, combinadores de `Option`/`Result` y funciones que devuelven valores nuevos. La única mutación aceptada es ordenar un `Vec` local y propio.
+- Sin `unsafe`, y sin comodín `_` al hacer `match` sobre enums de la aplicación tampoco.
+- La única mutación aceptada es ordenar un `Vec` local y propio.
 - Los `Display` usan `f.pad`, para que funcionen anchos como `{:<10}`.
-- Tests:
-  - Preferir tests con tabla de casos: un array recorrido con `for_each` y un mensaje de `assert_eq!` que nombre el caso.
-  - Las vistas se comprueban sobre el texto sin color (`anstream::adapter::strip_str`); un test comprueba los códigos de color.
+- Las vistas se comprueban sobre el texto sin color (`anstream::adapter::strip_str`); un test comprueba los códigos de color.
 
 ## Versiones de las librerías
 

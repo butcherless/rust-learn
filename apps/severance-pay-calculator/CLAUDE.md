@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working on the `severance-pay-calculator` project of this workspace.
 
-A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--print`, it prints the report to stdout instead. It is a port of the Python script `~/projects/calc_amount.py`. Its structure and conventions follow `apps/pr-checker`.
+A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--print`, it prints the report to stdout instead. It is a port of the Python script `~/projects/calc_amount.py`. Its structure and conventions follow `apps/pr-checker`. `README.md` covers usage: options, keys and exit codes.
 
 ## Commands
 
-Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. From the workspace root:
+Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
 
 Build and run:
 
