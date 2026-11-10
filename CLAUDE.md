@@ -16,17 +16,37 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 
 ## Commands
 
-Run from the root. `-p` takes the package name (`[package] name`), not the directory.
+Run from the root. `-p` takes the package name (`[package] name`), not the directory. Each project's `CLAUDE.md` lists its own run flags and tests.
+
+Build and run:
+
+```bash
+cargo build                                                   # every member, debug → target/debug/<package>
+cargo build --release                                         # every member, optimized → target/release/<package>
+cargo build -p <package>                                      # one member (add --release for optimized)
+cargo run -p <package> -- <args>                              # build and run one app; args after `--` go to the program
+cargo <alias> <args>                                          # same through the app's alias in .cargo/config.toml
+./target/release/<package> <args>                             # run a release build without cargo
+```
+
+Run aliases:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) cargo pr [--tui]                # pr-checker with apps/pr-checker/projects.toml
+cargo sev [--print]                                           # severance-pay-calculator
+```
+
+Check:
 
 ```bash
 cargo test --workspace                                        # every member, offline
-cargo test -p pr-checker                                      # one member
+cargo test -p <package>                                       # one member
 cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
+cargo fmt --all                                               # format; --check only reports, as CI does
 cargo llvm-cov --workspace                                    # tests with a per-file coverage summary; --open for HTML
-GITHUB_TOKEN=$(gh auth token) cargo pr                        # run pr-checker with apps/pr-checker/projects.toml
-cargo sev --print                                             # run severance-pay-calculator
 ```
+
+All members build into the root `target/`, never into `apps/<name>/target/`.
 
 Binaries run with the current directory as their working directory, so relative paths (config, data files) resolve against wherever `cargo` was started. Tests that need a file use `env!("CARGO_MANIFEST_DIR")`.
 

@@ -8,15 +8,25 @@ A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--prin
 
 Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. From the workspace root:
 
+Build and run:
+
 ```bash
+cargo build -p severance-pay-calculator                 # debug → target/debug/severance-pay-calculator
+cargo build --release -p severance-pay-calculator       # optimized → target/release/severance-pay-calculator
 cargo sev                                               # start the interactive UI (needs a real terminal; Esc quits)
 cargo sev --print                                       # print the report for the defaults and today, no UI
 cargo sev --print --annual-pay 40000 --dismissal 20 --from 2020-01-01 --to 2025-12-31
-cargo build --release -p severance-pay-calculator       # → target/release/severance-pay-calculator (root target/)
+cargo run --release -p severance-pay-calculator         # optimized run
+./target/release/severance-pay-calculator --print       # run a release build without cargo
+```
+
+Test:
+
+```bash
 cargo test -p severance-pay-calculator                  # unit tests, plus tests/cli.rs, which runs the binary
 cargo test -p severance-pay-calculator --lib domain::   # tests of one module
 cargo test -p severance-pay-calculator shows_the_python_report_grouped   # one test
-cargo llvm-cov -p severance-pay-calculator              # tests + per-file coverage; --open for HTML
+cargo llvm-cov -p severance-pay-calculator              # coverage of this project only; --open for HTML
 ```
 
 Coverage:

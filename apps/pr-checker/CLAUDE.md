@@ -8,15 +8,27 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 
 Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. From the workspace root:
 
+Build and run:
+
+```bash
+cargo build -p pr-checker                                                   # debug → target/debug/pr-checker
+cargo build --release -p pr-checker                                         # optimized → target/release/pr-checker
+GITHUB_TOKEN=$(gh auth token) cargo pr                                      # real API with apps/pr-checker/projects.toml
+GITHUB_TOKEN=$(gh auth token) cargo pr --tui                                # interactive UI, needs a real terminal
+GITHUB_TOKEN=$(gh auth token) cargo run -p pr-checker -- --config <path>    # another project list
+GITHUB_TOKEN=$(gh auth token) ./target/release/pr-checker --config apps/pr-checker/projects.toml
+```
+
+Test:
+
 ```bash
 cargo test -p pr-checker                                                    # offline, no token needed
 cargo test -p pr-checker --lib view::                                       # unit tests of one module
 cargo test -p pr-checker --test github_client_wiremock maps_error_statuses  # one integration test
-GITHUB_TOKEN=$(gh auth token) cargo pr                                      # real API with apps/pr-checker/projects.toml
-GITHUB_TOKEN=$(gh auth token) cargo pr --tui                                # interactive UI, needs a real terminal
+cargo llvm-cov -p pr-checker                                                # coverage of this project only
 ```
 
-`--config <path>` defaults to `./projects.toml`, relative to the current directory; the `cargo pr` alias passes `apps/pr-checker/projects.toml` so it works from the root. The alias already sets `--config`, so for another file use `cargo run -p pr-checker -- --config <path>`.
+`--config <path>` defaults to `./projects.toml`, relative to the current directory; the `cargo pr` alias passes `apps/pr-checker/projects.toml` so it works from the root. The alias already sets `--config`, so `cargo pr --config <path>` fails as a repeated flag; use `cargo run -p pr-checker` for another file.
 
 `tui/mod.rs` (the event loop, 0%) and the success path of `main.rs` (it always calls the real API) are untested I/O shells that stay in the coverage report; keep logic out of them so the workspace minimum holds.
 
