@@ -14,6 +14,7 @@ anstream = "1.0.0"
 anstyle = "1.0.14"
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
+crossterm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

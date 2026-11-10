@@ -4,8 +4,8 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 
 | | |
 |---|---|
-| **Fecha** | 2026-11-08 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-21 |
+| **Fecha** | 2026-11-11 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-22 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -100,6 +100,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
 | RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra gruesa `▌` (media celda, `15 ▌`), que deja leer mejor los números y muestra bastante color para distinguir los tonos. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
 | RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
+| RN-22 | Si la salida es un terminal, `month`, `year` y `summary` se muestran en una ventana a pantalla completa (la pantalla alternativa del terminal), con el mismo texto y colores que en la consola y una línea de ayuda abajo. `Esc`, `q` o `Ctrl+C` cierran la ventana y la consola vuelve tal como estaba, sin la vista. Si la vista no cabe, `↑` `↓` (o `k` `j`), `RePág` `AvPág` e `Inicio` `Fin` la desplazan; lo que no cabe a lo ancho se corta. Al redirigir la salida, o con `--no-tui`, la vista se imprime en la consola como hasta ahora. `day`, `list` y los comandos que cambian el fichero siempre imprimen en la consola. |
 
 ## 4. Requisitos funcionales
 
@@ -141,6 +142,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
 - **`<mes>`** (`Month`): el nombre en español (`enero`… `diciembre`, también `setiembre`) o el número, con o sin cero delante (`6`, `06`).
 - **Argumentos opcionales:** sin año, `month`, `year` y `summary` usan el año actual, y `month` también el mes actual.
+- **Ventana (RN-22):** en un terminal, `month`, `year` y `summary` se abren a pantalla completa y se cierran con `Esc` o `q`. `--no-tui` los imprime en la consola.
 - **Fichero:** se indica con `--file <ruta>`; si no, con la variable `CALENDARIO_FILE`; y si tampoco, se usa `./calendario.json`.
 - **Salidas:**
   - Los resultados van a stdout, y los errores y avisos a stderr.
@@ -253,6 +255,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-10 | RN-21: rejilla gris punteada entre los meses de la vista de año (`┊`, `┈` y `┼`). Se probó primero solo con líneas interiores y se añadió el marco exterior (arriba, abajo, izquierda y derecha), aunque la vista pasa de ~126 a 130 columnas. |
 | 2026-11-10 | RN-20: la barra fina `▎` pasa a `▌` (media celda), porque con tan poca superficie de color se confundían el rojo de `Holiday` y el magenta de `Vacation`; se descartaron `║` (igual de fina) y `▎▎` (la vista de año pasaba a ~151 columnas). `Vacation` pasa de magenta a blanco brillante, el único color ANSI básico libre; en un terminal de fondo claro se verá poco. |
 | 2026-11-10 | Colores de los `DayKind` laborables por parejas, con la jornada completa más oscura que la reducida: `Working` en azul marino (el azul ANSI, que cada tema pinta a su manera; se descartó el azul marino de la paleta de 256, que apenas se ve sobre fondo oscuro) y `Reduced` en cian; en `Summer`, `SummerWorking` en verde y `SummerReduced` en un verde pálido, más tenue (color 151 de la paleta de 256; el verde brillante ANSI resultaba más intenso que el normal), para que ningún tipo comparta color. |
+| 2026-11-11 | RN-22: `month`, `year` y `summary` se ven en una ventana a pantalla completa que se cierra con `Esc`, como `severance-pay-calculator`. No es el modo interactivo descartado el 2026-11-08: solo muestra y desplaza la vista. Se abre sola si la salida es un terminal, así que redirigir y los tests no cambian, y `--no-tui` la evita. Se dibuja con `crossterm` (la versión que ya usa el workspace) a partir del mismo texto con códigos ANSI que la consola, en lugar de reescribir las vistas en ratatui; las líneas se cortan a lo ancho con `DisableLineWrap`. La navegación entre meses queda pendiente. |
 
 ### Pendiente o posibles ampliaciones
 

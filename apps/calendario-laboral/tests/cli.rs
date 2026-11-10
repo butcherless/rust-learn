@@ -276,3 +276,25 @@ fn help_is_in_spanish() {
     assert!(mark.contains("--desc <TEXTO>"), "{mark}");
     assert!(!mark.contains("Options"), "{mark}");
 }
+
+#[test]
+fn rn_22_redirected_views_print_to_the_console_with_or_without_no_tui() {
+    let file = TempFile::new("no-tui");
+    assert!(run(&file, &["add-year", "2026"]).status.success());
+    [
+        vec!["month", "2026", "6"],
+        vec!["year", "2026"],
+        vec!["summary", "2026"],
+        vec!["day", "2026-06-08"],
+    ]
+    .into_iter()
+    .for_each(|command| {
+        let plain = run(&file, &command);
+        let after = run(&file, &[command.as_slice(), &["--no-tui"]].concat());
+        let before = run(&file, &[&["--no-tui"], command.as_slice()].concat());
+        assert!(plain.status.success(), "{command:?}: {}", stderr(&plain));
+        assert!(!stdout(&plain).is_empty(), "{command:?}");
+        assert_eq!(stdout(&after), stdout(&plain), "{command:?} --no-tui");
+        assert_eq!(stdout(&before), stdout(&plain), "--no-tui {command:?}");
+    });
+}

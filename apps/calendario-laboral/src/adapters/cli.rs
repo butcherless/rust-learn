@@ -37,6 +37,10 @@ pub struct Args {
     )]
     pub file: PathBuf,
 
+    /// Imprime `month`, `year` y `summary` en la consola en lugar de abrir la ventana (RN-22).
+    #[arg(long, global = true)]
+    pub no_tui: bool,
+
     /// Muestra la ayuda.
     #[arg(short, long, global = true, action = ArgAction::Help)]
     help: Option<bool>,

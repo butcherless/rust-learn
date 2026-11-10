@@ -74,8 +74,8 @@ moving or adding one, use its **Refresh Cargo Projects** button. `.idea/` is not
   environment variables).
 - **Tests:** the gutter icons next to each test or module run it, and **Run with Coverage** shows
   the coverage in the editor.
-- **Terminal UIs and colors:** `cargo pr --tui`, `cargo sev` and the colored views of `cargo cal`
-  need a real terminal. Use the built-in **Terminal**, not the Run console.
+- **Terminal UIs and colors:** `cargo pr --tui`, `cargo sev` and the windows of `cargo cal`
+  (`month`, `year`, `summary`) need a real terminal. Use the built-in **Terminal**, not the Run console.
 
 ## Layout
 

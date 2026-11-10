@@ -72,5 +72,5 @@ The shared rules are in the root `CLAUDE.md`. In this project:
 - **comfy-table 8** removed `load_preset` and `apply_modifier`. Use `load_style(PRESET.with_rounded_corners())`.
 - **reqwest 0.13** puts `RequestBuilder::query` behind an optional feature that isn't enabled. Build query strings with `reqwest::Url` instead.
 - **ratatui 0.30**: use `try_init` and `try_restore`; `init` panics.
-- **crossterm** is a direct dependency only for `EventStream` (the `event-stream` feature). Keep it on ratatui's version (0.29), or two copies get compiled.
+- **crossterm** is a direct dependency only for `EventStream`: it takes the workspace version and adds the `event-stream` feature. Keep it on ratatui's version (0.29), or two copies get compiled.
 - **`serde_json`** is a dev-dependency only. Decode responses with reqwest's `.json()`.

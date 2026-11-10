@@ -30,16 +30,17 @@ El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si ta
 
 El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (ignorado por git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
 
-Las consultas se pueden lanzar sobre el calendario real:
+Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
 
 ```bash
 cargo cal list                                     # RF-04; --year 2026 para un año
 cargo cal day 2026-06-08                           # RF-05
 cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026 6`; sin argumentos, el mes actual
-cargo cal year 2026                                # RF-07; necesita 130 columnas
+cargo cal year 2026                                # RF-07; necesita 130 columnas (en la ventana, lo que no cabe se corta)
+cargo cal year 2026 --no-tui                       # en la consola, como antes de RN-22
 cargo cal summary 2026                             # RF-08, RF-14: incluye las horas por mes y el acumulado
-cargo cal month 2026 6 > junio.txt                 # sin color al redirigir y con letras en lugar de puntos; también con NO_COLOR=1
-CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color (puntos) aunque la salida no sea un terminal
+cargo cal month 2026 6 > junio.txt                 # al redirigir no hay ventana, ni color, y van letras en lugar de barras; sin color también con NO_COLOR=1
+CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color (barras) aunque la salida no sea un terminal
 ```
 
 Los cambios escriben en el fichero; para probarlos sin tocar el calendario real, usa otro:
@@ -116,12 +117,17 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
     - Cada mes ocupa `MONTH_WIDTH` = 40 columnas; la vista de año pone 3 por fila (130 columnas), dentro de una rejilla gris punteada con marco (RN-21): `┊` a los lados y entre meses, y líneas `┈` arriba, abajo y entre filas, con esquinas y cruces `┌┬┐├┼┤└┴┘`.
     - Las horas llevan coma decimal (`decimal`).
+  - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
+    - `opens(report, no_tui, terminal)` decide si se abre: solo `Month`, `Year` y `Summary`, en un terminal y sin `--no-tui`.
+    - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI) y la primera visible. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
+    - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
   - `json`: DTOs con serde; el dominio no conoce serde.
     - `decode` valida a través de los constructores del dominio.
     - `load` devuelve un `Calendar` vacío si el fichero no existe.
     - `weekend` y `reduced_days` son nombres de día en inglés; si faltan, toman el valor por defecto.
     - `save` escribe `<fichero>.tmp` y lo renombra.
-- **`main.rs`** es la raíz de composición y el único sitio con efectos secundarios: el reloj, el fichero y la consola.
+- **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
+  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
   - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (lo hace clap).
   - Los avisos van a stderr.
 
@@ -139,6 +145,7 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 
 - **clap 4.6**: features `derive` y `env`.
 - **anstyle / anstream 1.0**: ya son dependencias de clap. `format!("{style}texto{style:#}")` aplica el estilo y lo cierra.
+- **crossterm 0.29**: la del workspace, la misma que usa ratatui. `Event::as_key_press_event` filtra las pulsaciones; sin él, en Windows llegarían también las teclas soltadas.
 - **chrono 0.4**: `NaiveDate::iter_days` recibe `&self`, así que se mapea con un closure. Los nombres de meses y días en español son tablas en `render`, no los locales inestables de chrono.
 - **serde_json**: indica los valores de `kind` desconocidos con línea y columna, y un test fija ese texto.
 

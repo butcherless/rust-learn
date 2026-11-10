@@ -13,9 +13,14 @@ Desde la raíz del workspace (los requisitos están en su [README](../../README.
 cargo cal add-year 2026                            # crea el fichero con el primer cambio
 cargo cal mark vacaciones 2026-06-05 2026-06-12
 cargo cal month 2026 junio                         # sin argumentos, el mes actual
+cargo cal year 2026
 cargo cal summary 2026
 cargo cal --help                                   # y `cargo cal <comando> --help`
 ```
+
+En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa: `↑` `↓`,
+`RePág` `AvPág` e `Inicio` `Fin` desplazan la vista si no cabe, y `Esc` o `q` la cierran y vuelven a
+la consola. Con `--no-tui`, o al redirigir la salida, se imprimen en la consola.
 
 Para instalar el binario en `~/.cargo/bin`: `cargo install --path apps/calendario-laboral`.
 
