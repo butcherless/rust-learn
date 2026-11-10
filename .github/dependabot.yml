@@ -7,13 +7,26 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    groups:
+      github-actions:
+        patterns: [ "*" ]
 
+  # One Cargo.lock at the root covers every workspace member.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+    groups:
+      # A single PR: separate ones would conflict with each other in the shared Cargo.lock.
+      # For 0.x crates a "minor" bump (0.30 → 0.31) can break the API; CI checks it.
+      cargo:
+        update-types: [ "minor", "patch" ]
     ignore:
       # Major bumps can need migration work, so they stay manual.
       - dependency-name: "*"
         update-types: [ "version-update:semver-major" ]
+      # pr-checker keeps crossterm on ratatui's version, or two copies get compiled.
+      # Bump it by hand together with ratatui.
+      - dependency-name: "crossterm"
+        update-types: [ "version-update:semver-minor" ]

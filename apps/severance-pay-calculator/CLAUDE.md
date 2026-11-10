@@ -30,7 +30,7 @@ cargo llvm-cov -p severance-pay-calculator              # coverage of this proje
 ```
 
 Coverage:
-- `tui/mod.rs` (0%) and the UI branch of `main.rs` stay untested because they drive the real terminal, as in pr-checker. Keep logic out of them so the workspace's 90% minimum holds.
+- `tui/mod.rs` (0%) and the UI branch of `main.rs` stay untested because they drive the real terminal, as in pr-checker. Keep logic out of them so the 90% minimum holds.
 - Every other file is at or near 100%.
 
 ## Parity with the Python script

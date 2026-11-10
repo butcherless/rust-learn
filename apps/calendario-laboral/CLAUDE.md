@@ -65,7 +65,7 @@ cargo test -p calendario-laboral --test cli        # solo los que ejecutan el bi
 cargo llvm-cov -p calendario-laboral --fail-under-lines 90   # requisito de build (RNF-06); --open para el HTML
 ```
 
-La CI del workspace ejecuta fmt, clippy y la cobertura con un mínimo del 90 % sobre el total del workspace. RNF-06 exige el 90 % a este proyecto, así que antes de dar un cambio por terminado ejecuta `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` y el `cargo llvm-cov -p calendario-laboral` de arriba. La cobertura está en torno al 99 %: sube el mínimo en lugar de bajarlo.
+La CI ejecuta fmt y clippy de todo el workspace y, en un job propio de este proyecto, el build en release y el `cargo llvm-cov -p calendario-laboral --fail-under-lines 90` de arriba (RNF-06). Antes de dar un cambio por terminado, ejecuta esos mismos comandos. La cobertura está en torno al 99 %: sube el mínimo en lugar de bajarlo.
 
 ## Flujo para hacer cambios
 

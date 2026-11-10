@@ -30,7 +30,7 @@ cargo llvm-cov -p pr-checker                                                # co
 
 `--config <path>` defaults to `./projects.toml`, relative to the current directory; the `cargo pr` alias passes `apps/pr-checker/projects.toml` so it works from the root. The alias already sets `--config`, so `cargo pr --config <path>` fails as a repeated flag; use `cargo run -p pr-checker` for another file.
 
-`tui/mod.rs` (the event loop, 0%) and the success path of `main.rs` (it always calls the real API) are untested I/O shells that stay in the coverage report; keep logic out of them so the workspace minimum holds.
+`tui/mod.rs` (the event loop, 0%) and the success path of `main.rs` (it always calls the real API) are untested I/O shells that stay in the coverage report; keep logic out of them so the 90% minimum holds. Line coverage is about 91%, the lowest of the workspace.
 
 ## Architecture
 

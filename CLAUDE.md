@@ -46,14 +46,21 @@ cargo test --workspace                                        # every member, of
 cargo test -p <package>                                       # one member
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all                                               # format; --check only reports, as CI does
-cargo llvm-cov --workspace                                    # tests with a per-file coverage summary; --open for HTML
+cargo llvm-cov -p <package> --fail-under-lines 90             # what CI checks for each member; --open for HTML
 ```
 
 All members build into the root `target/`, never into `apps/<name>/target/`.
 
 Binaries run with the current directory as their working directory, so relative paths (config, data files) resolve against wherever `cargo` was started. Tests that need a file use `env!("CARGO_MANIFEST_DIR")`.
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and `cargo llvm-cov --workspace --fail-under-lines 90` on pushes to `main` and on PRs, and uploads the HTML report as the `coverage-html` artifact. `cargo llvm-cov` replaces `cargo test` there: it runs the same unit and integration tests (but not doctests, which need nightly). There is no separate `cargo build` step, because clippy and the tests compile every target. The minimum applies to the whole workspace, so a new project needs tests that keep it. Raise the minimum when coverage grows rather than lowering it. Dependabot (`directory: "/"`) covers every member.
+CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on PRs, with `--locked`:
+- `lint`: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`, once.
+- `projects`: lists the members with `cargo metadata`, so a new app joins the matrix without editing the workflow.
+- `build-and-test`, one job per member (`fail-fast: false`): `cargo build --release -p <package>`, then `cargo llvm-cov -p <package> --fail-under-lines 90`, which runs its unit and integration tests (not doctests, which need nightly), and the HTML report as the `coverage-html-<package>` artifact.
+
+The 90% minimum applies to each project on its own, so a new project needs its own tests. Check it locally with `cargo llvm-cov -p <package> --fail-under-lines 90`. Raise the minimum when coverage grows rather than lowering it.
+
+Dependabot (`.github/dependabot.yml`, `directory: "/"`) covers every member through the root `Cargo.lock`. It groups minor and patch bumps into one weekly PR, because separate ones would conflict in the shared lockfile, plus one for GitHub Actions. Major bumps and crossterm minor bumps (it must match ratatui's crossterm) stay manual. For 0.x crates a "minor" bump can break the API, so read the CI result of that PR before merging it.
 
 ## Conventions
 

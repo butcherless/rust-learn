@@ -17,7 +17,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  # Format and lints for the whole workspace, once.
+  lint:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
@@ -32,24 +33,63 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
         # A Cargo.lock change (weekly Dependabot) would otherwise start from an empty cache.
         restore-keys: |
-          ${{ runner.os }}-cargo-
-    # No separate `cargo build`: clippy --all-targets and `cargo llvm-cov` already compile every
-    # target, including the binary the integration tests run against.
-    - run: cargo clippy --workspace --all-targets -- -D warnings
+          ${{ runner.os }}-cargo-lint-
+    - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # The workspace members, read from Cargo, so a new project under apps/ joins the matrix by itself.
+  projects:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - id: list
+      run: echo "packages=$(cargo metadata --no-deps --format-version 1 | jq -c '[.packages[].name]')" >> "$GITHUB_OUTPUT"
+
+  # Builds and tests each project on its own, with its own coverage minimum and report.
+  build-and-test:
+    needs: projects
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      # One failing project should not hide the results of the others.
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.projects.outputs.packages) }}
+    name: build-and-test (${{ matrix.package }})
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - run: rustup update
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ matrix.package }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ matrix.package }}-
+    # The optimized binary, as the READMEs build it.
+    - run: cargo build --release --locked -p ${{ matrix.package }}
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-llvm-cov
-    # Runs the tests of every member once with coverage, prints the per-file summary, and fails
-    # below the minimum, which applies to the whole workspace.
-    - run: cargo llvm-cov --workspace --fail-under-lines 90
+    # Runs the project's unit and integration tests once with coverage, prints the per-file
+    # summary, and fails if the project's line coverage is below the minimum.
+    - run: cargo llvm-cov --locked -p ${{ matrix.package }} --fail-under-lines 90
     # The HTML report is built from the data above, without running the tests again.
     - if: ${{ !cancelled() }}
-      run: cargo llvm-cov report --html
+      run: cargo llvm-cov report --html -p ${{ matrix.package }}
     - if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v7
       with:
-        name: coverage-html
+        name: coverage-html-${{ matrix.package }}
         path: target/llvm-cov/html

@@ -46,12 +46,19 @@ cargo test --workspace                                # every project, offline
 cargo test -p <project>                               # one project
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all                                       # --check only reports
-cargo llvm-cov --workspace --open                     # tests with an HTML coverage report
+cargo llvm-cov -p <project> --open                    # one project's tests with an HTML coverage report
 ```
 
-CI runs fmt, clippy and the tests with coverage on pushes to `main` and on pull requests. It fails
-if line coverage of the whole workspace drops below 90%, and attaches the HTML report to each run as
-the `coverage-html` artifact.
+CI runs on pushes to `main` and on pull requests:
+
+- **lint**: fmt and clippy for the whole workspace.
+- **build-and-test**, one job per project (found with `cargo metadata`, so a new project joins
+  without editing the workflow): the release build, then the tests with coverage. It fails if the
+  project's line coverage drops below 90%, and attaches the HTML report as the
+  `coverage-html-<project>` artifact.
+
+Dependabot opens one weekly pull request with the minor and patch updates of every project, and
+another for the GitHub Actions.
 
 ## Layout
 
