@@ -1,10 +1,15 @@
 projects = [
-  "butcherless/aero-hex-ai",
-  "butcherless/aero-ui-ai",
-  "butcherless/dependency-analyzer",
-  "butcherless/tapir-learn",
-  "butcherless/scala-3",
-  "butcherless/incubator",
-  "butcherless/scala",
-  "butcherless/rust-learn",
+    "butcherless/aero-hex-ai",
+    "butcherless/aero-ui-ai",
+    "butcherless/dependency-analyzer",
+    "butcherless/tapir-learn",
+    "butcherless/scala-3",
+    "butcherless/incubator",
+    "butcherless/scala",
+    "butcherless/rust-learn",
+    "butcherless/camel-and-boot",
+    "butcherless/ms-gateway",
+    "butcherless/microservice-one",
+    "butcherless/microservice-two",
+    "butcherless/java-research"
 ]
