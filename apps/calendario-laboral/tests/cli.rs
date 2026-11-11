@@ -149,9 +149,9 @@ fn rf_07_rf_08_rf_09_rf_10_configuration_changes_the_views() {
         "{summary}"
     );
     let year = stdout(&run(&file, &["year", "2026"]));
-    // Marco superior, 4 filas de meses de 10 líneas con su rejilla, una en blanco, la nota de
-    // vacaciones por defecto, la leyenda y el cupo (RN-21).
-    assert_eq!(year.lines().count(), 1 + 4 * 10 + 4, "{year}");
+    // Marco superior, franja del año con su línea (RN-23), 4 filas de meses de 10 líneas con su
+    // rejilla, una en blanco, la nota de vacaciones por defecto, la leyenda y el cupo (RN-21).
+    assert_eq!(year.lines().count(), 3 + 4 * 10 + 4, "{year}");
     // RF-14: 20 días de vacaciones por defecto desde el 1 de julio; julio queda con 3 días.
     assert!(
         summary

@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-22 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-23 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -101,6 +101,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra gruesa `▌` (media celda, `15 ▌`), que deja leer mejor los números y muestra bastante color para distinguir los tonos. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
 | RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
 | RN-22 | Si la salida es un terminal, `month`, `year` y `summary` se muestran en una ventana a pantalla completa (la pantalla alternativa del terminal), con el mismo texto y colores que en la consola y una línea de ayuda abajo. `Esc`, `q` o `Ctrl+C` cierran la ventana y la consola vuelve tal como estaba, sin la vista. Si la vista no cabe, `↑` `↓` (o `k` `j`), `RePág` `AvPág` e `Inicio` `Fin` la desplazan; lo que no cabe a lo ancho se corta. Al redirigir la salida, o con `--no-tui`, la vista se imprime en la consola como hasta ahora. `day`, `list` y los comandos que cambian el fichero siempre imprimen en la consola. |
+| RN-23 | La vista de año empieza con una franja, dentro del marco de la rejilla (RN-21), con el título `Calendario laboral AAAA` centrado y en negrita; una línea `┈` la separa de la primera fila de meses. Como el año ya está en la franja, cada mes se titula solo con su nombre (`Enero`). La vista de mes mantiene el año en su título (`Junio 2026`). |
 
 ## 4. Requisitos funcionales
 
@@ -149,7 +150,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
   - Códigos de salida: 0 si todo va bien, 1 si la operación falla y 2 si los argumentos no son válidos.
 - **Ayuda:** `calendario --help` y `calendario <comando> --help`.
 
-Cada día se muestra con su número, un espacio y una barra `▌` del color de su tipo (`15 ▌`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21), necesita 130. El ejemplo muestra la salida sin color:
+Cada día se muestra con su número, un espacio y una barra `▌` del color de su tipo (`15 ▌`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21) y bajo la franja con el año (RN-23), necesita 130. El ejemplo muestra la salida sin color:
 
 ```
                Junio 2026
@@ -259,6 +260,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-11 | `Vacation` pasa de blanco brillante a amarillo en negrita: el blanco apenas se distinguía, y el amarillo es el color libre más alejado del rojo de `Holiday`, también con daltonismo rojo-verde (el magenta se confundía con él). La negrita lo resalta en los terminales que la muestran más brillante. En un fondo claro el amarillo se ve poco. |
 | 2026-11-11 | `Vacation` pasa de amarillo a naranja en negrita, el 208 de la paleta de 256 (como el verde pálido de `SummerReduced`), porque no hay naranja entre los 16 colores básicos. Se ve mejor que el amarillo en un fondo claro, pero está más cerca del rojo de `Holiday`. |
 | 2026-11-11 | Refactorización sin cambios de comportamiento. `Month` pasa a ser `chrono::Month`, que ya es una enumeración ordenada como `Weekday` (RNF-08); el dominio solo le añade `ALL`, `of` e `is_summer` (`MonthExt`). La CLI construye sus valores (`MarkKind`, `Shift` y el mes) a partir del dominio con un único parser, en lugar de repetirlos en enums propios; el DTO JSON los mantiene aparte, porque es el formato del fichero. Las vistas de mes y de año resuelven el año una sola vez (antes, la de año lo resolvía 13 veces). |
+| 2026-11-11 | RN-23: el año se repetía en el título de los 12 meses de la vista de año; ahora aparece una vez, en una franja superior `Calendario laboral AAAA` dentro del marco, y los meses llevan solo el nombre. La vista de año pasa de 44 a 46 líneas. |
 
 ### Pendiente o posibles ampliaciones
 

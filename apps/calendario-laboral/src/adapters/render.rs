@@ -233,7 +233,7 @@ fn cell(day: &ResolvedDay, marker: Marker) -> String {
 }
 
 /// Las líneas de un mes, de [`MONTH_WIDTH`] caracteres, completadas hasta `weeks` semanas.
-fn month_grid(view: &MonthView, weeks: usize, marker: Marker) -> Vec<String> {
+fn month_grid(view: &MonthView, title: &str, weeks: usize, marker: Marker) -> Vec<String> {
     let leading = view
         .days
         .first()
@@ -253,10 +253,7 @@ fn month_grid(view: &MonthView, weeks: usize, marker: Marker) -> Vec<String> {
         .collect();
     let blank_rows = weeks.saturating_sub(rows.len());
     [
-        format!(
-            "{:^MONTH_WIDTH$}",
-            format!("{} {}", month_name(view.month), view.year)
-        ),
+        format!("{title:^MONTH_WIDTH$}"),
         format!("{HEADER:<MONTH_WIDTH$}"),
     ]
     .into_iter()
@@ -347,13 +344,18 @@ fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
         .into_iter()
         .flatten();
     lines(
-        month_grid(view, 0, marker)
-            .into_iter()
-            .chain(marks)
-            .chain(iter::once(String::new()))
-            .chain(default_vacation_note(&view.days))
-            .chain(summary.month(view.month).map(month_hours_line))
-            .chain([legend(marker), vacation_line(summary)]),
+        month_grid(
+            view,
+            &format!("{} {}", month_name(view.month), view.year),
+            0,
+            marker,
+        )
+        .into_iter()
+        .chain(marks)
+        .chain(iter::once(String::new()))
+        .chain(default_vacation_note(&view.days))
+        .chain(summary.month(view.month).map(month_hours_line))
+        .chain([legend(marker), vacation_line(summary)]),
     )
 }
 
@@ -361,7 +363,16 @@ fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
 fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
     let columns = months.len().min(MONTHS_PER_ROW);
-    let top = grid_rule(columns, ['┌', '┬', '┐']);
+    // RN-23: la franja con el año, dentro del marco y sobre la primera fila de meses.
+    let band_width = columns * MONTH_WIDTH + columns.saturating_sub(1) * 3;
+    let title = format!("Calendario laboral {}", summary.year);
+    let band =
+        format!("{title:^band_width$}").replacen(&title, &styled(Style::new().bold(), &title), 1);
+    let top = [
+        grid_rule(columns, ['┌', '┈', '┐']),
+        grid_row(&[band]),
+        grid_rule(columns, ['├', '┬', '┤']),
+    ];
     let rows = months
         .chunks(MONTHS_PER_ROW)
         .enumerate()
@@ -369,7 +380,7 @@ fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
             let grids: Vec<Vec<String>> = row
                 .iter()
                 .map(|view| {
-                    month_grid(view, MAX_WEEKS, marker)
+                    month_grid(view, month_name(view.month), MAX_WEEKS, marker)
                         .into_iter()
                         .chain(iter::once(month_hours_cell(summary, view.month)))
                         .collect()
@@ -394,7 +405,7 @@ fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
         });
     let all_days: Vec<ResolvedDay> = months.iter().flat_map(|view| view.days.clone()).collect();
     lines(
-        iter::once(top)
+        top.into_iter()
             .chain(rows)
             .chain(iter::once(String::new()))
             .chain(default_vacation_note(&all_days))
@@ -669,39 +680,40 @@ mod tests {
         );
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
-            lines.get(1),
+            lines.get(3),
             Some(
-                &"┊                Enero 2026                ┊               Febrero 2026               ┊                Marzo 2026                ┊"
+                &"┊                  Enero                   ┊                 Febrero                  ┊                  Marzo                   ┊"
             )
         );
         assert_eq!(
-            lines.get(2),
+            lines.get(4),
             Some(
                 &"┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊ Lu    Ma    Mi    Ju    Vi    Sá    Do   ┊"
             )
         );
         assert_eq!(
-            lines.get(3),
+            lines.get(5),
             Some(
                 &"┊                    1 L   2 R   3 S   4 S ┊                                      1 S ┊                                      1 S ┊"
             )
         );
-        // El marco superior (RN-21); cuatro filas de tres meses, de 8 líneas, la de horas (RF-14)
-        // y la línea de la rejilla debajo; una en blanco y, después, leyenda y cupo.
-        assert_eq!(lines.len(), 1 + 4 * 10 + 3, "{text}");
+        // El marco superior (RN-21) y la franja del año con su línea (RN-23); cuatro filas de tres
+        // meses, de 8 líneas, la de horas (RF-14) y la línea de la rejilla debajo; una en blanco
+        // y, después, leyenda y cupo.
+        assert_eq!(lines.len(), 3 + 4 * 10 + 3, "{text}");
         let hours = format!(
             "┊ {a:^40} ┊ {b:^40} ┊ {c:^40} ┊",
             a = "174,5 h · 22 días",
             b = "160,0 h · 20 días",
             c = "177,0 h · 22 días"
         );
-        assert_eq!(lines.get(9), Some(&hours.as_str()));
-        assert_eq!(lines.get(42), Some(&LEGEND));
-        assert_eq!(lines.get(43), Some(&"Vacaciones restantes: 24 / 25"));
+        assert_eq!(lines.get(11), Some(&hours.as_str()));
+        assert_eq!(lines.get(44), Some(&LEGEND));
+        assert_eq!(lines.get(45), Some(&"Vacaciones restantes: 24 / 25"));
         assert_eq!(
-            lines.get(31),
+            lines.get(33),
             Some(
-                &"┊               Octubre 2026               ┊              Noviembre 2026              ┊              Diciembre 2026              ┊"
+                &"┊                 Octubre                  ┊                Noviembre                 ┊                Diciembre                 ┊"
             )
         );
     }
@@ -719,12 +731,17 @@ mod tests {
             format!("{left}┈{segment}┈{cross}┈{segment}┈{cross}┈{segment}┈{right}")
         };
         [
-            (0, rule(['┌', '┬', '┐']), "marco superior"),
-            (10, rule(['├', '┼', '┤']), "entre la 1.ª y la 2.ª fila"),
-            (20, rule(['├', '┼', '┤']), "entre la 2.ª y la 3.ª fila"),
-            (30, rule(['├', '┼', '┤']), "entre la 3.ª y la 4.ª fila"),
-            (40, rule(['└', '┴', '┘']), "marco inferior"),
-            (41, String::new(), "línea en blanco tras el marco"),
+            (
+                0,
+                rule(['┌', '┈', '┐']),
+                "marco superior, sobre la franja del año",
+            ),
+            (2, rule(['├', '┬', '┤']), "entre la franja y la 1.ª fila"),
+            (12, rule(['├', '┼', '┤']), "entre la 1.ª y la 2.ª fila"),
+            (22, rule(['├', '┼', '┤']), "entre la 2.ª y la 3.ª fila"),
+            (32, rule(['├', '┼', '┤']), "entre la 3.ª y la 4.ª fila"),
+            (42, rule(['└', '┴', '┘']), "marco inferior"),
+            (43, String::new(), "línea en blanco tras el marco"),
         ]
         .into_iter()
         .for_each(|(index, expected, case)| {
@@ -733,7 +750,7 @@ mod tests {
         lines
             .iter()
             .enumerate()
-            .skip(1)
+            .skip(3)
             .take(9)
             .for_each(|(index, line)| {
                 let positions: Vec<usize> = line
@@ -745,8 +762,31 @@ mod tests {
             });
         assert!(colored.contains(" \u{1b}[90m┊\u{1b}[0m "), "{colored}");
         assert!(
-            colored.contains(&format!("\u{1b}[90m{}\u{1b}[0m", rule(['┌', '┬', '┐']))),
+            colored.contains(&format!("\u{1b}[90m{}\u{1b}[0m", rule(['┌', '┈', '┐']))),
             "{colored}"
+        );
+    }
+
+    #[test]
+    fn rn_23_year_shows_the_year_once_in_a_band_above_the_months() {
+        let colored = match execute(calendar(), Command::Year(2026)) {
+            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
+            other => format!("{other:?}"),
+        };
+        let text = plain(&colored);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(
+            lines.get(1),
+            Some(&format!("┊ {:^126} ┊", "Calendario laboral 2026").as_str())
+        );
+        assert_eq!(
+            text.matches("2026").count(),
+            1,
+            "el año solo aparece en la franja: {text}"
+        );
+        assert!(
+            colored.contains("\u{1b}[1mCalendario laboral 2026\u{1b}[0m"),
+            "título en negrita: {colored}"
         );
     }
 
