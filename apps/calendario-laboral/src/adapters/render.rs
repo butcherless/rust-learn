@@ -65,8 +65,22 @@ pub struct Message {
     pub warning: Option<String>,
 }
 
-/// El color de cada `DayKind`. En cada pareja laborable, la jornada reducida es más tenue que la
-/// completa: cian frente a azul y, en `Summer`, un verde pálido de la paleta de 256 frente al verde.
+/// El estilo de cada `DayKind`: su color y, en `Vacation`, negrita para separarla del rojo de
+/// `Holiday`. En cada pareja laborable, la jornada reducida es más tenue que la completa: cian
+/// frente a azul y, en `Summer`, un verde pálido de la paleta de 256 frente al verde.
+const fn style(kind: DayKind) -> Style {
+    let style = Style::new().fg_color(Some(color(kind)));
+    match kind {
+        DayKind::Vacation => style.bold(),
+        DayKind::Working
+        | DayKind::Reduced
+        | DayKind::SummerWorking
+        | DayKind::SummerReduced
+        | DayKind::Weekend
+        | DayKind::Holiday => style,
+    }
+}
+
 const fn color(kind: DayKind) -> Color {
     match kind {
         DayKind::Working => Color::Ansi(AnsiColor::Blue),
@@ -75,12 +89,12 @@ const fn color(kind: DayKind) -> Color {
         DayKind::SummerReduced => Color::Ansi256(Ansi256Color(151)),
         DayKind::Weekend => Color::Ansi(AnsiColor::BrightBlack),
         DayKind::Holiday => Color::Ansi(AnsiColor::Red),
-        DayKind::Vacation => Color::Ansi(AnsiColor::BrightWhite),
+        DayKind::Vacation => Color::Ansi(AnsiColor::Yellow),
     }
 }
 
 fn paint(kind: DayKind, text: &str) -> String {
-    let style = Style::new().fg_color(Some(color(kind)));
+    let style = style(kind);
     format!("{style}{text}{style:#}")
 }
 
@@ -576,7 +590,7 @@ mod tests {
             ),
             (" 6 \u{1b}[90m▌\u{1b}[0m", "gris"),
             (" 2 \u{1b}[31m▌\u{1b}[0m", "rojo"),
-            (" 3 \u{1b}[97m▌\u{1b}[0m", "blanco"),
+            (" 3 \u{1b}[1m\u{1b}[33m▌\u{1b}[0m", "amarillo en negrita"),
         ]
         .into_iter()
         .for_each(|(code, name)| assert!(colored.contains(code), "{name}"));
