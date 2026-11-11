@@ -10,7 +10,7 @@ use anstyle::{Ansi256Color, AnsiColor, Color, Style};
 use chrono::{Datelike, Weekday};
 
 use crate::application::{Event, MonthView, Report};
-use crate::domain::{DayKind, Mark, Month, MonthTotal, Origin, ResolvedDay, Summary};
+use crate::domain::{DayKind, Mark, Month, MonthExt, MonthTotal, Origin, ResolvedDay, Summary};
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
 const CELL_WIDTH: usize = 4;
@@ -330,6 +330,19 @@ fn month_hours_table(summary: &Summary) -> Vec<String> {
     .collect()
 }
 
+/// Las horas del año y su media mensual, que cierran la vista de año (RN-24).
+fn year_hours_lines(summary: &Summary) -> [String; 2] {
+    let total = decimal(summary.working_hours);
+    [
+        format!("Horas laborables del año: {total} h"),
+        format!(
+            "Media mensual: {} h ({total} h / {} meses)",
+            decimal(summary.monthly_average_hours()),
+            Month::ALL.len()
+        ),
+    ]
+}
+
 fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
     let marks = (!view.marks.is_empty())
         .then(|| {
@@ -409,7 +422,8 @@ fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
             .chain(rows)
             .chain(iter::once(String::new()))
             .chain(default_vacation_note(&all_days))
-            .chain([legend(marker), vacation_line(summary)]),
+            .chain([legend(marker), vacation_line(summary)])
+            .chain(year_hours_lines(summary)),
     )
 }
 
@@ -699,8 +713,8 @@ mod tests {
         );
         // El marco superior (RN-21) y la franja del año con su línea (RN-23); cuatro filas de tres
         // meses, de 8 líneas, la de horas (RF-14) y la línea de la rejilla debajo; una en blanco
-        // y, después, leyenda y cupo.
-        assert_eq!(lines.len(), 3 + 4 * 10 + 3, "{text}");
+        // y, después, leyenda, cupo, horas del año y media mensual (RN-24).
+        assert_eq!(lines.len(), 3 + 4 * 10 + 5, "{text}");
         let hours = format!(
             "┊ {a:^40} ┊ {b:^40} ┊ {c:^40} ┊",
             a = "174,5 h · 22 días",
@@ -764,6 +778,23 @@ mod tests {
         assert!(
             colored.contains(&format!("\u{1b}[90m{}\u{1b}[0m", rule(['┌', '┈', '┐']))),
             "{colored}"
+        );
+    }
+
+    #[test]
+    fn rn_24_year_ends_with_the_year_hours_and_the_monthly_average() {
+        let text = shown(calendar(), Command::Year(2026));
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(
+            lines.get(lines.len().saturating_sub(3)..),
+            Some(
+                &[
+                    "Vacaciones restantes: 0 / 25",
+                    "Horas laborables del año: 1888,5 h",
+                    "Media mensual: 157,38 h (1888,5 h / 12 meses)",
+                ][..]
+            ),
+            "{text}"
         );
     }
 

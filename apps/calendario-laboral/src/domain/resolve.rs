@@ -203,6 +203,11 @@ impl Summary {
     }
 
     /// El total del mes `month` (RF-14).
+    /// Las horas laborables del año repartidas entre los 12 meses (RN-24).
+    pub fn monthly_average_hours(&self) -> f64 {
+        self.working_hours / Month::ALL.len() as f64
+    }
+
     pub fn month(&self, month: Month) -> Option<&MonthTotal> {
         self.months.iter().find(|total| total.month == month)
     }
@@ -481,6 +486,24 @@ mod tests {
                 .map(|summary| summary.vacation_used),
             Ok(132)
         );
+    }
+
+    #[test]
+    fn rn_24_the_monthly_average_divides_the_year_hours_by_12() {
+        // Con el calendario por defecto, los meses tienen horas distintas; la media no es la de
+        // ningún mes, sino el total entre 12.
+        let summary = summarize(&calendar(), 2026);
+        assert_eq!(
+            summary
+                .as_ref()
+                .map(|summary| summary.monthly_average_hours() * 12.0 - summary.working_hours),
+            Ok(0.0)
+        );
+        let empty = Summary {
+            working_hours: 0.0,
+            ..summary.clone().expect("summary")
+        };
+        assert_eq!(empty.monthly_average_hours(), 0.0, "un año sin horas");
     }
 
     #[test]

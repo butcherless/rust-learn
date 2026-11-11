@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-23 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-24 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -102,6 +102,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
 | RN-22 | Si la salida es un terminal, `month`, `year` y `summary` se muestran en una ventana a pantalla completa (la pantalla alternativa del terminal), con el mismo texto y colores que en la consola y una línea de ayuda abajo. `Esc`, `q` o `Ctrl+C` cierran la ventana y la consola vuelve tal como estaba, sin la vista. Si la vista no cabe, `↑` `↓` (o `k` `j`), `RePág` `AvPág` e `Inicio` `Fin` la desplazan; lo que no cabe a lo ancho se corta. Al redirigir la salida, o con `--no-tui`, la vista se imprime en la consola como hasta ahora. `day`, `list` y los comandos que cambian el fichero siempre imprimen en la consola. |
 | RN-23 | La vista de año empieza con una franja, dentro del marco de la rejilla (RN-21), con el título `Calendario laboral AAAA` centrado y en negrita; una línea `┈` la separa de la primera fila de meses. Como el año ya está en la franja, cada mes se titula solo con su nombre (`Enero`). La vista de mes mantiene el año en su título (`Junio 2026`). |
+| RN-24 | La vista de año termina, bajo las vacaciones restantes, con las horas laborables del año (las de RF-08) y la media mensual: esas horas divididas entre 12, aunque algún mes no tenga horas, como medida del esfuerzo mensual medio. `Horas laborables del año: 1888,5 h` y `Media mensual: 157,38 h (1888,5 h / 12 meses)`. |
 
 ## 4. Requisitos funcionales
 
@@ -261,6 +262,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-11 | `Vacation` pasa de amarillo a naranja en negrita, el 208 de la paleta de 256 (como el verde pálido de `SummerReduced`), porque no hay naranja entre los 16 colores básicos. Se ve mejor que el amarillo en un fondo claro, pero está más cerca del rojo de `Holiday`. |
 | 2026-11-11 | Refactorización sin cambios de comportamiento. `Month` pasa a ser `chrono::Month`, que ya es una enumeración ordenada como `Weekday` (RNF-08); el dominio solo le añade `ALL`, `of` e `is_summer` (`MonthExt`). La CLI construye sus valores (`MarkKind`, `Shift` y el mes) a partir del dominio con un único parser, en lugar de repetirlos en enums propios; el DTO JSON los mantiene aparte, porque es el formato del fichero. Las vistas de mes y de año resuelven el año una sola vez (antes, la de año lo resolvía 13 veces). |
 | 2026-11-11 | RN-23: el año se repetía en el título de los 12 meses de la vista de año; ahora aparece una vez, en una franja superior `Calendario laboral AAAA` dentro del marco, y los meses llevan solo el nombre. La vista de año pasa de 44 a 46 líneas. |
+| 2026-11-11 | RN-24: la vista de año termina con el total de horas del año y la media mensual (total / 12), para ver el esfuerzo mensual medio sin abrir `summary`. La media divide siempre entre 12, no entre los meses con horas. La vista de año pasa de 46 a 48 líneas. |
 
 ### Pendiente o posibles ampliaciones
 
