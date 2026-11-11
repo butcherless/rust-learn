@@ -116,7 +116,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.
     - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
     - Cada mes ocupa `MONTH_WIDTH` = 40 columnas; la vista de año pone 3 por fila (130 columnas), dentro de una rejilla gris punteada con marco (RN-21): `┊` a los lados y entre meses, y líneas `┈` arriba, abajo y entre filas, con esquinas y cruces `┌┬┐├┼┤└┴┘`. Arriba, dentro del marco, la franja `Calendario laboral AAAA` en negrita (RN-23); por eso `month_grid` recibe el título: solo el nombre en la vista de año y `Junio 2026` en la de mes.
-    - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12, RN-24).
+    - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12) y, entre paréntesis, `monthly_average_days` (media / `REFERENCE_DAY_HOURS`, 8 h fijas) (RN-24).
     - Las horas llevan coma decimal (`decimal`).
   - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
     - `opens(report, no_tui, terminal)` decide si se abre: solo `Month`, `Year` y `Summary`, en un terminal y sin `--no-tui`.

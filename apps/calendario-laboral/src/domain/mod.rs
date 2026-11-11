@@ -13,7 +13,8 @@ pub use error::DomainError;
 pub use kind::{Category, DayKind, MarkKind, Shift};
 pub use month::{Month, MonthExt};
 pub use resolve::{
-    MonthTotal, Origin, ResolvedDay, Summary, resolve_day, resolve_year, summarize, summary_of,
+    MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary, resolve_day, resolve_year,
+    summarize, summary_of,
 };
 
 /// Constructores compartidos por los tests.

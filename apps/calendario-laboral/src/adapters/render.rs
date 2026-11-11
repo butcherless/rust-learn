@@ -10,7 +10,9 @@ use anstyle::{Ansi256Color, AnsiColor, Color, Style};
 use chrono::{Datelike, Weekday};
 
 use crate::application::{Event, MonthView, Report};
-use crate::domain::{DayKind, Mark, Month, MonthExt, MonthTotal, Origin, ResolvedDay, Summary};
+use crate::domain::{
+    DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary,
+};
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
 const CELL_WIDTH: usize = 4;
@@ -332,13 +334,16 @@ fn month_hours_table(summary: &Summary) -> Vec<String> {
 
 /// Las horas del año y su media mensual, que cierran la vista de año (RN-24).
 fn year_hours_lines(summary: &Summary) -> [String; 2] {
-    let total = decimal(summary.working_hours);
     [
-        format!("Horas laborables del año: {total} h"),
         format!(
-            "Media mensual: {} h ({total} h / {} meses)",
+            "Horas laborables del año: {} h",
+            decimal(summary.working_hours)
+        ),
+        format!(
+            // `Display` de `f64` escribe 8.0 como «8».
+            "Media mensual: {} h ({} días de {REFERENCE_DAY_HOURS} h)",
             decimal(summary.monthly_average_hours()),
-            Month::ALL.len()
+            decimal(summary.monthly_average_days()),
         ),
     ]
 }
@@ -791,7 +796,7 @@ mod tests {
                 &[
                     "Vacaciones restantes: 0 / 25",
                     "Horas laborables del año: 1888,5 h",
-                    "Media mensual: 157,38 h (1888,5 h / 12 meses)",
+                    "Media mensual: 157,38 h (19,67 días de 8 h)",
                 ][..]
             ),
             "{text}"

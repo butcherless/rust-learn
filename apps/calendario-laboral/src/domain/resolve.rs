@@ -160,6 +160,9 @@ fn with_default_vacation(days: Vec<ResolvedDay>, quota: u32) -> Vec<ResolvedDay>
 }
 
 /// Los días y horas laborables de un mes y el acumulado del año hasta él (RF-14, RN-19).
+/// La jornada de referencia de RN-24, fija: no son las horas configuradas de ningún `Shift`.
+pub const REFERENCE_DAY_HOURS: f64 = 8.0;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MonthTotal {
     /// El mes.
@@ -206,6 +209,11 @@ impl Summary {
     /// Las horas laborables del año repartidas entre los 12 meses (RN-24).
     pub fn monthly_average_hours(&self) -> f64 {
         self.working_hours / Month::ALL.len() as f64
+    }
+
+    /// La media mensual en días de [`REFERENCE_DAY_HOURS`] (RN-24).
+    pub fn monthly_average_days(&self) -> f64 {
+        self.monthly_average_hours() / REFERENCE_DAY_HOURS
     }
 
     pub fn month(&self, month: Month) -> Option<&MonthTotal> {
@@ -489,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn rn_24_the_monthly_average_divides_the_year_hours_by_12() {
+    fn rn_24_the_monthly_average_divides_the_year_hours_by_12_and_by_8_for_days() {
         // Con el calendario por defecto, los meses tienen horas distintas; la media no es la de
         // ningún mes, sino el total entre 12.
         let summary = summarize(&calendar(), 2026);
@@ -504,6 +512,15 @@ mod tests {
             ..summary.clone().expect("summary")
         };
         assert_eq!(empty.monthly_average_hours(), 0.0, "un año sin horas");
+        let year = Summary {
+            working_hours: 1920.0,
+            ..empty
+        };
+        assert_eq!(
+            (year.monthly_average_hours(), year.monthly_average_days()),
+            (160.0, 20.0),
+            "160 h al mes son 20 días de 8 h"
+        );
     }
 
     #[test]
