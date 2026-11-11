@@ -55,7 +55,7 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `SummerReduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, en `Summer` | `SummerReduced` (6,0 h) | Reducido verano | r | Verde pálido |
 | `Weekend` | `NonWorking` | Regla `Weekend` | — (0 h) | Fin de semana | S | Gris |
 | `Holiday` | `Absence` | `Mark` `Holiday` | — (0 h) | Festivo | F | Rojo |
-| `Vacation` | `Absence` | `Mark` `Vacation` o `DefaultVacation`; consume `quota` | — (0 h) | Vacaciones | V | Amarillo en negrita |
+| `Vacation` | `Absence` | `Mark` `Vacation` o `DefaultVacation`; consume `quota` | — (0 h) | Vacaciones | V | Naranja en negrita |
 
 ### 2.3 Resolución del `DayKind` efectivo
 
@@ -257,6 +257,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-10 | Colores de los `DayKind` laborables por parejas, con la jornada completa más oscura que la reducida: `Working` en azul marino (el azul ANSI, que cada tema pinta a su manera; se descartó el azul marino de la paleta de 256, que apenas se ve sobre fondo oscuro) y `Reduced` en cian; en `Summer`, `SummerWorking` en verde y `SummerReduced` en un verde pálido, más tenue (color 151 de la paleta de 256; el verde brillante ANSI resultaba más intenso que el normal), para que ningún tipo comparta color. |
 | 2026-11-11 | RN-22: `month`, `year` y `summary` se ven en una ventana a pantalla completa que se cierra con `Esc`, como `severance-pay-calculator`. No es el modo interactivo descartado el 2026-11-08: solo muestra y desplaza la vista. Se abre sola si la salida es un terminal, así que redirigir y los tests no cambian, y `--no-tui` la evita. Se dibuja con `crossterm` (la versión que ya usa el workspace) a partir del mismo texto con códigos ANSI que la consola, en lugar de reescribir las vistas en ratatui; las líneas se cortan a lo ancho con `DisableLineWrap`. La navegación entre meses queda pendiente. |
 | 2026-11-11 | `Vacation` pasa de blanco brillante a amarillo en negrita: el blanco apenas se distinguía, y el amarillo es el color libre más alejado del rojo de `Holiday`, también con daltonismo rojo-verde (el magenta se confundía con él). La negrita lo resalta en los terminales que la muestran más brillante. En un fondo claro el amarillo se ve poco. |
+| 2026-11-11 | `Vacation` pasa de amarillo a naranja en negrita, el 208 de la paleta de 256 (como el verde pálido de `SummerReduced`), porque no hay naranja entre los 16 colores básicos. Se ve mejor que el amarillo en un fondo claro, pero está más cerca del rojo de `Holiday`. |
 
 ### Pendiente o posibles ampliaciones
 

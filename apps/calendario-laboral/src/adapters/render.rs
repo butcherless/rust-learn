@@ -89,7 +89,7 @@ const fn color(kind: DayKind) -> Color {
         DayKind::SummerReduced => Color::Ansi256(Ansi256Color(151)),
         DayKind::Weekend => Color::Ansi(AnsiColor::BrightBlack),
         DayKind::Holiday => Color::Ansi(AnsiColor::Red),
-        DayKind::Vacation => Color::Ansi(AnsiColor::Yellow),
+        DayKind::Vacation => Color::Ansi256(Ansi256Color(208)),
     }
 }
 
@@ -590,7 +590,10 @@ mod tests {
             ),
             (" 6 \u{1b}[90m▌\u{1b}[0m", "gris"),
             (" 2 \u{1b}[31m▌\u{1b}[0m", "rojo"),
-            (" 3 \u{1b}[1m\u{1b}[33m▌\u{1b}[0m", "amarillo en negrita"),
+            (
+                " 3 \u{1b}[1m\u{1b}[38;5;208m▌\u{1b}[0m",
+                "naranja en negrita",
+            ),
         ]
         .into_iter()
         .for_each(|(code, name)| assert!(colored.contains(code), "{name}"));
