@@ -7,7 +7,8 @@ use chrono::{Datelike, NaiveDate};
 
 use crate::domain::{
     Calendar, DEFAULT_VACATION_QUOTA, DateRange, DomainError, Mark, MarkId, MarkKind, Marking,
-    Month, ResolvedDay, Shift, Summary, resolve_day, resolve_year, summarize,
+    Month, MonthExt, ResolvedDay, Shift, Summary, Year, resolve_day, resolve_year, summarize,
+    summary_of,
 };
 
 /// Una operación pedida por el usuario.
@@ -163,17 +164,23 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
         Command::Day(date) => {
             resolve_day(&calendar, date).map(|day| Outcome::Report(Report::Day(day)))
         }
-        Command::Month { year, month } => Ok(Outcome::Report(Report::Month(
-            month_view(&calendar, year, month)?,
-            summarize(&calendar, year)?,
-        ))),
-        Command::Year(year) => Ok(Outcome::Report(Report::Year(
-            Month::ALL
-                .into_iter()
-                .map(|month| month_view(&calendar, year, month))
-                .collect::<Result<_, _>>()?,
-            summarize(&calendar, year)?,
-        ))),
+        Command::Month { year, month } => {
+            let (days, year) = (resolve_year(&calendar, year)?, calendar.year(year)?);
+            Ok(Outcome::Report(Report::Month(
+                month_view(year, month, &days)?,
+                summary_of(year, &days),
+            )))
+        }
+        Command::Year(year) => {
+            let (days, year) = (resolve_year(&calendar, year)?, calendar.year(year)?);
+            Ok(Outcome::Report(Report::Year(
+                Month::ALL
+                    .into_iter()
+                    .map(|month| month_view(year, month, &days))
+                    .collect::<Result<_, _>>()?,
+                summary_of(year, &days),
+            )))
+        }
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
@@ -229,20 +236,20 @@ fn list(calendar: &Calendar, year: Option<i32>) -> Result<Vec<Mark>, DomainError
     }
 }
 
-fn month_view(calendar: &Calendar, year: i32, month: Month) -> Result<MonthView, DomainError> {
-    let days = resolve_year(calendar, year)?;
-    let range = DateRange::month(year, month)?;
+/// La vista de un mes a partir de los días del año ya resueltos, que se resuelven una sola vez
+/// aunque la vista de año pida los 12 meses.
+fn month_view(year: &Year, month: Month, days: &[ResolvedDay]) -> Result<MonthView, DomainError> {
+    let range = DateRange::month(year.number(), month)?;
     Ok(MonthView {
-        year,
+        year: year.number(),
         month,
         days: days
-            .into_iter()
+            .iter()
             .filter(|day| range.contains(day.date))
+            .cloned()
             .collect(),
         marks: sorted(
-            calendar
-                .year(year)?
-                .marks()
+            year.marks()
                 .iter()
                 .filter(|mark| mark.range.overlaps(range))
                 .cloned(),

@@ -94,14 +94,19 @@ const fn color(kind: DayKind) -> Color {
 }
 
 fn paint(kind: DayKind, text: &str) -> String {
-    let style = style(kind);
+    styled(style(kind), text)
+}
+
+fn styled(style: Style, text: &str) -> String {
     format!("{style}{text}{style:#}")
 }
 
 /// Las líneas de la rejilla de la vista de año, en gris para que no compitan con los días (RN-21).
 fn paint_grid(text: &str) -> String {
-    let style = Style::new().fg_color(Some(AnsiColor::BrightBlack.into()));
-    format!("{style}{text}{style:#}")
+    styled(
+        Style::new().fg_color(Some(AnsiColor::BrightBlack.into())),
+        text,
+    )
 }
 
 /// Una línea de la vista de año: los meses separados por la línea vertical, con un espacio a
@@ -186,11 +191,20 @@ fn origin(day: &ResolvedDay) -> String {
     }
 }
 
+/// `text`, seguido de la descripción tras `separator` si la hay.
+fn described(text: String, separator: &str, description: Option<&str>) -> String {
+    match description {
+        Some(description) => format!("{text}{separator}{description}"),
+        None => text,
+    }
+}
+
 fn mark_line(mark: &Mark) -> String {
-    let text = format!("#{:<3} {:<10} {}", mark.id, mark.kind, mark.range);
-    mark.description
-        .as_ref()
-        .map_or(text.clone(), |description| format!("{text}  {description}"))
+    described(
+        format!("#{:<3} {:<10} {}", mark.id, mark.kind, mark.range),
+        "  ",
+        mark.description.as_deref(),
+    )
 }
 
 fn legend(marker: Marker) -> String {
@@ -421,14 +435,11 @@ fn day(day: &ResolvedDay, marker: Marker) -> String {
         format!("{} h", decimal(day.hours)),
         origin(day),
     ];
-    let text = parts.join(" · ");
-    lines(iter::once(
-        day.description
-            .as_ref()
-            .map_or(text.clone(), |description| {
-                format!("{text} · {description}")
-            }),
-    ))
+    lines(iter::once(described(
+        parts.join(" · "),
+        " · ",
+        day.description.as_deref(),
+    )))
 }
 
 /// El texto del resultado de una consulta, terminado en salto de línea. `marker` decide cómo se
@@ -491,7 +502,7 @@ mod tests {
     use super::*;
     use crate::application::{Command, Outcome, execute};
     use crate::domain::fixtures::{calendar, date, marked};
-    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, Shift};
+    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, MonthExt, Shift};
 
     fn plain(text: &str) -> String {
         anstream::adapter::strip_str(text).to_string()

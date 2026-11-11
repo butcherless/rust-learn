@@ -11,8 +11,10 @@ pub use calendar::{Calendar, DEFAULT_VACATION_QUOTA, Hours, Mark, MarkId, Markin
 pub use date::{DateRange, check_year, days_of_year, parse_date};
 pub use error::DomainError;
 pub use kind::{Category, DayKind, MarkKind, Shift};
-pub use month::Month;
-pub use resolve::{MonthTotal, Origin, ResolvedDay, Summary, resolve_day, resolve_year, summarize};
+pub use month::{Month, MonthExt};
+pub use resolve::{
+    MonthTotal, Origin, ResolvedDay, Summary, resolve_day, resolve_year, summarize, summary_of,
+};
 
 /// Constructores compartidos por los tests.
 #[cfg(test)]

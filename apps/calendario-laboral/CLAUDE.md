@@ -86,7 +86,7 @@ Fechas de referencia para los casos de test:
 Las dependencias apuntan hacia dentro: `main → adapters → application → domain`.
 
 - **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `without_mark`, `with_quota`, `with_shift_hours` y `restore_mark`.
-  - `month`: `Month`, de `January` a `December`, con `ALL`, `of(date)`, `number()` (solo para chrono) e `is_summer()`. El dominio no compara números de mes.
+  - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
   - `kind`: `MarkKind` (`Reduced`, `Holiday`, `Vacation`; no existe un `Mark` laborable), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
   - `date`:
     - `parse_date` es ISO estricto (RN-01); chrono por sí solo acepta días de un dígito.
@@ -100,7 +100,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Los candidatos van en orden: primero los `Mark`, luego `Weekend` y luego `ReducedWeekday`. Con la misma prioridad gana el primero, así un `Mark` `Reduced` en viernes conserva su `Origin`.
     - La regla `ReducedWeekday` da `Rule::Reduced` con `Origin::ReducedWeekday`. Reutiliza los `Shift` `Reduced` y `SummerReduced`; no hay jornadas propias de los viernes.
     - `resolve_year` añade `DefaultVacation` (RN-14) si el `Year` no tiene `Mark` `Vacation`: los primeros `quota` días de `Category` `Working` desde el 1 de julio, con `Origin::DefaultVacation`. Nunca se guarda.
-    - `summarize` devuelve el `Summary`, con los 12 `MonthTotal` (RF-14): días, horas y acumulado, calculados con `scan`.
+    - `summarize` devuelve el `Summary`, con los 12 `MonthTotal` (RF-14): días, horas y acumulado, calculados con `scan`. `summary_of` lo calcula a partir de días ya resueltos, para que las vistas de mes y de año resuelvan el año una sola vez.
     - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría «-0,0».
   - `fixtures` (`#[cfg(test)]`): `date`, `range`, `calendar` (solo 2026) y `marked`.
 - **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`.
@@ -108,7 +108,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
   - `Event::Marked.excess` lleva el aviso de RN-11.
 - **`adapters`**:
   - `cli`: clap derive.
-    - `MarkKindArg`, `ShiftArg` y `MonthArg` mantienen clap fuera del dominio. `MonthArg` acepta el nombre en español y el número como alias.
+    - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
     - Los textos de error propios de clap siguen en inglés.
   - `render`: todo el texto de consola, en español.
@@ -135,7 +135,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 
 Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror`, tests con tabla de casos…) están en el `CLAUDE.md` raíz. En este proyecto, además:
 
-- **Enumeraciones antes que números (RNF-08):** modela los conceptos de negocio con enums (`Month`, `DayKind`, `Shift`…), nunca con códigos numéricos. Los números solo aparecen en los bordes: los alias `6`/`06` de `MonthArg` en la CLI y `Month::number` para chrono.
+- **Enumeraciones antes que números (RNF-08):** modela los conceptos de negocio con enums (`Month`, `DayKind`, `Shift`…), nunca con códigos numéricos. Los números solo aparecen en los bordes: los alias `6`/`06` del mes en la CLI y `number_from_month` para construir fechas con chrono.
 - Sin `unsafe`, y sin comodín `_` al hacer `match` sobre enums de la aplicación tampoco.
 - La única mutación aceptada es ordenar un `Vec` local y propio.
 - Los `Display` usan `f.pad`, para que funcionen anchos como `{:<10}`.
@@ -143,7 +143,7 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 
 ## Versiones de las librerías
 
-- **clap 4.6**: features `derive` y `env`.
+- **clap 4.6**: features `derive`, `env` y `string` (los nombres y alias de mes se generan en tiempo de ejecución).
 - **anstyle / anstream 1.0**: ya son dependencias de clap. `format!("{style}texto{style:#}")` aplica el estilo y lo cierra.
 - **crossterm 0.29**: la del workspace, la misma que usa ratatui. `Event::as_key_press_event` filtra las pulsaciones; sin él, en Windows llegarían también las teclas soltadas.
 - **chrono 0.4**: `NaiveDate::iter_days` recibe `&self`, así que se mapea con un closure. Los nombres de meses y días en español son tablas en `render`, no los locales inestables de chrono.

@@ -64,7 +64,7 @@ impl DateRange {
 
     /// Todos los días de `month` en `year`.
     pub fn month(year: i32, month: Month) -> Result<Self, DomainError> {
-        let from = NaiveDate::from_ymd_opt(year, month.number(), 1)
+        let from = NaiveDate::from_ymd_opt(year, month.number_from_month(), 1)
             .ok_or(DomainError::InvalidYear(year))?;
         from.checked_add_months(Months::new(1))
             .and_then(|next| next.pred_opt())
@@ -116,6 +116,7 @@ impl fmt::Display for DateRange {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::MonthExt;
     use crate::domain::fixtures::{date, range};
 
     #[test]

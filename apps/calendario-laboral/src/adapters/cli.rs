@@ -5,10 +5,12 @@
 use std::path::PathBuf;
 
 use chrono::{Datelike, NaiveDate};
-use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
+use clap::{ArgAction, Parser, Subcommand};
 
+use crate::adapters::render::month_name;
 use crate::application::Command;
-use crate::domain::{DomainError, MarkId, MarkKind, Month, Shift, parse_date};
+use crate::domain::{DomainError, MarkId, MarkKind, Month, MonthExt, Shift, parse_date};
 
 /// La plantilla de la ayuda, con encabezados en español en lugar de los de clap.
 const HELP: &str = "{about-with-newline}\nUso: {usage}\n\n{all-args}{after-help}";
@@ -68,8 +70,8 @@ pub enum CommandArg {
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Mark {
         /// Tipo de marca.
-        #[arg(value_name = "TIPO", display_order = 1)]
-        kind: MarkKindArg,
+        #[arg(value_name = "TIPO", value_parser = mark_kind_arg(), display_order = 1)]
+        kind: MarkKind,
         /// Día, o primer día del rango (AAAA-MM-DD).
         #[arg(value_name = "FECHA", value_parser = date_arg, display_order = 2)]
         from: NaiveDate,
@@ -108,8 +110,13 @@ pub enum CommandArg {
         #[arg(value_name = "AÑO", requires = "month", display_order = 1)]
         year: Option<i32>,
         /// Mes, por nombre o número: junio o 6.
-        #[arg(value_name = "MES", display_order = 2, hide_possible_values = true)]
-        month: Option<MonthArg>,
+        #[arg(
+            value_name = "MES",
+            value_parser = month_arg(),
+            display_order = 2,
+            hide_possible_values = true
+        )]
+        month: Option<Month>,
     },
     /// Muestra un año completo [por defecto: el actual].
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
@@ -129,8 +136,8 @@ pub enum CommandArg {
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Hours {
         /// Jornada.
-        #[arg(value_name = "JORNADA", display_order = 1)]
-        shift: ShiftArg,
+        #[arg(value_name = "JORNADA", value_parser = shift_arg(), display_order = 1)]
+        shift: Shift,
         /// Horas, con coma o punto decimal: 8,5 u 8.5.
         #[arg(value_name = "HORAS", value_parser = hours_arg, display_order = 2)]
         hours: f64,
@@ -148,116 +155,47 @@ pub enum CommandArg {
 }
 
 /// [`MarkKind`] como valor de la línea de comandos, para que el dominio no dependa de clap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum MarkKindArg {
-    /// Jornada reducida.
-    #[value(name = "reducido")]
-    Reduced,
-    /// Festivo.
-    #[value(name = "festivo")]
-    Holiday,
-    /// Vacaciones; consumen cupo.
-    #[value(name = "vacaciones")]
-    Vacation,
+/// Un valor de una lista cerrada: clap comprueba el texto (`possible_values`) y lo convierte en su
+/// valor del dominio. Así los enums del dominio no dependen de clap y sus nombres no se repiten.
+fn choice<T>(
+    choices: impl IntoIterator<Item = (T, PossibleValue)>,
+) -> impl TypedValueParser<Value = T>
+where
+    T: Copy + Send + Sync + 'static,
+{
+    let choices: Vec<(T, PossibleValue)> = choices.into_iter().collect();
+    PossibleValuesParser::new(choices.iter().map(|(_, value)| value.clone())).try_map(move |text| {
+        choices
+            .iter()
+            .find(|(_, value)| value.matches(&text, false))
+            .map(|(choice, _)| *choice)
+            .ok_or_else(|| format!("«{text}» no es un valor válido"))
+    })
 }
 
-impl From<MarkKindArg> for MarkKind {
-    fn from(arg: MarkKindArg) -> Self {
-        match arg {
-            MarkKindArg::Reduced => Self::Reduced,
-            MarkKindArg::Holiday => Self::Holiday,
-            MarkKindArg::Vacation => Self::Vacation,
-        }
-    }
+/// `reducido`, `festivo` o `vacaciones`, los nombres de `MarkKind`.
+fn mark_kind_arg() -> impl TypedValueParser<Value = MarkKind> {
+    choice(MarkKind::ALL.map(|kind| (kind, PossibleValue::new(kind.name()))))
 }
 
-/// [`Month`] como valor de la línea de comandos: el nombre en español o el número, con o sin
-/// cero delante.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum MonthArg {
-    /// Enero.
-    #[value(name = "enero", alias = "1", alias = "01")]
-    January,
-    /// Febrero.
-    #[value(name = "febrero", alias = "2", alias = "02")]
-    February,
-    /// Marzo.
-    #[value(name = "marzo", alias = "3", alias = "03")]
-    March,
-    /// Abril.
-    #[value(name = "abril", alias = "4", alias = "04")]
-    April,
-    /// Mayo.
-    #[value(name = "mayo", alias = "5", alias = "05")]
-    May,
-    /// Junio.
-    #[value(name = "junio", alias = "6", alias = "06")]
-    June,
-    /// Julio.
-    #[value(name = "julio", alias = "7", alias = "07")]
-    July,
-    /// Agosto.
-    #[value(name = "agosto", alias = "8", alias = "08")]
-    August,
-    /// Septiembre.
-    #[value(name = "septiembre", alias = "9", alias = "09", alias = "setiembre")]
-    September,
-    /// Octubre.
-    #[value(name = "octubre", alias = "10")]
-    October,
-    /// Noviembre.
-    #[value(name = "noviembre", alias = "11")]
-    November,
-    /// Diciembre.
-    #[value(name = "diciembre", alias = "12")]
-    December,
+/// `laborable`, `reducido`, `laborable-verano` o `reducido-verano`, los nombres de `Shift`.
+fn shift_arg() -> impl TypedValueParser<Value = Shift> {
+    choice(Shift::ALL.map(|shift| (shift, PossibleValue::new(shift.name()))))
 }
 
-impl From<MonthArg> for Month {
-    fn from(arg: MonthArg) -> Self {
-        match arg {
-            MonthArg::January => Self::January,
-            MonthArg::February => Self::February,
-            MonthArg::March => Self::March,
-            MonthArg::April => Self::April,
-            MonthArg::May => Self::May,
-            MonthArg::June => Self::June,
-            MonthArg::July => Self::July,
-            MonthArg::August => Self::August,
-            MonthArg::September => Self::September,
-            MonthArg::October => Self::October,
-            MonthArg::November => Self::November,
-            MonthArg::December => Self::December,
-        }
-    }
-}
-
-/// [`Shift`] como valor de la línea de comandos.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum ShiftArg {
-    /// Laborable fuera del verano.
-    #[value(name = "laborable")]
-    Working,
-    /// Reducido fuera del verano.
-    #[value(name = "reducido")]
-    Reduced,
-    /// Laborable del 1-jul al 31-ago.
-    #[value(name = "laborable-verano")]
-    SummerWorking,
-    /// Reducido del 1-jul al 31-ago.
-    #[value(name = "reducido-verano")]
-    SummerReduced,
-}
-
-impl From<ShiftArg> for Shift {
-    fn from(arg: ShiftArg) -> Self {
-        match arg {
-            ShiftArg::Working => Self::Working,
-            ShiftArg::Reduced => Self::Reduced,
-            ShiftArg::SummerWorking => Self::SummerWorking,
-            ShiftArg::SummerReduced => Self::SummerReduced,
-        }
-    }
+/// El nombre del mes en minúsculas, o su número con o sin cero (`6`, `06`); también `setiembre`.
+fn month_arg() -> impl TypedValueParser<Value = Month> {
+    choice(Month::ALL.map(|month| {
+        let number = month.number_from_month();
+        let value = PossibleValue::new(month_name(month).to_lowercase())
+            .aliases([number.to_string(), format!("{number:02}")]);
+        let value = if month == Month::September {
+            value.alias("setiembre")
+        } else {
+            value
+        };
+        (month, value)
+    }))
 }
 
 fn date_arg(text: &str) -> Result<NaiveDate, DomainError> {
@@ -282,7 +220,7 @@ impl CommandArg {
                 to,
                 description,
             } => Command::Mark {
-                kind: kind.into(),
+                kind,
                 from,
                 to,
                 description,
@@ -292,11 +230,11 @@ impl CommandArg {
             Self::Day { date } => Command::Day(date),
             Self::Month { year, month } => Command::Month {
                 year: year.unwrap_or(today.year()),
-                month: month.map_or_else(|| Month::of(today), Month::from),
+                month: month.unwrap_or_else(|| Month::of(today)),
             },
             Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
-            Self::Hours { shift, hours } => Command::Hours(shift.into(), hours),
+            Self::Hours { shift, hours } => Command::Hours(shift, hours),
             Self::Quota { year, days } => Command::Quota { year, days },
         }
     }

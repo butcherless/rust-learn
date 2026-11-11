@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use chrono::{Datelike, NaiveDate};
 
 use crate::domain::{
-    Calendar, Category, DayKind, DomainError, MarkId, MarkKind, Month, Year, days_of_year,
+    Calendar, Category, DayKind, DomainError, MarkId, MarkKind, Month, MonthExt, Year, days_of_year,
 };
 
 /// De dónde sale el `DayKind` de un día.
@@ -214,22 +214,29 @@ impl Summary {
 
 /// El resumen del año `number` (RF-08).
 pub fn summarize(calendar: &Calendar, number: i32) -> Result<Summary, DomainError> {
-    let quota = calendar.year(number)?.vacation_quota();
-    let days = resolve_year(calendar, number)?;
+    Ok(summary_of(
+        calendar.year(number)?,
+        &resolve_year(calendar, number)?,
+    ))
+}
+
+/// El [`Summary`] de un `Year` a partir de sus días ya resueltos con [`resolve_year`], para no
+/// resolverlo otra vez cuando ya se tienen.
+pub fn summary_of(year: &Year, days: &[ResolvedDay]) -> Summary {
     let count = |kind: DayKind| days.iter().filter(|day| day.kind == kind).count();
     let working = || {
         days.iter()
             .filter(|day| day.kind.category() == Category::Working)
     };
-    Ok(Summary {
-        year: number,
+    Summary {
+        year: year.number(),
         counts: DayKind::ALL.map(|kind| (kind, count(kind))),
         working_days: working().count(),
         working_hours: hours(working()),
         vacation_used: count(DayKind::Vacation),
-        vacation_quota: quota,
-        months: month_totals(&days),
-    })
+        vacation_quota: year.vacation_quota(),
+        months: month_totals(days),
+    }
 }
 
 /// La suma de las horas de `days`. Empieza en 0.0 porque `Sum` de `f64` empieza en -0.0, que se
