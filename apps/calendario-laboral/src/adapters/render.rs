@@ -573,7 +573,9 @@ pub fn event(event: &Event) -> Message {
         }
         Event::ReducedDaysSet(days) => format!("Jornada reducida: {}.", weekday_list(days)),
         Event::WeekendSet(days) => format!("Fin de semana: {}.", weekday_list(days)),
-        Event::QuotaSet { year, days: quota } => {
+        Event::QuotaSet {
+            year, days: quota, ..
+        } => {
             format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
         }
     };
@@ -581,6 +583,10 @@ pub fn event(event: &Event) -> Message {
         Event::Marked { mark, excess } if *excess > 0 => Some(format!(
             "aviso: las vacaciones de {} superan el cupo en {}",
             mark.range.from().year(),
+            days(*excess)
+        )),
+        Event::QuotaSet { year, excess, .. } if *excess > 0 => Some(format!(
+            "aviso: las vacaciones de {year} superan el cupo en {}",
             days(*excess)
         )),
         Event::Marked { .. }
@@ -1170,9 +1176,19 @@ mod tests {
                 Event::QuotaSet {
                     year: 2026,
                     days: 22,
+                    excess: 0,
                 },
                 "Cupo de vacaciones de 2026: 22 días.",
                 None,
+            ),
+            (
+                Event::QuotaSet {
+                    year: 2026,
+                    days: 3,
+                    excess: 2,
+                },
+                "Cupo de vacaciones de 2026: 3 días.",
+                Some("aviso: las vacaciones de 2026 superan el cupo en 2 días"),
             ),
         ]
         .into_iter()

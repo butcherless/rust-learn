@@ -89,7 +89,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-08 | El `Summer` es fijo, del 1 de julio al 31 de agosto. En ese periodo, `Working` pasa a `SummerWorking` y `Reduced` pasa a `SummerReduced`. |
 | RN-09 | Los días laborables son los de `Category` `Working`. Las horas laborables son la suma de las horas de su `Shift`. |
 | RN-10 | La `quota` es de 25 días por `Year` por defecto y se configura para cada `Year` (RF-10). Solo cuentan los días cuyo `DayKind` efectivo es `Vacation`. |
-| RN-11 | Si un `Mark` `Vacation` supera la `quota`, se guarda igualmente y se muestra un aviso con los días excedidos. |
+| RN-11 | Si un `Mark` `Vacation` supera la `quota`, o si la `quota` baja por debajo de las vacaciones ya usadas, el cambio se guarda igualmente y se muestra un aviso con los días excedidos. |
 | RN-12 | La semana empieza en lunes, que es la primera columna de las vistas. |
 | RN-13 | Una operación inválida muestra un error claro y no modifica el fichero. |
 | RN-14 | Si un `Year` no tiene ningún `Mark` `Vacation`, se aplica `DefaultVacation`: desde el 1 de julio, solo en días de `Category` `Working` (se saltan fines de semana y festivos), hasta agotar la `quota` o el año. No se guarda en el fichero y desaparece en cuanto se marca alguna `Vacation`. |
@@ -281,13 +281,13 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-06: `month junio` (o `month 6`) muestra ese mes del año actual; antes había que dar también el año. Un solo argumento es siempre el mes, así que `month 2026` es un mes no válido. |
 | 2026-11-12 | RF-05: `day` sin fecha muestra el día de hoy, como `month` sin argumentos muestra el mes actual. |
 | 2026-11-12 | RF-03: `unmark` acepta varios ids (`unmark 4 5`). Es todo o nada: si un id no existe, da error y el fichero no cambia (RN-13). Un id repetido se elimina una vez. |
+| 2026-11-12 | RN-11: `quota` también avisa si el nuevo cupo queda por debajo de las vacaciones ya usadas, con el mismo aviso que al marcar; antes el exceso solo se veía después, en las vistas. |
 
 ### Pendiente o posibles ampliaciones
 
 - [ ] RF-12: importar festivos. Hay que definir antes el formato del fichero de entrada.
 - [ ] RF-13: exportar en CSV o JSON.
 - [ ] ¿Subcomandos en español (`marcar`, `anadir-anio`…), o alias? Ahora siguen los nombres de §5.
-- [ ] Avisar cuando `quota` baja por debajo de las vacaciones ya usadas. RN-11 solo cubre los `Mark`.
 - [ ] Los textos que genera clap («invalid value», «Possible values», «[default: …]») siguen en inglés.
 - [ ] Interfaz ratatui para navegar meses, como en el proyecto hermano.
 - [ ] Objetivo de horas anuales del convenio y diferencia con las horas del calendario.

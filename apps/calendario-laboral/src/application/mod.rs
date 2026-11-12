@@ -110,6 +110,8 @@ pub enum Event {
         year: i32,
         /// Días de vacaciones.
         days: u32,
+        /// Días de vacaciones usadas por encima del nuevo cupo (RN-11).
+        excess: usize,
     },
 }
 
@@ -210,10 +212,14 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             calendar: calendar.with_shift_hours(year, shift, hours)?,
             event: Event::HoursSet { year, shift, hours },
         }),
-        Command::Quota { year, days } => Ok(Outcome::Changed {
-            calendar: calendar.with_quota(year, days)?,
-            event: Event::QuotaSet { year, days },
-        }),
+        Command::Quota { year, days } => {
+            let calendar = calendar.with_quota(year, days)?;
+            let excess = summarize(&calendar, year)?.vacation_excess();
+            Ok(Outcome::Changed {
+                calendar,
+                event: Event::QuotaSet { year, days, excess },
+            })
+        }
     }
 }
 
@@ -801,9 +807,36 @@ mod tests {
                 Ok(22),
                 Event::QuotaSet {
                     year: 2026,
-                    days: 22
+                    days: 22,
+                    excess: 0,
                 }
             ))
         );
+    }
+
+    #[test]
+    fn rn_11_a_quota_below_the_used_vacation_is_saved_with_the_excess() {
+        // 2026-06-01 a 2026-06-05 son 5 días laborables de vacaciones.
+        let calendar = marked(&[(MarkKind::Vacation, "2026-06-01", "2026-06-05")]);
+        let event = |days| {
+            changed(execute(
+                calendar.clone(),
+                Command::Quota { year: 2026, days },
+            ))
+            .map(|(_, event)| event)
+        };
+        [(3, 2), (5, 0), (25, 0)]
+            .into_iter()
+            .for_each(|(days, excess)| {
+                assert_eq!(
+                    event(days),
+                    Some(Event::QuotaSet {
+                        year: 2026,
+                        days,
+                        excess
+                    }),
+                    "cupo {days}"
+                );
+            });
     }
 }
