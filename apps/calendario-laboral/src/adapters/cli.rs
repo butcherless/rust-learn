@@ -116,9 +116,9 @@ pub enum CommandArg {
     /// Muestra el tipo y las horas de un día.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Day {
-        /// Fecha (AAAA-MM-DD).
+        /// Fecha (AAAA-MM-DD) [por defecto: hoy].
         #[arg(value_name = "FECHA", value_parser = date_arg)]
-        date: NaiveDate,
+        date: Option<NaiveDate>,
     },
     /// Muestra un mes [por defecto: el actual; con solo el mes, del año actual].
     #[command(
@@ -293,7 +293,7 @@ impl CommandArg {
             },
             Self::Unmark { id } => Command::Unmark(MarkId(id)),
             Self::List { year } => Command::List(year),
-            Self::Day { date } => Command::Day(date),
+            Self::Day { date } => Command::Day(date.unwrap_or(today)),
             Self::Month { year, month } => Command::Month {
                 year: year.unwrap_or(today.year()),
                 month: month.unwrap_or_else(|| Month::of(today)),
@@ -454,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn rf_06_views_default_to_the_current_month_and_year() {
+    fn rf_05_rf_06_views_default_to_today() {
         [
             (
                 &["month"][..],
@@ -479,6 +479,7 @@ mod tests {
             ),
             (&["year"][..], Command::Year(2026)),
             (&["summary"][..], Command::Summary(2026)),
+            (&["day"][..], Command::Day(date(2026, 11, 8))),
         ]
         .into_iter()
         .for_each(|(args, expected)| assert_eq!(command(args), Ok(expected), "{args:?}"));
