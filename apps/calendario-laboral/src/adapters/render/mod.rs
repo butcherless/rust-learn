@@ -167,11 +167,21 @@ mod tests {
         anstream::adapter::strip_str(text).to_string()
     }
 
-    fn shown(calendar: Calendar, command: Command) -> String {
+    fn rendered(calendar: Calendar, command: Command, marker: Marker) -> String {
         match execute(calendar, command) {
-            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Letter)),
+            Ok(Outcome::Report(result)) => report(&result, marker),
             other => format!("{other:?}"),
         }
+    }
+
+    /// El texto sin color, con letras: el que se ve al redirigir la salida.
+    fn shown(calendar: Calendar, command: Command) -> String {
+        plain(&rendered(calendar, command, Marker::Letter))
+    }
+
+    /// El texto con sus códigos de color y barras: el que se ve en un terminal.
+    fn colored(calendar: Calendar, command: Command) -> String {
+        rendered(calendar, command, Marker::Bar)
     }
 
     const LEGEND: &str = "Leyenda: L Laborable · R Reducido · l Laborable verano · r Reducido verano · S Fin de semana · F Festivo · V Vacaciones";
@@ -246,10 +256,7 @@ mod tests {
             (MarkKind::Holiday, "2026-06-02", "2026-06-02"),
             (MarkKind::Vacation, "2026-06-03", "2026-06-03"),
         ]);
-        let colored = match execute(calendar, Command::Year(2026)) {
-            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
-            other => format!("{other:?}"),
-        };
+        let colored = colored(calendar, Command::Year(2026));
         [
             (" 4 \u{1b}[34m▌\u{1b}[0m", "laborable: azul"),
             (" 1 \u{1b}[36m▌\u{1b}[0m", "reducido: cian"),
@@ -302,18 +309,12 @@ mod tests {
 
     #[test]
     fn rn_20_day_and_summary_use_the_marker() {
-        let day = match execute(calendar(), Command::Day(date(2026, 6, 5))) {
-            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Bar)),
-            other => format!("{other:?}"),
-        };
+        let day = plain(&colored(calendar(), Command::Day(date(2026, 6, 5))));
         assert_eq!(
             day,
             "2026-06-05 (viernes) · ▌ Reducido · 6,0 h · jornada reducida de los viernes\n"
         );
-        let summary = match execute(calendar(), Command::Summary(2026)) {
-            Ok(Outcome::Report(result)) => plain(&report(&result, Marker::Bar)),
-            other => format!("{other:?}"),
-        };
+        let summary = plain(&colored(calendar(), Command::Summary(2026)));
         assert!(
             summary.contains("\n  ▌ Fin de semana     104\n"),
             "{summary}"
@@ -368,10 +369,7 @@ mod tests {
 
     #[test]
     fn rn_21_year_frames_the_months_in_a_grey_dotted_grid() {
-        let colored = match execute(calendar(), Command::Year(2026)) {
-            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
-            other => format!("{other:?}"),
-        };
+        let colored = colored(calendar(), Command::Year(2026));
         let text = plain(&colored);
         let lines: Vec<&str> = text.lines().collect();
         let segment = "┈".repeat(40);
@@ -434,10 +432,7 @@ mod tests {
 
     #[test]
     fn rn_23_year_shows_the_year_once_in_a_band_above_the_months() {
-        let colored = match execute(calendar(), Command::Year(2026)) {
-            Ok(Outcome::Report(result)) => report(&result, Marker::Bar),
-            other => format!("{other:?}"),
-        };
+        let colored = colored(calendar(), Command::Year(2026));
         let text = plain(&colored);
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
