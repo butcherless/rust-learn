@@ -4,6 +4,10 @@
 //! Las funciones devuelven texto con códigos ANSI; `anstream` los quita cuando la salida no es
 //! un terminal o está definida `NO_COLOR`.
 
+mod calendar;
+mod style;
+mod text;
+
 use std::iter;
 
 use anstyle::{Ansi256Color, AnsiColor, Color, Style};
@@ -15,24 +19,10 @@ use crate::domain::{
     Summary,
 };
 
-/// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
-const CELL_WIDTH: usize = 4;
-/// Separación entre dos días, mayor que la del número y su símbolo para que se vea de qué
-/// número es cada símbolo (RN-20).
-const CELL_GAP: &str = "  ";
-/// Ancho visible de un mes en la cuadrícula: siete celdas y seis separaciones.
-const MONTH_WIDTH: usize = 7 * CELL_WIDTH + 6 * CELL_GAP.len();
-/// Semanas que puede ocupar un mes, para que todos los meses de la vista de año midan lo mismo.
-const MAX_WEEKS: usize = 6;
-/// Meses por fila en la vista de año.
-const MONTHS_PER_ROW: usize = 3;
-/// La línea punteada vertical entre dos meses y en los lados de la vista de año (RN-21).
-const GRID_VERTICAL: &str = "┊";
-/// La línea punteada horizontal entre dos filas de meses y arriba y abajo (RN-21).
-const GRID_HORIZONTAL: &str = "┈";
-/// Los días de la semana, alineados con el número de cada celda.
-const HEADER: &str = "Lu    Ma    Mi    Ju    Vi    Sá    Do";
-const BLANK_CELL: &str = "    ";
+use calendar::{month, year};
+use style::paint;
+pub use text::event;
+use text::{config, day, summary};
 
 /// Cómo se identifica el tipo de cada día junto a su número (RN-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,70 +56,6 @@ pub struct Message {
     pub text: String,
     /// Un aviso, como unas vacaciones por encima del cupo (RN-11).
     pub warning: Option<String>,
-}
-
-/// El estilo de cada `DayKind`: su color y, en `Vacation`, negrita para separarla del rojo de
-/// `Holiday`. En cada pareja laborable, la jornada reducida es más tenue que la completa: cian
-/// frente a azul y, en `Summer`, un verde pálido de la paleta de 256 frente al verde.
-const fn style(kind: DayKind) -> Style {
-    let style = Style::new().fg_color(Some(color(kind)));
-    match kind {
-        DayKind::Vacation => style.bold(),
-        DayKind::Working
-        | DayKind::Reduced
-        | DayKind::SummerWorking
-        | DayKind::SummerReduced
-        | DayKind::Weekend
-        | DayKind::Holiday => style,
-    }
-}
-
-const fn color(kind: DayKind) -> Color {
-    match kind {
-        DayKind::Working => Color::Ansi(AnsiColor::Blue),
-        DayKind::Reduced => Color::Ansi(AnsiColor::Cyan),
-        DayKind::SummerWorking => Color::Ansi(AnsiColor::Green),
-        DayKind::SummerReduced => Color::Ansi256(Ansi256Color(151)),
-        DayKind::Weekend => Color::Ansi(AnsiColor::BrightBlack),
-        DayKind::Holiday => Color::Ansi(AnsiColor::Red),
-        DayKind::Vacation => Color::Ansi256(Ansi256Color(208)),
-    }
-}
-
-fn paint(kind: DayKind, text: &str) -> String {
-    styled(style(kind), text)
-}
-
-fn styled(style: Style, text: &str) -> String {
-    format!("{style}{text}{style:#}")
-}
-
-/// Las líneas de la rejilla de la vista de año, en gris para que no compitan con los días (RN-21).
-fn paint_grid(text: &str) -> String {
-    styled(
-        Style::new().fg_color(Some(AnsiColor::BrightBlack.into())),
-        text,
-    )
-}
-
-/// Una línea de la vista de año: los meses separados por la línea vertical, con un espacio a
-/// cada lado, y entre las dos líneas del marco (RN-21).
-fn grid_row(cells: &[String]) -> String {
-    let vertical = paint_grid(GRID_VERTICAL);
-    format!(
-        "{vertical} {} {vertical}",
-        cells.join(&format!(" {vertical} "))
-    )
-}
-
-/// Una línea horizontal de la rejilla para `months` meses: `left` y `right` en los extremos y
-/// `cross` bajo cada separación entre meses (RN-21).
-fn grid_rule(months: usize, [left, cross, right]: [char; 3]) -> String {
-    let segment = GRID_HORIZONTAL.repeat(MONTH_WIDTH);
-    let inner = vec![segment; months].join(&format!("{GRID_HORIZONTAL}{cross}{GRID_HORIZONTAL}"));
-    paint_grid(&format!(
-        "{left}{GRID_HORIZONTAL}{inner}{GRID_HORIZONTAL}{right}"
-    ))
 }
 
 /// Horas con coma decimal y uno o dos decimales: `8,5`, `6,0`, `7,25` (RN-15).
@@ -181,19 +107,6 @@ pub const fn weekday_name(day: Weekday) -> &'static str {
     }
 }
 
-fn origin(day: &ResolvedDay) -> String {
-    match day.origin {
-        Origin::Mark(id) => format!("marca #{id}"),
-        Origin::Weekend => "fin de semana".to_owned(),
-        Origin::ReducedWeekday => format!(
-            "jornada reducida de los {}",
-            weekday_name(day.date.weekday())
-        ),
-        Origin::Default => "por defecto".to_owned(),
-        Origin::DefaultVacation => "vacaciones por defecto desde el 1 de julio".to_owned(),
-    }
-}
-
 /// `text`, seguido de la descripción tras `separator` si la hay.
 fn described(text: String, separator: &str, description: Option<&str>) -> String {
     match description {
@@ -210,12 +123,11 @@ fn mark_line(mark: &Mark) -> String {
     )
 }
 
-fn legend(marker: Marker) -> String {
-    let items: Vec<String> = DayKind::ALL
+fn lines(lines: impl IntoIterator<Item = String>) -> String {
+    lines
         .into_iter()
-        .map(|kind| format!("{} {}", marker.symbol(kind), kind.label()))
-        .collect();
-    format!("Leyenda: {}", items.join(" · "))
+        .map(|line| format!("{}\n", line.trim_end()))
+        .collect()
 }
 
 fn vacation_line(summary: &Summary) -> String {
@@ -230,305 +142,6 @@ fn vacation_line(summary: &Summary) -> String {
     }
 }
 
-/// Un día de la cuadrícula: el número sin color y, a su derecha, el símbolo de su tipo (RN-20).
-fn cell(day: &ResolvedDay, marker: Marker) -> String {
-    format!("{:>2} {}", day.date.day(), marker.symbol(day.kind))
-}
-
-/// Las líneas de un mes, de [`MONTH_WIDTH`] caracteres, completadas hasta `weeks` semanas.
-fn month_grid(view: &MonthView, title: &str, weeks: usize, marker: Marker) -> Vec<String> {
-    let leading = view
-        .days
-        .first()
-        .map_or(0, |day| day.date.weekday().num_days_from_monday() as usize);
-    let cells: Vec<String> = iter::repeat_n(BLANK_CELL.to_owned(), leading)
-        .chain(view.days.iter().map(|day| cell(day, marker)))
-        .collect();
-    let rows: Vec<String> = cells
-        .chunks(7)
-        .map(|week| {
-            week.iter()
-                .cloned()
-                .chain(iter::repeat_n(BLANK_CELL.to_owned(), 7 - week.len()))
-                .collect::<Vec<_>>()
-                .join(CELL_GAP)
-        })
-        .collect();
-    let blank_rows = weeks.saturating_sub(rows.len());
-    [
-        format!("{title:^MONTH_WIDTH$}"),
-        format!("{HEADER:<MONTH_WIDTH$}"),
-    ]
-    .into_iter()
-    .chain(rows)
-    .chain(iter::repeat_n(" ".repeat(MONTH_WIDTH), blank_rows))
-    .collect()
-}
-
-fn lines(lines: impl IntoIterator<Item = String>) -> String {
-    lines
-        .into_iter()
-        .map(|line| format!("{}\n", line.trim_end()))
-        .collect()
-}
-
-fn default_vacation_note(days: &[ResolvedDay]) -> Option<String> {
-    days.iter()
-        .any(|day| day.origin == Origin::DefaultVacation)
-        .then(|| {
-            "Vacaciones por defecto desde el 1 de julio: el año no tiene marcas de vacaciones."
-                .to_owned()
-        })
-}
-
-/// La línea de horas de la vista de mes (RF-14).
-fn month_hours_line(total: &MonthTotal) -> String {
-    format!(
-        "Horas laborables de {}: {} h en {} · acumulado del año: {} h",
-        month_name(total.month).to_lowercase(),
-        decimal(total.working_hours),
-        days(total.working_days),
-        decimal(total.cumulative_hours)
-    )
-}
-
-/// La línea de horas bajo cada mes de la vista de año, de [`MONTH_WIDTH`] caracteres (RF-14).
-fn month_hours_cell(summary: &Summary, month: Month) -> String {
-    let text = summary.month(month).map_or_else(String::new, |total| {
-        format!(
-            "{} h · {}",
-            decimal(total.working_hours),
-            days(total.working_days)
-        )
-    });
-    format!("{text:^MONTH_WIDTH$}")
-}
-
-/// La tabla de horas por mes del resumen, con su fila de total (RF-14).
-fn month_hours_table(summary: &Summary) -> Vec<String> {
-    let row = |name: &str, working_days: usize, hours: f64, cumulative: &str| {
-        format!(
-            "  {name:<13}{working_days:>6}{:>10}{cumulative:>11}",
-            decimal(hours)
-        )
-    };
-    iter::once(format!(
-        "{:<15}{:>6}{:>10}{:>11}",
-        "Horas por mes", "Días", "Horas", "Acumulado"
-    ))
-    .chain(summary.months.iter().map(|total| {
-        row(
-            month_name(total.month),
-            total.working_days,
-            total.working_hours,
-            &decimal(total.cumulative_hours),
-        )
-    }))
-    .chain(iter::once(row(
-        "Total",
-        summary.working_days,
-        summary.working_hours,
-        "",
-    )))
-    .collect()
-}
-
-/// Las horas del año y su media mensual, que cierran la vista de año (RN-24).
-fn year_hours_lines(summary: &Summary) -> [String; 2] {
-    [
-        format!(
-            "Horas laborables del año: {} h",
-            decimal(summary.working_hours)
-        ),
-        format!(
-            // `Display` de `f64` escribe 8.0 como «8».
-            "Media mensual: {} h ({} días de {REFERENCE_DAY_HOURS} h)",
-            decimal(summary.monthly_average_hours()),
-            decimal(summary.monthly_average_days()),
-        ),
-    ]
-}
-
-fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
-    let marks = (!view.marks.is_empty())
-        .then(|| {
-            iter::once(String::new())
-                .chain(iter::once("Marcas:".to_owned()))
-                .chain(
-                    view.marks
-                        .iter()
-                        .map(|mark| format!("  {}", mark_line(mark))),
-                )
-        })
-        .into_iter()
-        .flatten();
-    lines(
-        month_grid(
-            view,
-            &format!("{} {}", month_name(view.month), view.year),
-            0,
-            marker,
-        )
-        .into_iter()
-        .chain(marks)
-        .chain(iter::once(String::new()))
-        .chain(default_vacation_note(&view.days))
-        .chain(summary.month(view.month).map(month_hours_line))
-        .chain([legend(marker), vacation_line(summary)]),
-    )
-}
-
-/// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21).
-fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
-    let row_count = months.chunks(MONTHS_PER_ROW).len();
-    let columns = months.len().min(MONTHS_PER_ROW);
-    // RN-23: la franja con el año, dentro del marco y sobre la primera fila de meses.
-    let band_width = columns * MONTH_WIDTH + columns.saturating_sub(1) * 3;
-    let title = format!("Calendario laboral {}", summary.year);
-    let band =
-        format!("{title:^band_width$}").replacen(&title, &styled(Style::new().bold(), &title), 1);
-    let top = [
-        grid_rule(columns, ['┌', '┈', '┐']),
-        grid_row(&[band]),
-        grid_rule(columns, ['├', '┬', '┤']),
-    ];
-    let rows = months
-        .chunks(MONTHS_PER_ROW)
-        .enumerate()
-        .flat_map(|(position, row)| {
-            let grids: Vec<Vec<String>> = row
-                .iter()
-                .map(|view| {
-                    month_grid(view, month_name(view.month), MAX_WEEKS, marker)
-                        .into_iter()
-                        .chain(iter::once(month_hours_cell(summary, view.month)))
-                        .collect()
-                })
-                .collect();
-            let height = grids.first().map_or(0, Vec::len);
-            let corners = if position + 1 < row_count {
-                ['├', '┼', '┤']
-            } else {
-                ['└', '┴', '┘']
-            };
-            (0..height)
-                .map(move |index| {
-                    grid_row(
-                        &grids
-                            .iter()
-                            .filter_map(|grid| grid.get(index).cloned())
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .chain(iter::once(grid_rule(row.len(), corners)))
-        });
-    let all_days: Vec<ResolvedDay> = months.iter().flat_map(|view| view.days.clone()).collect();
-    lines(
-        top.into_iter()
-            .chain(rows)
-            .chain(iter::once(String::new()))
-            .chain(default_vacation_note(&all_days))
-            .chain([legend(marker), vacation_line(summary)])
-            .chain(year_hours_lines(summary)),
-    )
-}
-
-fn summary(summary: &Summary, marker: Marker) -> String {
-    let counts = summary.counts.iter().map(|(kind, count)| {
-        format!(
-            "  {} {:<17}{:>4}",
-            marker.symbol(*kind),
-            kind.label(),
-            count
-        )
-    });
-    lines(
-        iter::once(format!("Resumen {}", summary.year))
-            .chain(counts)
-            .chain([
-                format!("Días laborables: {}", summary.working_days),
-                format!("Horas laborables: {} h", decimal(summary.working_hours)),
-                format!(
-                    "Vacaciones: {} usadas de {}",
-                    summary.vacation_used, summary.vacation_quota
-                ),
-                vacation_line(summary),
-                String::new(),
-            ])
-            .chain(month_hours_table(summary)),
-    )
-}
-
-/// Los días de la semana en español: `lunes`, `lunes y viernes` o `lunes, martes y viernes`.
-fn weekday_list(days: &[Weekday]) -> String {
-    let names: Vec<&str> = days.iter().map(|day| weekday_name(*day)).collect();
-    match names.split_last() {
-        None => "ninguno".to_owned(),
-        Some((last, [])) => (*last).to_owned(),
-        Some((last, rest)) => format!("{} y {last}", rest.join(", ")),
-    }
-}
-
-/// La configuración (RF-15): los días de la semana y una fila por año con su cupo y sus horas.
-/// Las columnas de horas llevan el nombre de la jornada en `hours`.
-fn config(calendar: &Calendar) -> String {
-    let row = |year: &str, quota: &str, hours: &[String]| {
-        let columns: String = Shift::ALL
-            .iter()
-            .zip(hours)
-            .map(|(shift, hours)| format!("  {hours:>width$}", width = shift.name().len()))
-            .collect();
-        format!("{year:<4}  {quota:>4}{columns}")
-    };
-    let header = row(
-        "Año",
-        "Cupo",
-        &Shift::ALL.map(|shift| shift.name().to_owned()),
-    );
-    let years: Vec<String> = calendar
-        .years()
-        .iter()
-        .map(|year| {
-            row(
-                &year.number().to_string(),
-                &year.vacation_quota().to_string(),
-                &Shift::ALL.map(|shift| format!("{} h", decimal(year.hours().of(shift)))),
-            )
-        })
-        .collect();
-    let table = if years.is_empty() {
-        vec!["No hay años; añade uno con «calendario add-year <año>».".to_owned()]
-    } else {
-        iter::once(header).chain(years).collect()
-    };
-    lines(
-        [
-            format!("Fin de semana: {}", weekday_list(calendar.weekend())),
-            format!(
-                "Jornada reducida: {}",
-                weekday_list(calendar.reduced_days())
-            ),
-            String::new(),
-        ]
-        .into_iter()
-        .chain(table),
-    )
-}
-
-fn day(day: &ResolvedDay, marker: Marker) -> String {
-    let parts = [
-        format!("{} ({})", day.date, weekday_name(day.date.weekday())),
-        format!("{} {}", marker.symbol(day.kind), day.kind.label()),
-        format!("{} h", decimal(day.hours)),
-        origin(day),
-    ];
-    lines(iter::once(described(
-        parts.join(" · "),
-        " · ",
-        day.description.as_deref(),
-    )))
-}
-
 /// El texto del resultado de una consulta, terminado en salto de línea. `marker` decide cómo se
 /// identifica el tipo de cada día (RN-20).
 pub fn report(report: &Report, marker: Marker) -> String {
@@ -541,92 +154,6 @@ pub fn report(report: &Report, marker: Marker) -> String {
         Report::Summary(totals) => summary(totals, marker),
         Report::Config(calendar) => config(calendar),
     }
-}
-
-/// La confirmación de un cambio y su aviso, si lo hay.
-pub fn event(event: &Event) -> Message {
-    let text = match event {
-        Event::YearAdded {
-            year,
-            quota,
-            holidays,
-        } => {
-            let added = format!(
-                "Año {year} añadido con un cupo de {} de vacaciones",
-                days(*quota as usize)
-            );
-            match holidays {
-                Some((from, 1)) => format!("{added} y 1 festivo copiado de {from}."),
-                Some((from, count)) => format!("{added} y {count} festivos copiados de {from}."),
-                None => format!("{added}."),
-            }
-        }
-        Event::Marked { mark, .. } => {
-            format!("Marca #{} añadida: {} {}.", mark.id, mark.kind, mark.range)
-        }
-        Event::YearRemoved { year, marks: 0 } => format!("Año {year} eliminado."),
-        Event::YearRemoved { year, marks: 1 } => format!("Año {year} eliminado, con 1 marca."),
-        Event::YearRemoved { year, marks } => format!("Año {year} eliminado, con {marks} marcas."),
-        Event::Edited { mark, .. } => {
-            format!(
-                "Marca #{} modificada: {} {}.",
-                mark.id, mark.kind, mark.range
-            )
-        }
-        Event::AlreadyMarked(id) => {
-            format!("Ya existe una marca idéntica (#{id}); no se ha añadido.")
-        }
-        Event::Unmarked(marks) => marks
-            .iter()
-            .map(|mark| {
-                format!(
-                    "Marca #{} eliminada: {} {}.",
-                    mark.id, mark.kind, mark.range
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-        Event::HoursSet { year, shift, hours } => {
-            format!("Jornada {shift} de {year}: {} h.", decimal(*hours))
-        }
-        Event::ReducedDaysSet(days) => format!("Jornada reducida: {}.", weekday_list(days)),
-        Event::WeekendSet(days) => format!("Fin de semana: {}.", weekday_list(days)),
-        Event::QuotaSet {
-            year, days: quota, ..
-        } => {
-            format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
-        }
-    };
-    let warning = match event {
-        Event::Marked { mark, excess } | Event::Edited { mark, excess } if *excess > 0 => {
-            Some(format!(
-                "aviso: las vacaciones de {} superan el cupo en {}",
-                mark.range.from().year(),
-                days(*excess)
-            ))
-        }
-        Event::QuotaSet { year, excess, .. } if *excess > 0 => Some(format!(
-            "aviso: las vacaciones de {year} superan el cupo en {}",
-            days(*excess)
-        )),
-        Event::YearAdded {
-            holidays: Some(_), ..
-        } => Some(
-            "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes"
-                .to_owned(),
-        ),
-        Event::Marked { .. }
-        | Event::Edited { .. }
-        | Event::YearRemoved { .. }
-        | Event::YearAdded { .. }
-        | Event::AlreadyMarked(_)
-        | Event::Unmarked(_)
-        | Event::HoursSet { .. }
-        | Event::ReducedDaysSet(_)
-        | Event::WeekendSet(_)
-        | Event::QuotaSet { .. } => None,
-    };
-    Message { text, warning }
 }
 
 #[cfg(test)]

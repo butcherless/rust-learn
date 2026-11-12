@@ -120,7 +120,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
     - `error_text` da en español los errores de argumentos de clap, montados a partir de su `ErrorKind` y su contexto, y la ayuda, con `spanish_clap` sobre el texto de clap (`[valores posibles: …]`, `[OPCIONES]`…). La versión y los errores poco habituales los muestra clap.
-  - `render`: todo el texto de consola, en español.
+  - `render`: todo el texto de consola, en español. `mod.rs` tiene la API (`report`, `event`, `Marker`) y los textos compartidos, y sus tests; `style.rs`, los colores; `calendar.rs`, las vistas de mes y año; y `text.rs`, `summary`, `day`, `config` y los mensajes de eventos. Los submódulos usan `use super::*`.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
     - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::color` mira `anstream::AutoStream::choice(&stdout())` y `Marker::for_color` elige `Letter` si no habrá color.
     - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
