@@ -11,14 +11,17 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-use calendario_laboral::adapters::cli::Args;
+use calendario_laboral::adapters::cli::{Args, error_text};
 use calendario_laboral::adapters::render::Marker;
 use calendario_laboral::adapters::{json, render, viewer};
 use calendario_laboral::application::{Command, Event, Outcome, Report, execute};
 
-/// Termina con 1 si la operación falla y con 2 si los argumentos no son válidos (lo hace clap).
+/// Termina con 1 si la operación falla y con 2 si los argumentos no son válidos.
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(error) => return argument_error(&error),
+    };
     let command = args.command.into_command(chrono::Local::now().date_naive());
     run(&args.file, command, args.no_tui).map_or_else(
         |error| {
@@ -27,6 +30,16 @@ fn main() -> ExitCode {
         },
         |()| ExitCode::SUCCESS,
     )
+}
+
+/// Muestra el error de argumentos en español, o la ayuda y la versión como las da clap, y
+/// devuelve su código de salida: 2 para los errores y 0 para la ayuda (RNF-07).
+fn argument_error(error: &clap::Error) -> ExitCode {
+    match error_text(error) {
+        Some(text) => anstream::eprint!("{text}"),
+        None => error.print().unwrap_or(()),
+    }
+    ExitCode::from(u8::try_from(error.exit_code()).unwrap_or(2))
 }
 
 /// Solo guarda si el caso de uso ha ido bien, así una operación inválida deja el fichero

@@ -116,7 +116,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
   - `cli`: clap derive.
     - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
-    - Los textos de error propios de clap siguen en inglés.
+    - `error_text` monta en español los errores de argumentos de clap, a partir de su `ErrorKind` y su contexto; `main` los muestra con `try_parse` y sale con 2. Los tipos poco habituales, la ayuda y la versión los muestra clap.
   - `render`: todo el texto de consola, en español.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
     - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.

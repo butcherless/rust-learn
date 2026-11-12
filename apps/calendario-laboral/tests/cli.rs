@@ -227,7 +227,14 @@ fn rn_01_invalid_arguments_exit_with_2() {
     let output = run(&file, &["mark", "festivo", "2026-02-30"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(
-        stderr(&output).contains("fecha no válida: «2026-02-30»"),
+        stderr(&output).starts_with(
+            "error: valor no válido «2026-02-30» para <FECHA>: fecha no válida: «2026-02-30»"
+        ),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).ends_with("Para más información, prueba con «--help».\n"),
         "{}",
         stderr(&output)
     );

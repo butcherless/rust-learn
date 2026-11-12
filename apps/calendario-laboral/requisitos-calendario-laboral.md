@@ -293,13 +293,13 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-19: `add-year --festivos-de` copia los festivos de otro año para no tener que marcarlos uno a uno. Solo se copian los `Holiday`, con la misma fecha; los que cambian cada año (Semana Santa, festivos trasladados a lunes) hay que revisarlos con `edit`, y por eso se avisa siempre. Es todo o nada, como el resto de cambios. |
 | 2026-11-12 | RN-26: vuelve el `MarkKind` `Working` (`laborable`) para forzar la jornada completa en un viernes concreto. Va entre `Vacation` y `Reduced` en la prioridad: gana a la jornada reducida, por regla o por marca, y no a ausencias ni fines de semana. Trabajar un sábado queda fuera: haría falta otra prioridad por encima de `Weekend`. |
 | 2026-11-12 | RF-20: `remove-year` elimina un año. Con `Mark` exige `--confirmar`, porque no se puede deshacer y un error al escribir el año borraría sus marcas; un año sin `Mark` se elimina sin más. |
+| 2026-11-12 | RNF-07: los errores de argumentos de clap se muestran en español. clap no se puede traducir, así que `cli::error_text` monta el mensaje a partir del tipo de error y su contexto (argumento, valor, valores posibles, sugerencias y uso). Los tipos de error poco habituales se muestran con el texto de clap. |
 
 ### Pendiente o posibles ampliaciones
 
 - [ ] RF-12: importar festivos. Hay que definir antes el formato del fichero de entrada.
 - [ ] RF-13: exportar en CSV o JSON.
 - [ ] ¿Subcomandos en español (`marcar`, `anadir-anio`…), o alias? Ahora siguen los nombres de §5.
-- [ ] Los textos que genera clap («invalid value», «Possible values», «[default: …]») siguen en inglés.
 - [ ] Interfaz ratatui para navegar meses, como en el proyecto hermano.
 - [ ] Objetivo de horas anuales del convenio y diferencia con las horas del calendario.
 - [ ] Horas de ausencias por mes (vacaciones y festivos valorados en horas).
