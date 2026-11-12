@@ -33,7 +33,7 @@ El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el c
 Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
 
 ```bash
-cargo cal list                                     # RF-04; --year 2026 para un año
+cargo cal list                                     # RF-04; `list 2026` para un año
 cargo cal day 2026-06-08                           # RF-05
 cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026 6`; sin argumentos, el mes actual
 cargo cal year 2026                                # RF-07; necesita 130 columnas (en la ventana, lo que no cabe se corta)

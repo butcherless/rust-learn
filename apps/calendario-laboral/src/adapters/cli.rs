@@ -110,7 +110,7 @@ pub enum CommandArg {
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     List {
         /// Solo las marcas de este año.
-        #[arg(long, value_name = "AÑO", help_heading = "Opciones")]
+        #[arg(value_name = "AÑO")]
         year: Option<i32>,
     },
     /// Muestra el tipo y las horas de un día.
@@ -372,7 +372,7 @@ mod tests {
                 Command::Weekend(vec![Weekday::Fri, Weekday::Sat]),
             ),
             (&["weekend", "--ninguno"][..], Command::Weekend(Vec::new())),
-            (&["list", "--year", "2026"][..], Command::List(Some(2026))),
+            (&["list", "2026"][..], Command::List(Some(2026))),
             (&["day", "2026-06-08"][..], Command::Day(date(2026, 6, 8))),
             (
                 &["month", "2026", "6"][..],
@@ -506,6 +506,7 @@ mod tests {
             (&["month", "2026"][..], ErrorKind::MissingRequiredArgument),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
+            (&["list", "--year", "2026"][..], ErrorKind::UnknownArgument),
             (&["weekend"][..], ErrorKind::MissingRequiredArgument),
             (&["reduced-days", "friday"][..], ErrorKind::InvalidValue),
             (

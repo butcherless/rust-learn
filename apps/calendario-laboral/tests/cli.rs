@@ -109,7 +109,7 @@ fn rf_03_rf_04_rf_05_list_day_and_unmark() {
         &["mark", "festivo", "2026-03-03", "--desc", "Fiesta local"],
     );
     assert_eq!(
-        stdout(&run(&file, &["list", "--year", "2026"])),
+        stdout(&run(&file, &["list", "2026"])),
         "#1   festivo    2026-03-03  Fiesta local\n"
     );
     assert_eq!(

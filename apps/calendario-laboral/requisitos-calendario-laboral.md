@@ -136,7 +136,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `add-year <año>` | 01 | `calendario add-year 2027` |
 | `mark <tipo> <fecha> [<hasta>] [--desc <texto>]` | 02 | `calendario mark vacaciones 2026-06-05 2026-06-12` |
 | `unmark <id>` | 03 | `calendario unmark 4` |
-| `list [--year <año>]` | 04 | `calendario list --year 2026` |
+| `list [<año>]` | 04 | `calendario list 2026` |
 | `day <fecha>` | 05 | `calendario day 2026-06-08` |
 | `month [<año> <mes>]` | 06, 14 | `calendario month 2026 junio` |
 | `year [<año>]` | 07, 14 | `calendario year 2026` |
@@ -277,6 +277,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-15: `config` muestra la configuración, que antes solo se veía abriendo el JSON: los días de fin de semana y de jornada reducida, y una fila por año con su cupo y las horas de cada jornada. Se imprime siempre en la consola, como `day` y `list`. |
 | 2026-11-12 | RF-16: `reduced-days` cambia los días de jornada reducida, que antes solo se cambiaban en el JSON. Para no tener ninguno hay que pedirlo con `--ninguno`, así un comando sin días no los borra por error. Como el fin de semana, es una regla común a todos los años. |
 | 2026-11-12 | RF-17: `weekend` cambia los días del fin de semana, igual que `reduced-days` y también con `--ninguno`. |
+| 2026-11-12 | RF-04: `list` recibe el año como argumento posicional (`list 2026`), como `year`, `summary` y `quota`, en lugar de la opción `--year`. |
 
 ### Pendiente o posibles ampliaciones
 
