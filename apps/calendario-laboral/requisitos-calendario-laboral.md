@@ -111,7 +111,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 |---|---|---|
 | RF-01 | Añadir un `Year` al fichero | Must |
 | RF-02 | Marcar un día o un `DateRange` con un `MarkKind` y una descripción opcional | Must |
-| RF-03 | Eliminar un `Mark` | Must |
+| RF-03 | Eliminar uno o varios `Mark`; si alguno no existe, no se elimina ninguno (RN-13) | Must |
 | RF-04 | Listar los `Mark`, todos o los de un `Year`, ordenados por fecha | Must |
 | RF-05 | Consultar el `ResolvedDay` de una fecha: `DayKind`, horas, `Origin` y descripción | Must |
 | RF-06 | Vista de mes en cuadrícula de lunes a domingo, con colores, `Mark` del mes, leyenda y vacaciones restantes | Must |
@@ -135,7 +135,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 |---|---|---|
 | `add-year <año>` | 01 | `calendario add-year 2027` |
 | `mark <tipo> <fecha> [<hasta>] [--desc <texto>]` | 02 | `calendario mark vacaciones 2026-06-05 2026-06-12` |
-| `unmark <id>` | 03 | `calendario unmark 4` |
+| `unmark <id>…` | 03 | `calendario unmark 4 5` |
 | `list [<año>]` | 04 | `calendario list 2026` |
 | `day [<fecha>]` | 05 | `calendario day 2026-06-08` |
 | `month [[<año>] <mes>]` | 06, 14 | `calendario month 2026 junio` |
@@ -280,6 +280,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-04: `list` recibe el año como argumento posicional (`list 2026`), como `year`, `summary` y `quota`, en lugar de la opción `--year`. |
 | 2026-11-12 | RF-06: `month junio` (o `month 6`) muestra ese mes del año actual; antes había que dar también el año. Un solo argumento es siempre el mes, así que `month 2026` es un mes no válido. |
 | 2026-11-12 | RF-05: `day` sin fecha muestra el día de hoy, como `month` sin argumentos muestra el mes actual. |
+| 2026-11-12 | RF-03: `unmark` acepta varios ids (`unmark 4 5`). Es todo o nada: si un id no existe, da error y el fichero no cambia (RN-13). Un id repetido se elimina una vez. |
 
 ### Pendiente o posibles ampliaciones
 

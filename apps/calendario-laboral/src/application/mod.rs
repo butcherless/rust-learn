@@ -27,8 +27,8 @@ pub enum Command {
         /// Texto opcional; un texto en blanco cuenta como ausente.
         description: Option<String>,
     },
-    /// RF-03: eliminar un `Mark`.
-    Unmark(MarkId),
+    /// RF-03: eliminar uno o varios `Mark`, todos o ninguno.
+    Unmark(Vec<MarkId>),
     /// RF-04: listar los `Mark` de todos los años o de uno.
     List(Option<i32>),
     /// RF-05: mostrar un día.
@@ -96,8 +96,8 @@ pub enum Event {
     },
     /// Ya existía un `Mark` idéntico (RN-06).
     AlreadyMarked(MarkId),
-    /// Se ha eliminado un `Mark`.
-    Unmarked(Mark),
+    /// Se han eliminado uno o varios `Mark`, en el orden pedido.
+    Unmarked(Vec<Mark>),
     /// Se han configurado los días de jornada reducida, de lunes a domingo.
     ReducedDaysSet(Vec<Weekday>),
     /// Se han configurado los días del fin de semana, de lunes a domingo.
@@ -164,12 +164,7 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             DateRange::new(from, to.unwrap_or(from))?,
             description,
         ),
-        Command::Unmark(id) => calendar
-            .without_mark(id)
-            .map(|(calendar, mark)| Outcome::Changed {
-                calendar,
-                event: Event::Unmarked(mark),
-            }),
+        Command::Unmark(ids) => unmark(calendar, &ids),
         Command::List(year) => {
             list(&calendar, year).map(|marks| Outcome::Report(Report::Marks(marks)))
         }
@@ -246,6 +241,30 @@ fn mark(
             })
         }
     }
+}
+
+/// Elimina los `Mark` de `ids` uno tras otro; el primero que no existe hace fallar todo y el
+/// fichero no cambia (RN-13). Un id repetido se elimina una vez.
+fn unmark(calendar: Calendar, ids: &[MarkId]) -> Result<Outcome, DomainError> {
+    let unique = ids.iter().fold(Vec::new(), |unique: Vec<MarkId>, id| {
+        if unique.contains(id) {
+            unique
+        } else {
+            unique.into_iter().chain([*id]).collect()
+        }
+    });
+    let (calendar, removed) = unique.into_iter().try_fold(
+        (calendar, Vec::new()),
+        |(calendar, removed): (Calendar, Vec<Mark>), id| {
+            calendar
+                .without_mark(id)
+                .map(|(calendar, mark)| (calendar, removed.into_iter().chain([mark]).collect()))
+        },
+    )?;
+    Ok(Outcome::Changed {
+        calendar,
+        event: Event::Unmarked(removed),
+    })
 }
 
 fn sorted(marks: impl Iterator<Item = Mark>) -> Vec<Mark> {
@@ -435,7 +454,7 @@ mod tests {
             ),
             (Command::AddYear(2026), DomainError::DuplicateYear(2026)),
             (
-                Command::Unmark(MarkId(3)),
+                Command::Unmark(vec![MarkId(3)]),
                 DomainError::UnknownMark(MarkId(3)),
             ),
             (Command::List(Some(2027)), DomainError::UnknownYear(2027)),
@@ -489,18 +508,52 @@ mod tests {
     #[test]
     fn rf_03_unmark_returns_the_removed_mark() {
         let calendar = marked(&[(MarkKind::Holiday, "2026-03-03", "2026-03-03")]);
-        let outcome = changed(execute(calendar, Command::Unmark(MarkId(1))));
+        let outcome = changed(execute(calendar, Command::Unmark(vec![MarkId(1)])));
         assert_eq!(
             outcome.map(|(calendar, event)| (calendar.marks().count(), event)),
             Some((
                 0,
-                Event::Unmarked(Mark {
+                Event::Unmarked(vec![Mark {
                     id: MarkId(1),
                     kind: MarkKind::Holiday,
                     range: crate::domain::DateRange::day(date(2026, 3, 3)),
                     description: None,
-                })
+                }])
             ))
+        );
+    }
+
+    #[test]
+    fn rf_03_rn_13_unmark_removes_several_marks_or_none() {
+        let calendar = marked(&[
+            (MarkKind::Holiday, "2026-03-03", "2026-03-03"),
+            (MarkKind::Holiday, "2026-03-04", "2026-03-04"),
+            (MarkKind::Holiday, "2026-03-05", "2026-03-05"),
+        ]);
+        let removed = |ids: &[u32]| {
+            changed(execute(
+                calendar.clone(),
+                Command::Unmark(ids.iter().map(|id| MarkId(*id)).collect()),
+            ))
+            .map(|(calendar, event)| {
+                let removed: Vec<u32> = if let Event::Unmarked(marks) = event {
+                    marks.iter().map(|mark| mark.id.0).collect()
+                } else {
+                    Vec::new()
+                };
+                let left: Vec<u32> = calendar.marks().map(|mark| mark.id.0).collect();
+                (removed, left)
+            })
+        };
+        assert_eq!(removed(&[3, 1]), Some((vec![3, 1], vec![2])));
+        assert_eq!(removed(&[2, 2]), Some((vec![2], vec![1, 3])), "repetido");
+        assert_eq!(
+            execute(
+                calendar.clone(),
+                Command::Unmark(vec![MarkId(1), MarkId(9)])
+            ),
+            Err(DomainError::UnknownMark(MarkId(9))),
+            "todo o nada"
         );
     }
 

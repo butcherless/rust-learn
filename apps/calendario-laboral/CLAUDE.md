@@ -52,7 +52,7 @@ cal add-year 2026                                  # RF-01
 cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
 cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
 cal mark reducido 2026-12-24
-cal unmark 1                                       # RF-03, con el id que muestra `list`
+cal unmark 1                                       # RF-03, con el id que muestra `list`; varios: `unmark 1 2`
 cal hours 2026 laborable-verano 8,5                # RF-09, RN-25: las horas son de cada año; con coma o punto
 cal quota 2026 23                                  # RF-10
 cal reduced-days lunes viernes                     # RF-16; --ninguno para quitarlos

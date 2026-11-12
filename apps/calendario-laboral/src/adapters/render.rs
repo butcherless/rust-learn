@@ -558,12 +558,16 @@ pub fn event(event: &Event) -> Message {
         Event::AlreadyMarked(id) => {
             format!("Ya existe una marca idéntica (#{id}); no se ha añadido.")
         }
-        Event::Unmarked(mark) => {
-            format!(
-                "Marca #{} eliminada: {} {}.",
-                mark.id, mark.kind, mark.range
-            )
-        }
+        Event::Unmarked(marks) => marks
+            .iter()
+            .map(|mark| {
+                format!(
+                    "Marca #{} eliminada: {} {}.",
+                    mark.id, mark.kind, mark.range
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
         Event::HoursSet { year, shift, hours } => {
             format!("Jornada {shift} de {year}: {} h.", decimal(*hours))
         }
@@ -1123,8 +1127,19 @@ mod tests {
                 None,
             ),
             (
-                Event::Unmarked(mark),
+                Event::Unmarked(vec![mark.clone()]),
                 "Marca #3 eliminada: vacaciones 2026-06-05 → 2026-06-12.",
+                None,
+            ),
+            (
+                Event::Unmarked(vec![
+                    mark.clone(),
+                    Mark {
+                        id: MarkId(4),
+                        ..mark
+                    },
+                ]),
+                "Marca #3 eliminada: vacaciones 2026-06-05 → 2026-06-12.\nMarca #4 eliminada: vacaciones 2026-06-05 → 2026-06-12.",
                 None,
             ),
             (

@@ -99,12 +99,12 @@ pub enum CommandArg {
         #[arg(long = "desc", value_name = "TEXTO", help_heading = "Opciones")]
         description: Option<String>,
     },
-    /// Elimina una marca.
+    /// Elimina una o varias marcas; si una no existe, no elimina ninguna.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Unmark {
-        /// Id de la marca, como lo muestra «list».
-        #[arg(value_name = "ID")]
-        id: u32,
+        /// Ids de las marcas, como los muestra «list».
+        #[arg(value_name = "ID", required = true)]
+        ids: Vec<u32>,
     },
     /// Lista las marcas de todos los años o de uno.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
@@ -291,7 +291,7 @@ impl CommandArg {
                 to,
                 description,
             },
-            Self::Unmark { id } => Command::Unmark(MarkId(id)),
+            Self::Unmark { ids } => Command::Unmark(ids.into_iter().map(MarkId).collect()),
             Self::List { year } => Command::List(year),
             Self::Day { date } => Command::Day(date.unwrap_or(today)),
             Self::Month { year, month } => Command::Month {
@@ -356,7 +356,11 @@ mod tests {
                     description: None,
                 },
             ),
-            (&["unmark", "4"][..], Command::Unmark(MarkId(4))),
+            (&["unmark", "4"][..], Command::Unmark(vec![MarkId(4)])),
+            (
+                &["unmark", "4", "7"][..],
+                Command::Unmark(vec![MarkId(4), MarkId(7)]),
+            ),
             (&["list"][..], Command::List(None)),
             (&["config"][..], Command::Config),
             (
@@ -525,6 +529,7 @@ mod tests {
             (&["month", "2026"][..], ErrorKind::InvalidValue),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
+            (&["unmark"][..], ErrorKind::MissingRequiredArgument),
             (&["list", "--year", "2026"][..], ErrorKind::UnknownArgument),
             (&["weekend"][..], ErrorKind::MissingRequiredArgument),
             (&["reduced-days", "friday"][..], ErrorKind::InvalidValue),
