@@ -340,22 +340,16 @@ mod tests {
     use crate::domain::Year;
     use crate::domain::fixtures::{date, marked};
 
-    const EXAMPLE: &str = r#"{
-  "version": 2,
-  "weekend": ["saturday", "sunday"],
-  "reduced_days": ["friday"],
-  "years": [
-    {
-      "year": 2026,
-      "vacation_quota": 25,
-      "hours": { "laborable": 8.5, "reducido": 6.0, "laborable_verano": 8.5, "reducido_verano": 6.0 },
-      "marks": [
-        { "id": 1, "kind": "festivo", "from": "2026-03-03", "to": "2026-03-03", "description": "Fiesta local" },
-        { "id": 2, "kind": "vacaciones", "from": "2026-06-05", "to": "2026-06-12" }
-      ]
+    /// El ejemplo de la §6 de los requisitos, leído del documento: si el ejemplo deja de ser un
+    /// fichero válido, este test falla.
+    const REQUIREMENTS: &str = include_str!("../../requisitos-calendario-laboral.md");
+
+    fn example() -> &'static str {
+        REQUIREMENTS
+            .split_once("```json\n")
+            .and_then(|(_, rest)| rest.split_once("```"))
+            .map_or("", |(json, _)| json)
     }
-  ]
-}"#;
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("calendario-{}-{name}.json", std::process::id()))
@@ -363,7 +357,7 @@ mod tests {
 
     #[test]
     fn rf_11_reads_the_example_of_the_requirements() {
-        let calendar = decode(EXAMPLE).expect("valid example");
+        let calendar = decode(example()).expect("valid example");
         let marks: Vec<Mark> = calendar.marks().cloned().collect();
         assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
         assert_eq!(calendar.reduced_days(), [Weekday::Fri]);
