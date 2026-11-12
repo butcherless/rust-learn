@@ -53,7 +53,7 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `separated` chains groups with a separator between them, standing in for the unstable `Iterator::intersperse`.
 - **`domain`**:
   - `calculate(Input) -> Result<Report, CalcError>`. `Report` carries its `Input`.
-  - `forecast(Input, years)` runs `calculate` on the current date and each anniversary, with constant salary. A 29 February moves to 28 February.
+  - `forecast(Input, years)` runs `calculate` on the current date and on the next `years` anniversaries of the initial date after it, with constant salary. Each anniversary is counted from the initial date, so a 29 February start falls on 28 February only in non-leap years.
   - `thousands` and `group_digits` format numbers.
   - `Dismissal` is a closed set of presets (20, 33 and 45 days per year) and implements `Display`.
   - The defaults live here, so the UI and `--print` agree.

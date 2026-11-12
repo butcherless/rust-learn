@@ -368,13 +368,13 @@ mod tests {
             &[
                 "Forecast · next 5 years",
                 "2026-11-07  now",
-                "2031-11-07  +5y",
+                "2031-10-11  +5y",
                 "24,340",
-                "29,131",
-                "33,936",
-                "38,728",
-                "43,520",
-                "48,312",
+                "28,777",
+                "33,582",
+                "38,374",
+                "43,165",
+                "47,957",
                 "earned today",
                 "forecast growth",
                 DISCLAIMER,
@@ -382,7 +382,7 @@ mod tests {
         );
         assert!(!screen(&app(), 80, 29).contains("Forecast"));
         let stacked = screen(&app(), 60, 50);
-        assert_shows(&stacked, &["Forecast", "48,312"]);
+        assert_shows(&stacked, &["Forecast", "47,957"]);
     }
 
     #[test]

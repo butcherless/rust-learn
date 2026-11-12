@@ -124,15 +124,21 @@ pub fn calculate(input: Input) -> Result<Report, CalcError> {
     })
 }
 
-/// The reports for the current date and each of its next `years` anniversaries, with the same
-/// salary and dismissal type. A 29 February moves to 28 February in non-leap years.
+/// The reports for the current date and the next `years` anniversaries of the initial date after
+/// it, with the same salary and dismissal type. Each anniversary is counted from the initial date,
+/// so a 29 February start falls on 28 February in non-leap years and on 29 February again in leap
+/// years.
 pub fn forecast(input: Input, years: u32) -> Result<Vec<Report>, CalcError> {
-    (0..=years)
+    let anniversaries = (1..)
         .map_while(|year| {
             input
-                .current_date
+                .initial_date
                 .checked_add_months(Months::new(12 * year))
         })
+        .skip_while(|anniversary| *anniversary <= input.current_date)
+        .take(usize::try_from(years).unwrap_or(usize::MAX));
+    std::iter::once(input.current_date)
+        .chain(anniversaries)
         .map(|current_date| {
             calculate(Input {
                 current_date,
@@ -278,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn forecasts_each_anniversary() {
+    fn forecasts_the_next_anniversaries_of_the_initial_date() {
         let reports = forecast(python_input(), 5).expect("valid input");
         let summary: Vec<_> = reports
             .iter()
@@ -292,11 +298,11 @@ mod tests {
             .collect();
         let expected = [
             ("2026-11-07", 1_854, "24,340"),
-            ("2027-11-07", 2_219, "29,131"),
-            ("2028-11-07", 2_585, "33,936"),
-            ("2029-11-07", 2_950, "38,728"),
-            ("2030-11-07", 3_315, "43,520"),
-            ("2031-11-07", 3_680, "48,312"),
+            ("2027-10-11", 2_192, "28,777"),
+            ("2028-10-11", 2_558, "33,582"),
+            ("2029-10-11", 2_923, "38,374"),
+            ("2030-10-11", 3_288, "43,165"),
+            ("2031-10-11", 3_653, "47,957"),
         ]
         .map(|(date, days, total)| (date.to_owned(), days, total.to_owned()));
         assert_eq!(summary, expected);
@@ -305,15 +311,33 @@ mod tests {
     #[test]
     fn forecast_moves_leap_days_and_propagates_errors() {
         let leap = Input {
-            current_date: date(2028, 2, 29),
+            initial_date: date(2020, 2, 29),
+            current_date: date(2027, 1, 1),
             ..python_input()
         };
-        let dates: Vec<_> = forecast(leap, 1)
+        let dates: Vec<_> = forecast(leap, 2)
             .expect("valid input")
             .iter()
             .map(|r| r.input.current_date)
             .collect();
-        assert_eq!(dates, [date(2028, 2, 29), date(2029, 2, 28)]);
+        assert_eq!(
+            dates,
+            [date(2027, 1, 1), date(2027, 2, 28), date(2028, 2, 29)]
+        );
+        let on_an_anniversary = Input {
+            current_date: date(2026, 10, 11),
+            ..python_input()
+        };
+        let dates: Vec<_> = forecast(on_an_anniversary, 1)
+            .expect("valid input")
+            .iter()
+            .map(|r| r.input.current_date)
+            .collect();
+        assert_eq!(
+            dates,
+            [date(2026, 10, 11), date(2027, 10, 11)],
+            "today's anniversary is not repeated"
+        );
         let invalid = Input {
             annual_pay: 0.0,
             ..python_input()

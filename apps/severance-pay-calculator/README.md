@@ -41,7 +41,7 @@ The options fill in both the UI's starting form and the `--print` report.
 - days = days from `--from` to `--to`, both included
 - total = days × daily pay
 
-The forecast repeats the calculation on each of the next five anniversaries, with the same salary.
+The forecast repeats the calculation on each of the next five anniversaries of the initial date, with the same salary.
 
 ## Interactive UI keys
 
