@@ -4,6 +4,10 @@ use std::iter;
 
 use super::*;
 
+/// El aviso de `add-year --festivos-de`: los festivos móviles se copian con la fecha del otro año
+/// (RF-19).
+pub(super) const HOLIDAYS_TO_CHECK: &str = "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes";
+
 fn origin(day: &ResolvedDay) -> String {
     match day.origin {
         Origin::Mark(id) => format!("marca #{id}"),
@@ -216,10 +220,7 @@ pub fn event(event: &Event) -> Message {
         )),
         Event::YearAdded {
             holidays: Some(_), ..
-        } => Some(
-            "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes"
-                .to_owned(),
-        ),
+        } => Some(HOLIDAYS_TO_CHECK.to_owned()),
         Event::Marked { .. }
         | Event::Edited { .. }
         | Event::YearRemoved { .. }

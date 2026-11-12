@@ -160,6 +160,7 @@ pub fn report(report: &Report, marker: Marker) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::text::HOLIDAYS_TO_CHECK;
     use super::*;
     use crate::application::{Command, Outcome, execute};
     use crate::domain::fixtures::{calendar, date, marked};
@@ -632,6 +633,15 @@ mod tests {
         );
     }
 
+    /// El único sitio con el texto del aviso de RF-19; los demás tests usan la constante.
+    #[test]
+    fn rf_19_the_holiday_warning_is_fixed() {
+        assert_eq!(
+            HOLIDAYS_TO_CHECK,
+            "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes"
+        );
+    }
+
     #[test]
     fn counts_use_the_singular_only_for_one() {
         [(0, "0 días"), (1, "1 día"), (2, "2 días"), (25, "25 días")]
@@ -693,9 +703,7 @@ mod tests {
                     holidays: Some((2026, 1)),
                 },
                 "Año 2027 añadido con un cupo de 25 días de vacaciones y 1 festivo copiado de 2026.",
-                Some(
-                    "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes",
-                ),
+                Some(HOLIDAYS_TO_CHECK),
             ),
             (
                 Event::YearAdded {
@@ -704,9 +712,7 @@ mod tests {
                     holidays: Some((2026, 9)),
                 },
                 "Año 2027 añadido con un cupo de 25 días de vacaciones y 9 festivos copiados de 2026.",
-                Some(
-                    "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes",
-                ),
+                Some(HOLIDAYS_TO_CHECK),
             ),
             (
                 Event::Marked {

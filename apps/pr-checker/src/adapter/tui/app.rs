@@ -9,8 +9,10 @@ use crate::adapter::view::{DisplayRow, rows};
 use crate::domain::model::PrUrl;
 use crate::service::ProjectReport;
 
-const LOADING: &str = "Loading…";
-const NOT_A_PULL_REQUEST: &str = "This row is not a pull request";
+/// The status line while fetching.
+pub const LOADING: &str = "Loading…";
+/// The status line when the selected row has no pull request to open.
+pub const NOT_A_PULL_REQUEST: &str = "This row is not a pull request";
 const SAFE_SCHEME: &str = "https://";
 
 /// A change of the selected row.
@@ -287,6 +289,13 @@ mod tests {
     fn rows_are_computed_when_the_reports_load() {
         assert_eq!(loaded().rows(), rows(&reports()));
         assert!(App::default().rows().is_empty());
+    }
+
+    /// The only place that spells out the status texts; other tests use the constants.
+    #[test]
+    fn status_texts_are_fixed() {
+        assert_eq!(LOADING, "Loading…");
+        assert_eq!(NOT_A_PULL_REQUEST, "This row is not a pull request");
     }
 
     #[test]

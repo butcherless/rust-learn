@@ -9,7 +9,8 @@ pub const HEADER: [&str; 4] = ["Project", "PR #", "Title", "State"];
 /// The orange of open pull request rows, as RGB.
 pub const ORANGE: (u8, u8, u8) = (255, 165, 0);
 const NO_VALUE: &str = "—";
-const NO_PULL_REQUESTS: &str = "no open pull requests";
+/// The message of a project without open pull requests (FR9).
+pub const NO_PULL_REQUESTS: &str = "no open pull requests";
 
 /// What a row represents, which decides its color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,13 +121,20 @@ mod tests {
         }
     }
 
+    /// The only place that spells out the texts of FR8 and FR9; other tests use the constants.
+    #[test]
+    fn texts_are_the_ones_of_the_requirements() {
+        assert_eq!(HEADER, ["Project", "PR #", "Title", "State"]);
+        assert_eq!(NO_PULL_REQUESTS, "no open pull requests");
+    }
+
     #[test]
     fn no_pull_requests_gives_one_row() {
         assert_eq!(
             rows(&[report("a/b", Ok(vec![]))]),
             [row(
                 RowKind::NoPullRequests,
-                ["a/b", "—", "no open pull requests", "—"],
+                ["a/b", "—", NO_PULL_REQUESTS, "—"],
                 None
             )]
         );

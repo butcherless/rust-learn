@@ -310,7 +310,7 @@ mod tests {
                 "1,854",
                 "TOTAL SEVERANCE PAY",
                 "24,340",
-                "Good luck!",
+                GOOD_LUCK,
                 DISCLAIMER,
             ],
         );

@@ -82,6 +82,7 @@ mod tests {
 
     use super::*;
     use crate::adapter::tui::app::fixtures::loaded;
+    use crate::adapter::view::NO_PULL_REQUESTS;
 
     fn screen(app: &App) -> String {
         let mut terminal = Terminal::new(TestBackend::new(70, 10)).unwrap();
@@ -102,7 +103,7 @@ mod tests {
             "Open pull requests",
             "Project",
             "title 1",
-            "no open pull requests",
+            NO_PULL_REQUESTS,
             "error: repository not found",
             "2 open pull requests",
             "q quit",
