@@ -71,7 +71,7 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `fixtures` has `app`, `apply` and `typed`.
 - **`tui::view`** is the drawing. It only reads `App`.
   - Panels sit side by side from 76 columns and stack below that.
-  - The Forecast panel sits below them only when the terminal is tall enough: 30 rows side by side. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total.
+  - The Forecast panel sits below them only when the terminal is tall enough: 30 rows side by side. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
   - Panel sizes are computed from `GROUPS`, `Field::ALL`, `FORECAST_YEARS` and the widest dismissal text.
   - Colors: cyan input border, orange group headings, cyan values, green total, red errors, gray help.
 - **`tui::mod`** is the only code with side effects: the terminal and the synchronous `crossterm::event::read` loop.

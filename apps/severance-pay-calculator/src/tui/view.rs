@@ -178,10 +178,12 @@ fn forecast_lines(reports: &[Report], width: usize) -> Vec<Line<'static>> {
     let bars = reports.iter().enumerate().map(|(years, report)| {
         let cells = bar_cells(report.total, max, bar_width);
         let solid = earned.min(cells);
-        let horizon_style = if years == 0 {
-            Style::new().fg(ORANGE).bold()
+        // Today's row is what is earned now: its total is green and bold like the report's
+        // total, and the forecast rows are cyan.
+        let (horizon_style, value_style) = if years == 0 {
+            (Style::new().fg(ORANGE).bold(), Style::new().green().bold())
         } else {
-            Style::new().gray()
+            (Style::new().gray(), Style::new().cyan())
         };
         Line::from(vec![
             Span::from(Concept::CurrentDate.value(report)).gray(),
@@ -192,7 +194,10 @@ fn forecast_lines(reports: &[Report], width: usize) -> Vec<Line<'static>> {
             Span::from(GROWTH.repeat(cells - solid)).cyan(),
             Span::raw(" ".repeat(bar_width - cells)),
             Span::raw(GAP),
-            Span::from(format!("{:>value_width$}", Concept::Total.value(report))).cyan(),
+            Span::styled(
+                format!("{:>value_width$}", Concept::Total.value(report)),
+                value_style,
+            ),
         ])
     });
     let legend = Line::from(vec![
@@ -402,7 +407,7 @@ mod tests {
                 (text.matches(EARNED).count(), text.matches(GROWTH).count())
             })
             .collect();
-        // 74 columns leave 43 for the bars; today's 24,340 of 48,312 is 22 of them.
+        // 74 columns leave 43 for the bars; today's 24,340 of 47,957 is 22 of them.
         assert_eq!(
             counts,
             [(22, 0), (22, 4), (22, 8), (22, 12), (22, 17), (22, 21)]
