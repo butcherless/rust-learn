@@ -13,8 +13,6 @@
 - Use stable and well-maintained libraries.
 - Avoid using deprecated libraries or features.
 - Avoid code duplication.
-- Avoid using deprecated libraries or features.
-- Avoid code duplication.
 
 ## Continuous integration
 
