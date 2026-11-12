@@ -71,7 +71,7 @@ Dependabot (`.github/dependabot.yml`, `directory: "/"`) covers every member thro
 
 ## Adding a project
 
-1. Put it in `apps/<name>/`, where `<name>` is its package name. Bring its history with `git filter-branch` or `git filter-repo` onto `apps/<name>/` and merge it with `--allow-unrelated-histories`, or copy it if it has none.
+1. Put it in `apps/<name>/`, where `<name>` is its package name. Bring its history with `git filter-repo --to-subdirectory-filter apps/<name>` (`brew install git-filter-repo`; git's own manual advises against `git filter-branch`) in a fresh clone, then merge it with `--allow-unrelated-histories`, or copy it if it has none.
 2. Delete its `Cargo.lock`, `target/`, `rust-toolchain.toml`, `.gitignore`, `.idea/` and CI files; the root ones apply. Add any file it must ignore (such as real data) to the root `.gitignore`.
 3. In its `Cargo.toml`, inherit `version`, `edition` and `publish` with `.workspace = true`. Move each dependency that another member already uses to `[workspace.dependencies]`, at the latest version, and check `cargo tree --workspace -d`.
 4. Add a run alias to `.cargo/config.toml`, passing any data file by its path from the root.
