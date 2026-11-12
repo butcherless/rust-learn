@@ -1,0 +1,44 @@
+# cargo-deny: run with `cargo deny check`. CI runs it on every push and pull request.
+# Options: https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+
+# Security advisories from the RustSec database: vulnerable, unmaintained or yanked crates fail.
+[advisories]
+yanked = "deny"
+
+[licenses]
+# Permissive licenses only, the ones the dependency graph uses today. A new one fails the check, so
+# it gets reviewed before it's added here.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# The workspace members have `publish = false` and no license.
+[licenses.private]
+ignore = true
+
+[bans]
+# A second version of a crate fails, as the root CLAUDE.md asks ("a single version in Cargo.lock").
+multiple-versions = "deny"
+wildcards = "deny"
+# Transitive duplicates that can't be unified from here (root CLAUDE.md, Layout). base64 0.22/0.23
+# isn't listed: 0.22 only comes with wiremock, a dev-dependency, which this check leaves out.
+skip = [
+    { crate = "core-foundation@0.9.4", reason = "system-configuration uses 0.9 and rustls-platform-verifier 0.10 (macOS only)" },
+    { crate = "syn@2.0.119", reason = "derive_more and strum use syn 2 and clap_derive syn 3" },
+]
+
+# Crates come from crates.io only, never from another registry or a git repository.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -22,6 +22,8 @@ Each project's README explains how to use it.
   pinned to 1.99.1 for now (see the file), with clippy, rustfmt and `llvm-tools-preview`.
 - For coverage only, [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): install it once
   with `brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`.
+- For the dependency checks only, [cargo-deny](https://github.com/EmbarkStudios/cargo-deny):
+  `brew install cargo-deny` or `cargo install cargo-deny --locked`.
 
 ## Build and run
 
@@ -49,11 +51,15 @@ cargo test -p <project>                               # one project
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all                                       # --check only reports
 cargo llvm-cov -p <project> --open                    # one project's tests with an HTML coverage report
+cargo deny check                                      # advisories, licenses, duplicates and sources
 ```
 
 CI runs on pushes to `main` and on pull requests:
 
 - **lint**: fmt and clippy for the whole workspace.
+- **deny**: cargo-deny checks the dependencies for
+  security advisories, licenses, duplicate versions and sources, as set in `deny.toml`. It also
+  runs every Monday.
 - **build-and-test**, one job per project (found with `cargo metadata`, so a new project joins
   without editing the workflow): the release build, then the tests with coverage. It fails if the
   project's line coverage drops below 90%, and attaches the HTML report as the

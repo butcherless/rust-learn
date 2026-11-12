@@ -5,6 +5,9 @@ on:
     branches:
       - 'main'
   pull_request:
+  # Weekly, so a new RustSec advisory is reported even when nothing is pushed.
+  schedule:
+    - cron: '0 6 * * 1'
 
 # Actions are pinned to a commit SHA, with the version in a comment, so a moved tag can't change
 # what runs; Dependabot updates the SHA and the comment together.
@@ -42,6 +45,19 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-lint-
     - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # Security advisories, licenses, duplicate versions and sources of the dependencies (deny.toml).
+  deny:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      with:
+        tool: cargo-deny@0.20.2
+    - run: cargo deny --locked check
 
   # The workspace members, read from Cargo, so a new project under apps/ joins the matrix by itself.
   projects:

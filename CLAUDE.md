@@ -14,7 +14,7 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 - Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: chrono, clap, crossterm, ratatui, serde, serde_json, thiserror). A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
 - `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks (blank lines and test attributes count as uncovered). Try `cargo +stable llvm-cov -p <package>` on each new stable release and go back to `channel = "stable"` when it matches.
-- Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`.
+- Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
 - `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`).
 - `.idea/` is ignored. The README explains how to open the workspace in IntelliJ.
 
@@ -49,6 +49,7 @@ cargo test -p <package>                                       # one member
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all                                               # format; --check only reports, as CI does
 cargo llvm-cov -p <package> --fail-under-lines 90             # what CI checks for each member; --open for HTML
+cargo deny check                                              # advisories, licenses, duplicates and sources (deny.toml)
 ```
 
 All members build into the root `target/`, never into `apps/<name>/target/`.
@@ -57,6 +58,7 @@ Binaries run with the current directory as their working directory, so relative 
 
 CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on PRs, with `--locked`:
 - `lint`: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`, once.
+- `deny`: `cargo deny check` with `deny.toml`: RustSec advisories, licenses (permissive ones only), duplicate versions and sources (crates.io only). A new license or duplicate has to be reviewed and added there. The workflow also runs every Monday, so new advisories show up without a push.
 - `projects`: lists the members with `cargo metadata`, so a new app joins the matrix without editing the workflow.
 - `build-and-test`, one job per member (`fail-fast: false`): `cargo build --release -p <package>`, then `cargo llvm-cov -p <package> --fail-under-lines 90`, which runs its unit and integration tests (not doctests, which need nightly), and the HTML report as the `coverage-html-<package>` artifact.
 
