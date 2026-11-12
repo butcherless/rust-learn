@@ -87,7 +87,8 @@ jobs:
     - run: cargo build --release --locked -p ${{ matrix.package }}
     - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
       with:
-        tool: cargo-llvm-cov
+        # Pinned like the toolchain, so a new release can't break CI without a code change.
+        tool: cargo-llvm-cov@0.9.1
     # Runs the project's unit and integration tests once with coverage, prints the per-file
     # summary, and fails if the project's line coverage is below the minimum.
     - run: cargo llvm-cov --locked -p ${{ matrix.package }} --fail-under-lines 90
