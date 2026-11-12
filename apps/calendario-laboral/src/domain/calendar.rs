@@ -345,6 +345,22 @@ impl Calendar {
         }
     }
 
+    /// El mismo calendario con `mark` en lugar del `Mark` de su id, y el `Mark` anterior (RF-18).
+    /// Falla si el id no existe, si el año del rango no existe o si queda idéntico a otro `Mark`.
+    pub fn with_replaced_mark(self, mark: Mark) -> Result<(Self, Mark), DomainError> {
+        let (calendar, old) = self.without_mark(mark.id)?;
+        let identical = calendar
+            .year(mark.range.year()?)?
+            .marks
+            .iter()
+            .find(|other| other.kind == mark.kind && other.range == mark.range)
+            .map(|other| other.id);
+        match identical {
+            Some(id) => Err(DomainError::DuplicateMark(id)),
+            None => calendar.restore_mark(mark).map(|calendar| (calendar, old)),
+        }
+    }
+
     /// Añade un `Mark` que conserva su id, tal como se lee del fichero. El id no puede estar en uso.
     pub fn restore_mark(self, mark: Mark) -> Result<Self, DomainError> {
         if self.marks().any(|existing| existing.id == mark.id) {
@@ -401,7 +417,7 @@ impl Calendar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::fixtures::{calendar, date, range};
+    use crate::domain::fixtures::{calendar, date, marked, range};
 
     fn add(
         calendar: Calendar,
@@ -559,6 +575,65 @@ mod tests {
             matches!(other_kind, Ok(Marking::Added(_))),
             "{other_kind:?}"
         );
+    }
+
+    #[test]
+    fn rf_18_replaces_a_mark_keeping_its_id() {
+        let calendar = marked(&[
+            (MarkKind::Holiday, "2026-03-03", "2026-03-03"),
+            (MarkKind::Vacation, "2026-06-01", "2026-06-05"),
+        ]);
+        let edited = Mark {
+            id: MarkId(2),
+            kind: MarkKind::Vacation,
+            range: range(date(2026, 6, 1), date(2026, 6, 12)),
+            description: Some("Viaje".to_owned()),
+        };
+        let replaced = calendar.clone().with_replaced_mark(edited.clone());
+        assert_eq!(
+            replaced
+                .as_ref()
+                .map(|(calendar, old)| (calendar.marks().cloned().collect::<Vec<_>>(), old.id)),
+            Ok((
+                vec![
+                    calendar.marks().next().cloned().expect("holiday"),
+                    edited.clone()
+                ],
+                MarkId(2)
+            ))
+        );
+        [
+            (
+                Mark {
+                    kind: MarkKind::Holiday,
+                    range: range(date(2026, 3, 3), date(2026, 3, 3)),
+                    ..edited.clone()
+                },
+                DomainError::DuplicateMark(MarkId(1)),
+            ),
+            (
+                Mark {
+                    id: MarkId(9),
+                    ..edited.clone()
+                },
+                DomainError::UnknownMark(MarkId(9)),
+            ),
+            (
+                Mark {
+                    range: range(date(2027, 1, 4), date(2027, 1, 8)),
+                    ..edited
+                },
+                DomainError::UnknownYear(2027),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(mark, error)| {
+            assert_eq!(
+                calendar.clone().with_replaced_mark(mark.clone()),
+                Err(error),
+                "{mark:?}"
+            );
+        });
     }
 
     #[test]

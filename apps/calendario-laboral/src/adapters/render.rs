@@ -555,6 +555,12 @@ pub fn event(event: &Event) -> Message {
         Event::Marked { mark, .. } => {
             format!("Marca #{} añadida: {} {}.", mark.id, mark.kind, mark.range)
         }
+        Event::Edited { mark, .. } => {
+            format!(
+                "Marca #{} modificada: {} {}.",
+                mark.id, mark.kind, mark.range
+            )
+        }
         Event::AlreadyMarked(id) => {
             format!("Ya existe una marca idéntica (#{id}); no se ha añadido.")
         }
@@ -580,16 +586,19 @@ pub fn event(event: &Event) -> Message {
         }
     };
     let warning = match event {
-        Event::Marked { mark, excess } if *excess > 0 => Some(format!(
-            "aviso: las vacaciones de {} superan el cupo en {}",
-            mark.range.from().year(),
-            days(*excess)
-        )),
+        Event::Marked { mark, excess } | Event::Edited { mark, excess } if *excess > 0 => {
+            Some(format!(
+                "aviso: las vacaciones de {} superan el cupo en {}",
+                mark.range.from().year(),
+                days(*excess)
+            ))
+        }
         Event::QuotaSet { year, excess, .. } if *excess > 0 => Some(format!(
             "aviso: las vacaciones de {year} superan el cupo en {}",
             days(*excess)
         )),
         Event::Marked { .. }
+        | Event::Edited { .. }
         | Event::YearAdded { .. }
         | Event::AlreadyMarked(_)
         | Event::Unmarked(_)
@@ -1126,6 +1135,22 @@ mod tests {
                 },
                 "Marca #3 añadida: vacaciones 2026-06-05 → 2026-06-12.",
                 Some("aviso: las vacaciones de 2026 superan el cupo en 1 día"),
+            ),
+            (
+                Event::Edited {
+                    mark: mark.clone(),
+                    excess: 0,
+                },
+                "Marca #3 modificada: vacaciones 2026-06-05 → 2026-06-12.",
+                None,
+            ),
+            (
+                Event::Edited {
+                    mark: mark.clone(),
+                    excess: 3,
+                },
+                "Marca #3 modificada: vacaciones 2026-06-05 → 2026-06-12.",
+                Some("aviso: las vacaciones de 2026 superan el cupo en 3 días"),
             ),
             (
                 Event::AlreadyMarked(MarkId(3)),

@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-17 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-18 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -126,6 +126,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-15 | Consultar la configuración: los días de `Weekend` y de `ReducedWeekday`, y de cada `Year` su `quota` y sus `Hours` | Should |
 | RF-16 | Configurar los días de la semana de la regla `ReducedWeekday`, o ninguno (RN-18) | Should |
 | RF-17 | Configurar los días de la semana del `Weekend`, o ninguno (RN-04) | Should |
+| RF-18 | Modificar un `Mark` (su `MarkKind`, sus fechas o su descripción) conservando su `id`. Se aplican las reglas de `mark` (RN-01 a RN-03 y RN-11), y si queda idéntico a otro `Mark` (RN-06) es un error | Should |
 
 ## 5. Interfaz de consola
 
@@ -136,6 +137,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `add-year <año>` | 01 | `calendario add-year 2027` |
 | `mark <tipo> <fecha> [<hasta>] [--desc <texto>]` | 02 | `calendario mark vacaciones 2026-06-05 2026-06-12` |
 | `unmark <id>…` | 03 | `calendario unmark 4 5` |
+| `edit <id> [--tipo <tipo>] [--desde <fecha>] [--hasta <fecha>] [--desc <texto>]` | 18 | `calendario edit 4 --hasta 2026-06-15` |
 | `list [<año>]` | 04 | `calendario list 2026` |
 | `day [<fecha>]` | 05 | `calendario day 2026-06-08` |
 | `month [[<año>] <mes>]` | 06, 14 | `calendario month 2026 junio` |
@@ -282,6 +284,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-05: `day` sin fecha muestra el día de hoy, como `month` sin argumentos muestra el mes actual. |
 | 2026-11-12 | RF-03: `unmark` acepta varios ids (`unmark 4 5`). Es todo o nada: si un id no existe, da error y el fichero no cambia (RN-13). Un id repetido se elimina una vez. |
 | 2026-11-12 | RN-11: `quota` también avisa si el nuevo cupo queda por debajo de las vacaciones ya usadas, con el mismo aviso que al marcar; antes el exceso solo se veía después, en las vistas. |
+| 2026-11-12 | RF-18: `edit` cambia un `Mark` sin borrarlo y volverlo a crear, así conserva su `id`. Hay que indicar al menos un cambio; lo que no se indica se mantiene, y `--desc ""` quita la descripción. Si el resultado es idéntico a otro `Mark` es un error, porque no se pueden fusionar. |
 
 ### Pendiente o posibles ampliaciones
 

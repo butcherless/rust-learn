@@ -39,6 +39,9 @@ pub enum DomainError {
     /// Ningún `Mark` tiene este id.
     #[error("no existe ninguna marca con id {0}")]
     UnknownMark(MarkId),
+    /// RF-18: el `Mark` modificado queda idéntico a otro (RN-06).
+    #[error("ya existe una marca idéntica (#{0})")]
+    DuplicateMark(MarkId),
     /// Dos `Mark` comparten id.
     #[error("hay más de una marca con id {0}")]
     DuplicateMarkId(MarkId),

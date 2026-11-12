@@ -99,6 +99,34 @@ pub enum CommandArg {
         #[arg(long = "desc", value_name = "TEXTO", help_heading = "Opciones")]
         description: Option<String>,
     },
+    /// Modifica una marca y conserva su id; lo que no se indica se mantiene.
+    #[command(
+        help_template = HELP,
+        next_help_heading = "Argumentos",
+        group(
+            clap::ArgGroup::new("changes")
+                .required(true)
+                .multiple(true)
+                .args(["kind", "from", "to", "description"])
+        )
+    )]
+    Edit {
+        /// Id de la marca, como lo muestra «list».
+        #[arg(value_name = "ID")]
+        id: u32,
+        /// Tipo de marca nuevo.
+        #[arg(long = "tipo", value_name = "TIPO", value_parser = mark_kind_arg(), help_heading = "Opciones")]
+        kind: Option<MarkKind>,
+        /// Primer día nuevo (AAAA-MM-DD).
+        #[arg(long = "desde", value_name = "FECHA", value_parser = date_arg, help_heading = "Opciones")]
+        from: Option<NaiveDate>,
+        /// Último día nuevo (AAAA-MM-DD).
+        #[arg(long = "hasta", value_name = "FECHA", value_parser = date_arg, help_heading = "Opciones")]
+        to: Option<NaiveDate>,
+        /// Descripción nueva; "" la quita.
+        #[arg(long = "desc", value_name = "TEXTO", help_heading = "Opciones")]
+        description: Option<String>,
+    },
     /// Elimina una o varias marcas; si una no existe, no elimina ninguna.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Unmark {
@@ -291,6 +319,19 @@ impl CommandArg {
                 to,
                 description,
             },
+            Self::Edit {
+                id,
+                kind,
+                from,
+                to,
+                description,
+            } => Command::Edit {
+                id: MarkId(id),
+                kind,
+                from,
+                to,
+                description,
+            },
             Self::Unmark { ids } => Command::Unmark(ids.into_iter().map(MarkId).collect()),
             Self::List { year } => Command::List(year),
             Self::Day { date } => Command::Day(date.unwrap_or(today)),
@@ -357,6 +398,37 @@ mod tests {
                 },
             ),
             (&["unmark", "4"][..], Command::Unmark(vec![MarkId(4)])),
+            (
+                &[
+                    "edit",
+                    "4",
+                    "--tipo",
+                    "festivo",
+                    "--desde",
+                    "2026-03-02",
+                    "--hasta",
+                    "2026-03-03",
+                    "--desc",
+                    "Puente",
+                ][..],
+                Command::Edit {
+                    id: MarkId(4),
+                    kind: Some(MarkKind::Holiday),
+                    from: Some(date(2026, 3, 2)),
+                    to: Some(date(2026, 3, 3)),
+                    description: Some("Puente".to_owned()),
+                },
+            ),
+            (
+                &["edit", "4", "--hasta", "2026-03-03"][..],
+                Command::Edit {
+                    id: MarkId(4),
+                    kind: None,
+                    from: None,
+                    to: Some(date(2026, 3, 3)),
+                    description: None,
+                },
+            ),
             (
                 &["unmark", "4", "7"][..],
                 Command::Unmark(vec![MarkId(4), MarkId(7)]),
@@ -530,6 +602,11 @@ mod tests {
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
             (&["unmark"][..], ErrorKind::MissingRequiredArgument),
+            (&["edit", "4"][..], ErrorKind::MissingRequiredArgument),
+            (
+                &["edit", "4", "--desde", "2026-3-2"][..],
+                ErrorKind::ValueValidation,
+            ),
             (&["list", "--year", "2026"][..], ErrorKind::UnknownArgument),
             (&["weekend"][..], ErrorKind::MissingRequiredArgument),
             (&["reduced-days", "friday"][..], ErrorKind::InvalidValue),

@@ -52,6 +52,7 @@ cal add-year 2026                                  # RF-01
 cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
 cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
 cal mark reducido 2026-12-24
+cal edit 2 --hasta 2026-06-15 --desc Viaje         # RF-18: conserva el id; --tipo, --desde, --hasta, --desc "" la quita
 cal unmark 1                                       # RF-03, con el id que muestra `list`; varios: `unmark 1 2`
 cal hours 2026 laborable-verano 8,5                # RF-09, RN-25: las horas son de cada año; con coma o punto
 cal quota 2026 23                                  # RF-10
@@ -88,7 +89,7 @@ Fechas de referencia para los casos de test:
 
 Las dependencias apuntan hacia dentro: `main → adapters → application → domain`.
 
-- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours` y `restore_mark`.
+- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `with_replaced_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours` y `restore_mark`.
   - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
   - `kind`: `MarkKind` (`Reduced`, `Holiday`, `Vacation`; no existe un `Mark` laborable), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
   - `date`:

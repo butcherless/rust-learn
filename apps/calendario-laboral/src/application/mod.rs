@@ -27,6 +27,15 @@ pub enum Command {
         /// Texto opcional; un texto en blanco cuenta como ausente.
         description: Option<String>,
     },
+    /// RF-18: modificar un `Mark`; lo que es `None` se mantiene.
+    Edit {
+        id: MarkId,
+        kind: Option<MarkKind>,
+        from: Option<NaiveDate>,
+        to: Option<NaiveDate>,
+        /// Una descripción en blanco quita la que tenga.
+        description: Option<String>,
+    },
     /// RF-03: eliminar uno o varios `Mark`, todos o ninguno.
     Unmark(Vec<MarkId>),
     /// RF-04: listar los `Mark` de todos los años o de uno.
@@ -96,6 +105,8 @@ pub enum Event {
     },
     /// Ya existía un `Mark` idéntico (RN-06).
     AlreadyMarked(MarkId),
+    /// Se ha modificado un `Mark`; `excess` lleva el aviso de RN-11.
+    Edited { mark: Mark, excess: usize },
     /// Se han eliminado uno o varios `Mark`, en el orden pedido.
     Unmarked(Vec<Mark>),
     /// Se han configurado los días de jornada reducida, de lunes a domingo.
@@ -167,6 +178,13 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             description,
         ),
         Command::Unmark(ids) => unmark(calendar, &ids),
+        Command::Edit {
+            id,
+            kind,
+            from,
+            to,
+            description,
+        } => edit(calendar, id, kind, (from, to), description),
         Command::List(year) => {
             list(&calendar, year).map(|marks| Outcome::Report(Report::Marks(marks)))
         }
@@ -229,24 +247,62 @@ fn mark(
     range: DateRange,
     description: Option<String>,
 ) -> Result<Outcome, DomainError> {
-    let description = description
-        .map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty());
-    match calendar.with_mark(kind, range, description)? {
+    match calendar.with_mark(kind, range, trimmed(description))? {
         (_, Marking::Existing(id)) => Ok(Outcome::Unchanged(Event::AlreadyMarked(id))),
         (calendar, Marking::Added(mark)) => {
-            let excess = match mark.kind {
-                MarkKind::Vacation => {
-                    summarize(&calendar, mark.range.from().year())?.vacation_excess()
-                }
-                MarkKind::Reduced | MarkKind::Holiday => 0,
-            };
+            let excess = vacation_excess(&calendar, &mark)?;
             Ok(Outcome::Changed {
                 calendar,
                 event: Event::Marked { mark, excess },
             })
         }
     }
+}
+
+/// La descripción sin espacios alrededor; en blanco, ninguna.
+fn trimmed(description: Option<String>) -> Option<String> {
+    description
+        .map(|text| text.trim().to_owned())
+        .filter(|text| !text.is_empty())
+}
+
+/// Los días de vacaciones por encima del cupo tras guardar `mark`, para el aviso de RN-11.
+fn vacation_excess(calendar: &Calendar, mark: &Mark) -> Result<usize, DomainError> {
+    match mark.kind {
+        MarkKind::Vacation => Ok(summarize(calendar, mark.range.from().year())?.vacation_excess()),
+        MarkKind::Reduced | MarkKind::Holiday => Ok(0),
+    }
+}
+
+/// Cambia lo indicado de un `Mark` y mantiene el resto, también su id (RF-18). Con
+/// `description`, una en blanco quita la que tuviera.
+fn edit(
+    calendar: Calendar,
+    id: MarkId,
+    kind: Option<MarkKind>,
+    (from, to): (Option<NaiveDate>, Option<NaiveDate>),
+    description: Option<String>,
+) -> Result<Outcome, DomainError> {
+    let old = calendar
+        .marks()
+        .find(|mark| mark.id == id)
+        .cloned()
+        .ok_or(DomainError::UnknownMark(id))?;
+    let mark = Mark {
+        id,
+        kind: kind.unwrap_or(old.kind),
+        range: DateRange::new(
+            from.unwrap_or(old.range.from()),
+            to.unwrap_or(old.range.to()),
+        )?,
+        description: description.map_or(old.description, |text| trimmed(Some(text))),
+    };
+    let (calendar, _) = calendar.with_replaced_mark(mark.clone())?;
+    let excess = vacation_excess(&calendar, &mark)?;
+    Ok(Outcome::Changed {
+        calendar,
+        event: Event::Edited { mark, excess },
+    })
 }
 
 /// Elimina los `Mark` de `ids` uno tras otro; el primero que no existe hace fallar todo y el
@@ -409,6 +465,142 @@ mod tests {
             ),
             Ok(Outcome::Unchanged(Event::AlreadyMarked(MarkId(1))))
         );
+    }
+
+    fn edit_command(id: u32) -> Command {
+        Command::Edit {
+            id: MarkId(id),
+            kind: None,
+            from: None,
+            to: None,
+            description: None,
+        }
+    }
+
+    #[test]
+    fn rf_18_edit_changes_only_what_is_given() {
+        let calendar = calendar()
+            .with_mark(
+                MarkKind::Vacation,
+                range(date(2026, 6, 1), date(2026, 6, 5)),
+                Some("Viaje".to_owned()),
+            )
+            .map(|(calendar, _)| calendar)
+            .expect("mark");
+        let edited = |command| {
+            changed(execute(calendar.clone(), command)).and_then(|(_, event)| match event {
+                Event::Edited { mark, excess } => Some((mark, excess)),
+                Event::YearAdded { .. }
+                | Event::Marked { .. }
+                | Event::AlreadyMarked(_)
+                | Event::Unmarked(_)
+                | Event::ReducedDaysSet(_)
+                | Event::WeekendSet(_)
+                | Event::HoursSet { .. }
+                | Event::QuotaSet { .. } => None,
+            })
+        };
+        let original = Mark {
+            id: MarkId(1),
+            kind: MarkKind::Vacation,
+            range: range(date(2026, 6, 1), date(2026, 6, 5)),
+            description: Some("Viaje".to_owned()),
+        };
+        [
+            (
+                Command::Edit {
+                    id: MarkId(1),
+                    kind: None,
+                    from: None,
+                    to: Some(date(2026, 6, 12)),
+                    description: None,
+                },
+                Mark {
+                    range: range(date(2026, 6, 1), date(2026, 6, 12)),
+                    ..original.clone()
+                },
+                "solo el último día",
+            ),
+            (
+                Command::Edit {
+                    id: MarkId(1),
+                    kind: Some(MarkKind::Holiday),
+                    from: Some(date(2026, 6, 3)),
+                    to: None,
+                    description: None,
+                },
+                Mark {
+                    kind: MarkKind::Holiday,
+                    range: range(date(2026, 6, 3), date(2026, 6, 5)),
+                    ..original.clone()
+                },
+                "tipo y primer día",
+            ),
+            (
+                Command::Edit {
+                    id: MarkId(1),
+                    kind: None,
+                    from: None,
+                    to: None,
+                    description: Some("  ".to_owned()),
+                },
+                Mark {
+                    description: None,
+                    ..original.clone()
+                },
+                "una descripción en blanco la quita",
+            ),
+            (
+                Command::Edit {
+                    id: MarkId(1),
+                    kind: None,
+                    from: None,
+                    to: None,
+                    description: Some(" Playa ".to_owned()),
+                },
+                Mark {
+                    description: Some("Playa".to_owned()),
+                    ..original.clone()
+                },
+                "descripción nueva, sin espacios",
+            ),
+        ]
+        .into_iter()
+        .for_each(|(command, expected, case)| {
+            assert_eq!(edited(command), Some((expected, 0)), "{case}");
+        });
+        // RN-11: 22 días laborables en junio y 5 hasta el 7 de julio, 2 por encima de 25.
+        assert_eq!(
+            edited(Command::Edit {
+                id: MarkId(1),
+                kind: None,
+                from: None,
+                to: Some(date(2026, 7, 7)),
+                description: None,
+            })
+            .map(|(_, excess)| excess),
+            Some(2)
+        );
+        [
+            (
+                Command::Edit {
+                    id: MarkId(1),
+                    kind: None,
+                    from: Some(date(2026, 6, 9)),
+                    to: None,
+                    description: None,
+                },
+                DomainError::ReversedRange {
+                    from: date(2026, 6, 9),
+                    to: date(2026, 6, 5),
+                },
+            ),
+            (edit_command(7), DomainError::UnknownMark(MarkId(7))),
+        ]
+        .into_iter()
+        .for_each(|(command, error)| {
+            assert_eq!(execute(calendar.clone(), command), Err(error));
+        });
     }
 
     #[test]
