@@ -42,6 +42,8 @@ pub struct ResolvedDay {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Rule {
     Reduced,
+    /// Un `Mark` `Working`: gana a `Reduced` y pierde con las ausencias (RN-26).
+    Working,
     Vacation,
     Weekend,
     Holiday,
@@ -50,6 +52,7 @@ enum Rule {
 impl From<MarkKind> for Rule {
     fn from(kind: MarkKind) -> Self {
         match kind {
+            MarkKind::Working => Self::Working,
             MarkKind::Reduced => Self::Reduced,
             MarkKind::Holiday => Self::Holiday,
             MarkKind::Vacation => Self::Vacation,
@@ -60,8 +63,8 @@ impl From<MarkKind> for Rule {
 /// El `DayKind` que da una regla, con las variantes de verano en julio y agosto (RN-08).
 const fn day_kind(rule: Option<Rule>, summer: bool) -> DayKind {
     match (rule, summer) {
-        (None, false) => DayKind::Working,
-        (None, true) => DayKind::SummerWorking,
+        (None | Some(Rule::Working), false) => DayKind::Working,
+        (None | Some(Rule::Working), true) => DayKind::SummerWorking,
         (Some(Rule::Reduced), false) => DayKind::Reduced,
         (Some(Rule::Reduced), true) => DayKind::SummerReduced,
         (Some(Rule::Vacation), _) => DayKind::Vacation,
@@ -563,6 +566,61 @@ mod tests {
                 .map(|summary| (summary.vacation_remaining(), summary.vacation_excess())),
             Ok((19, 0))
         );
+    }
+
+    #[test]
+    fn rn_26_a_working_mark_restores_the_full_shift_only_on_reduced_days() {
+        // 2026-03-06 y 2026-07-03 son viernes; 2026-03-07 es sábado.
+        let calendar = marked(&[
+            (MarkKind::Working, "2026-03-02", "2026-03-08"),
+            (MarkKind::Working, "2026-07-03", "2026-07-03"),
+            (MarkKind::Reduced, "2026-03-04", "2026-03-04"),
+            (MarkKind::Holiday, "2026-03-05", "2026-03-05"),
+            (MarkKind::Vacation, "2026-03-03", "2026-03-03"),
+        ]);
+        let resolved =
+            |day| resolve_day(&calendar, day).map(|day| (day.kind, day.hours, day.origin));
+        [
+            (
+                date(2026, 3, 6),
+                (DayKind::Working, 8.5, Origin::Mark(MarkId(1))),
+                "viernes",
+            ),
+            (
+                date(2026, 7, 3),
+                (DayKind::SummerWorking, 8.5, Origin::Mark(MarkId(2))),
+                "viernes de verano",
+            ),
+            (
+                date(2026, 3, 4),
+                (DayKind::Working, 8.5, Origin::Mark(MarkId(1))),
+                "gana a un Mark Reduced",
+            ),
+            (
+                date(2026, 3, 5),
+                (DayKind::Holiday, 0.0, Origin::Mark(MarkId(4))),
+                "no a un festivo",
+            ),
+            (
+                date(2026, 3, 3),
+                (DayKind::Vacation, 0.0, Origin::Mark(MarkId(5))),
+                "no a unas vacaciones",
+            ),
+            (
+                date(2026, 3, 7),
+                (DayKind::Weekend, 0.0, Origin::Weekend),
+                "no a un fin de semana",
+            ),
+            (
+                date(2026, 3, 2),
+                (DayKind::Working, 8.5, Origin::Mark(MarkId(1))),
+                "un lunes ya era laborable",
+            ),
+        ]
+        .into_iter()
+        .for_each(|(day, expected, case)| {
+            assert_eq!(resolved(day), Ok(expected), "{day}: {case}");
+        });
     }
 
     #[test]

@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-19 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-19 y RN-01 a RN-26 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -27,7 +27,7 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Calendar` | El contenido del fichero: configuración común y años | fichero `calendario.json` |
 | `Year` | Un año con su `quota` y sus `Mark` | `add-year`, `year` |
 | `Mark` | Un `MarkKind` sobre un `DateRange`, con id y descripción opcional | «marca», `mark`, `unmark` |
-| `MarkKind` | Lo que fija un `Mark`: `Reduced`, `Holiday` o `Vacation` | `reducido`, `festivo`, `vacaciones` |
+| `MarkKind` | Lo que fija un `Mark`: `Working`, `Reduced`, `Holiday` o `Vacation` | `laborable`, `reducido`, `festivo`, `vacaciones` |
 | `DateRange` | Rango de días `[from, to]`, ambos incluidos | `<fecha> [<hasta>]` |
 | `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y barra `▌` o letra |
 | `Marker` | Cómo se identifica el tipo junto al número del día: `Bar` (barra de color) o `Letter` (RN-20) | `15 ▌` o `15 F` |
@@ -49,9 +49,9 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 
 | `DayKind` | `Category` | Origen | `Shift` (horas por defecto) | Se muestra como | Letra | Color |
 |---|---|---|---|---|---|---|
-| `Working` | `Working` | Por defecto fuera del `Summer` | `Working` (8,5 h) | Laborable | L | Azul marino |
+| `Working` | `Working` | Por defecto o `Mark` `Working`, fuera del `Summer` | `Working` (8,5 h) | Laborable | L | Azul marino |
 | `Reduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, fuera del `Summer` | `Reduced` (6,0 h) | Reducido | R | Cian |
-| `SummerWorking` | `Working` | Por defecto en `Summer` | `SummerWorking` (8,5 h) | Laborable verano | l | Verde |
+| `SummerWorking` | `Working` | Por defecto o `Mark` `Working`, en `Summer` | `SummerWorking` (8,5 h) | Laborable verano | l | Verde |
 | `SummerReduced` | `Working` | `Mark` `Reduced` o regla `ReducedWeekday`, en `Summer` | `SummerReduced` (6,0 h) | Reducido verano | r | Verde pálido |
 | `Weekend` | `NonWorking` | Regla `Weekend` | — (0 h) | Fin de semana | S | Gris |
 | `Holiday` | `Absence` | `Mark` `Holiday` | — (0 h) | Festivo | F | Rojo |
@@ -61,11 +61,12 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 
 El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cubren y las reglas `Weekend` y `ReducedWeekday`. Si no aplica ninguno, el día es `Working`, o `SummerWorking` si cae en `Summer`.
 
-**Prioridad:** `Holiday` > `Weekend` > `Vacation` > `Reduced` (`Mark` o regla `ReducedWeekday`) > `Working`
+**Prioridad:** `Holiday` > `Weekend` > `Vacation` > `Mark` `Working` > `Reduced` (`Mark` o regla `ReducedWeekday`) > `Working` por defecto
 
 - Así, una `Vacation` de lunes a domingo no consume fines de semana ni festivos.
 - Si dos `Mark` del mismo `MarkKind` cubren el día, gana el más antiguo, y la descripción es la suya.
 - Un `Mark` `Reduced` sobre un viernes gana a la regla `ReducedWeekday` (mismo `DayKind`), así el `Origin` y la descripción son los del `Mark`.
+- Un `Mark` `Working` sobre un viernes le devuelve la jornada completa (RN-26), pero no convierte en laborable un fin de semana, un festivo ni unas vacaciones.
 - `DefaultVacation` (RN-14) se aplica después, solo sobre los días que hayan quedado en `Category` `Working`.
 
 ### 2.4 Entidades
@@ -104,6 +105,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-23 | La vista de año empieza con una franja, dentro del marco de la rejilla (RN-21), con el título `Calendario laboral AAAA` centrado y en negrita; una línea `┈` la separa de la primera fila de meses. Como el año ya está en la franja, cada mes se titula solo con su nombre (`Enero`). La vista de mes mantiene el año en su título (`Junio 2026`). |
 | RN-24 | La vista de año termina, bajo las vacaciones restantes, con las horas laborables del año (las de RF-08) y la media mensual: esas horas divididas entre 12, aunque algún mes no tenga horas, como medida del esfuerzo mensual medio. Entre paréntesis, esa media en días de 8 h (media / 8), una jornada de referencia fija que no depende de las horas configuradas (RF-09): `Horas laborables del año: 1888,5 h` y `Media mensual: 157,38 h (19,67 días de 8 h)`. |
 | RN-25 | Las `Hours` son de cada `Year`: cambiarlas en un año no altera las horas ni los totales de los demás. Un `Year` nuevo hereda las `Hours` del año anterior más cercano del fichero; si no hay ninguno anterior, las del siguiente; y si el fichero no tiene años, las de por defecto (8,5 h las jornadas completas y 6 h las reducidas). |
+| RN-26 | Un `Mark` `Working` (`laborable`) fuerza la jornada completa, `Working` o `SummerWorking` en `Summer`, en días que serían `Reduced` por la regla `ReducedWeekday` o por un `Mark` `Reduced`. Su prioridad está entre `Vacation` y `Reduced` (§2.3), así que no cambia fines de semana, festivos ni vacaciones. |
 
 ## 4. Requisitos funcionales
 
@@ -150,7 +152,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `reduced-days <día>… \| --ninguno` | 16 | `calendario reduced-days viernes` |
 | `weekend <día>… \| --ninguno` | 17 | `calendario weekend sábado domingo` |
 
-- **`<tipo>`** (`MarkKind`): `reducido`, `festivo` y `vacaciones`.
+- **`<tipo>`** (`MarkKind`): `laborable`, `reducido`, `festivo` y `vacaciones`.
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
 - **`<día>`** (`Weekday`): el nombre en español, con o sin tilde (`lunes`… `domingo`, `miercoles`, `sabado`).
 - **`<mes>`** (`Month`): el nombre en español (`enero`… `diciembre`, también `setiembre`) o el número, con o sin cero delante (`6`, `06`).
@@ -199,7 +201,7 @@ En el fichero JSON solo se guardan la configuración y los `Mark`. El `Weekend`,
 - **Escritura:** se escribe en `<fichero>.tmp` y después se renombra, así un fallo nunca deja un fichero a medias.
 - **Campos opcionales:** `weekend`, `reduced_days`, `hours`, `vacation_quota` y `marks` toman los valores por defecto si faltan. Un fichero anterior sin `reduced_days` pasa a tener los viernes reducidos.
 - **Versiones:** se escribe la versión 2, con las `hours` dentro de cada año (RN-25). Se lee también la versión 1, que tenía unas `hours` comunes en la raíz: se aplican a cada año que no tenga las suyas, y al guardar el fichero pasa a la versión 2.
-- **Valores de `kind`:** van en español (`reducido`, `festivo`, `vacaciones`), igual que en la CLI.
+- **Valores de `kind`:** van en español (`laborable`, `reducido`, `festivo`, `vacaciones`), igual que en la CLI.
 
 ```json
 {
@@ -287,6 +289,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RN-11: `quota` también avisa si el nuevo cupo queda por debajo de las vacaciones ya usadas, con el mismo aviso que al marcar; antes el exceso solo se veía después, en las vistas. |
 | 2026-11-12 | RF-18: `edit` cambia un `Mark` sin borrarlo y volverlo a crear, así conserva su `id`. Hay que indicar al menos un cambio; lo que no se indica se mantiene, y `--desc ""` quita la descripción. Si el resultado es idéntico a otro `Mark` es un error, porque no se pueden fusionar. |
 | 2026-11-12 | RF-19: `add-year --festivos-de` copia los festivos de otro año para no tener que marcarlos uno a uno. Solo se copian los `Holiday`, con la misma fecha; los que cambian cada año (Semana Santa, festivos trasladados a lunes) hay que revisarlos con `edit`, y por eso se avisa siempre. Es todo o nada, como el resto de cambios. |
+| 2026-11-12 | RN-26: vuelve el `MarkKind` `Working` (`laborable`) para forzar la jornada completa en un viernes concreto. Va entre `Vacation` y `Reduced` en la prioridad: gana a la jornada reducida, por regla o por marca, y no a ausencias ni fines de semana. Trabajar un sábado queda fuera: haría falta otra prioridad por encima de `Weekend`. |
 
 ### Pendiente o posibles ampliaciones
 
@@ -297,4 +300,3 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 - [ ] Interfaz ratatui para navegar meses, como en el proyecto hermano.
 - [ ] Objetivo de horas anuales del convenio y diferencia con las horas del calendario.
 - [ ] Horas de ausencias por mes (vacaciones y festivos valorados en horas).
-- [ ] Forzar jornada completa en un viernes concreto: haría falta recuperar un `MarkKind` laborable con prioridad entre `Reduced` y `Vacation`.

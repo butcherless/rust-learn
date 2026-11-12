@@ -421,6 +421,15 @@ mod tests {
             ),
             (&["unmark", "4"][..], Command::Unmark(vec![MarkId(4)])),
             (
+                &["mark", "laborable", "2026-03-06"][..],
+                Command::Mark {
+                    kind: MarkKind::Working,
+                    from: date(2026, 3, 6),
+                    to: None,
+                    description: None,
+                },
+            ),
+            (
                 &[
                     "edit",
                     "4",
@@ -599,7 +608,7 @@ mod tests {
     fn rn_01_invalid_arguments_are_rejected() {
         [
             (
-                &["mark", "laborable", "2026-03-03"][..],
+                &["mark", "nocturna", "2026-03-03"][..],
                 ErrorKind::InvalidValue,
             ),
             (

@@ -144,6 +144,7 @@ struct MarkDto {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum KindDto {
+    Laborable,
     Reducido,
     Festivo,
     Vacaciones,
@@ -152,6 +153,7 @@ enum KindDto {
 impl From<KindDto> for MarkKind {
     fn from(kind: KindDto) -> Self {
         match kind {
+            KindDto::Laborable => Self::Working,
             KindDto::Reducido => Self::Reduced,
             KindDto::Festivo => Self::Holiday,
             KindDto::Vacaciones => Self::Vacation,
@@ -162,6 +164,7 @@ impl From<KindDto> for MarkKind {
 impl From<MarkKind> for KindDto {
     fn from(kind: MarkKind) -> Self {
         match kind {
+            MarkKind::Working => Self::Laborable,
             MarkKind::Reduced => Self::Reducido,
             MarkKind::Holiday => Self::Festivo,
             MarkKind::Vacation => Self::Vacaciones,
@@ -394,6 +397,7 @@ mod tests {
         let calendar = marked(&[
             (MarkKind::Holiday, "2026-03-03", "2026-03-03"),
             (MarkKind::Reduced, "2026-12-24", "2026-12-24"),
+            (MarkKind::Working, "2026-12-18", "2026-12-18"),
         ])
         .with_weekend(&[Weekday::Fri, Weekday::Sat])
         .with_reduced_days(&[Weekday::Mon, Weekday::Thu])
@@ -498,8 +502,8 @@ mod tests {
                 "el año 2027 no existe en el calendario; añádelo con «calendario add-year 2027»",
             ),
             (
-                mark("laborable", "2026-03-03", "2026-03-03"),
-                "unknown variant `laborable`, expected one of `reducido`, `festivo`, `vacaciones` at line 1 column 82",
+                mark("nocturna", "2026-03-03", "2026-03-03"),
+                "unknown variant `nocturna`, expected one of `laborable`, `reducido`, `festivo`, `vacaciones` at line 1 column 81",
             ),
         ]
         .into_iter()

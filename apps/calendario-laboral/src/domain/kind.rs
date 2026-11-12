@@ -5,6 +5,8 @@ use std::fmt;
 /// Lo que fija un `Mark` en los días que cubre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MarkKind {
+    /// La jornada completa en un día que sería reducido (RN-26).
+    Working,
     /// Una jornada más corta.
     Reduced,
     /// Un festivo nacional, autonómico o local.
@@ -15,11 +17,12 @@ pub enum MarkKind {
 
 impl MarkKind {
     /// Todos los tipos, en el orden en que se muestran al usuario.
-    pub const ALL: [Self; 3] = [Self::Reduced, Self::Holiday, Self::Vacation];
+    pub const ALL: [Self; 4] = [Self::Working, Self::Reduced, Self::Holiday, Self::Vacation];
 
     /// El nombre que se usa en la línea de comandos y en el fichero.
     pub const fn name(self) -> &'static str {
         match self {
+            Self::Working => "laborable",
             Self::Reduced => "reducido",
             Self::Holiday => "festivo",
             Self::Vacation => "vacaciones",
@@ -218,7 +221,7 @@ mod tests {
     fn names_are_the_ones_of_the_command_line() {
         let marks: Vec<String> = MarkKind::ALL.iter().map(ToString::to_string).collect();
         let shifts: Vec<String> = Shift::ALL.iter().map(ToString::to_string).collect();
-        assert_eq!(marks, ["reducido", "festivo", "vacaciones"]);
+        assert_eq!(marks, ["laborable", "reducido", "festivo", "vacaciones"]);
         assert_eq!(
             shifts,
             [

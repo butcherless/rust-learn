@@ -311,7 +311,7 @@ fn trimmed(description: Option<String>) -> Option<String> {
 fn vacation_excess(calendar: &Calendar, mark: &Mark) -> Result<usize, DomainError> {
     match mark.kind {
         MarkKind::Vacation => Ok(summarize(calendar, mark.range.from().year())?.vacation_excess()),
-        MarkKind::Reduced | MarkKind::Holiday => Ok(0),
+        MarkKind::Working | MarkKind::Reduced | MarkKind::Holiday => Ok(0),
     }
 }
 

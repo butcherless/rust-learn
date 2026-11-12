@@ -91,7 +91,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 
 - **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `with_replaced_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours` y `restore_mark`.
   - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
-  - `kind`: `MarkKind` (`Reduced`, `Holiday`, `Vacation`; no existe un `Mark` laborable), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
+  - `kind`: `MarkKind` (`Working`, `Reduced`, `Holiday`, `Vacation`; `Working` fuerza la jornada completa, RN-26), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
   - `date`:
     - `parse_date` es ISO estricto (RN-01); chrono por sí solo acepta días de un dígito.
     - `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
@@ -101,7 +101,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta (RN-06).
     - El id siguiente es el máximo más uno (RN-16).
   - `resolve`:
-    - El enum privado `Rule` ordena la prioridad con `Ord`: `Reduced` < `Vacation` < `Weekend` < `Holiday`.
+    - El enum privado `Rule` ordena la prioridad con `Ord`: `Reduced` < `Working` (solo de un `Mark`, RN-26) < `Vacation` < `Weekend` < `Holiday`.
     - Los candidatos van en orden: primero los `Mark`, luego `Weekend` y luego `ReducedWeekday`. Con la misma prioridad gana el primero, así un `Mark` `Reduced` en viernes conserva su `Origin`.
     - La regla `ReducedWeekday` da `Rule::Reduced` con `Origin::ReducedWeekday`. Reutiliza los `Shift` `Reduced` y `SummerReduced`; no hay jornadas propias de los viernes.
     - `resolve_year` añade `DefaultVacation` (RN-14) si el `Year` no tiene `Mark` `Vacation`: los primeros `quota` días de `Category` `Working` desde el 1 de julio, con `Origin::DefaultVacation`. Nunca se guarda.
