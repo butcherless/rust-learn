@@ -3,4 +3,4 @@
 # attributes as uncovered, and every project falls below the 90% minimum. Go back to "stable"
 # when a newer release fixes it (check with `cargo +stable llvm-cov -p <package>`).
 channel = "1.99.1"
-components = ["clippy", "rustfmt", "llvm-tools-preview"]
+components = ["clippy", "rustfmt", "llvm-tools"]
