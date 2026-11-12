@@ -96,7 +96,8 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
   - `date`:
     - `parse_date` es ISO estricto (RN-01); chrono por sí solo acepta días de un dígito.
     - `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
-  - `calendar`: `Calendar`, `Year`, `Mark`, `MarkId` y `Hours`.
+  - `hours`: `Hours`, las horas de los cuatro `Shift`, entre 0 y 24 (RN-17).
+  - `calendar`: `Calendar`, `Year`, `Mark` y `MarkId`.
     - Las `Hours` son de cada `Year` (RN-25). `with_year` las hereda con `inherited_hours`: del año anterior más cercano, si no del siguiente, y si no las de por defecto.
     - `Calendar` guarda dos listas de `Weekday`: `weekend` y `reduced_days` (viernes por defecto, RN-18; se cambian con `weekend` y `reduced-days`, RF-17 y RF-16). Las dos se ordenan desde el lunes con `from_monday`.
     - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta (RN-06).

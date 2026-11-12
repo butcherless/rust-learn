@@ -3,13 +3,15 @@
 mod calendar;
 mod date;
 mod error;
+mod hours;
 mod kind;
 mod month;
 mod resolve;
 
-pub use calendar::{Calendar, DEFAULT_VACATION_QUOTA, Hours, Mark, MarkId, Marking, WEEK, Year};
+pub use calendar::{Calendar, DEFAULT_VACATION_QUOTA, Mark, MarkId, Marking, WEEK, Year};
 pub use date::{DateRange, check_year, days_of_year, parse_date};
 pub use error::DomainError;
+pub use hours::Hours;
 pub use kind::{Category, DayKind, MarkKind, Shift};
 pub use month::{Month, MonthExt};
 pub use resolve::{
