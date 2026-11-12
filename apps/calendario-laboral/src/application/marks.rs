@@ -30,11 +30,7 @@ pub(super) fn edit(
     (from, to): (Option<NaiveDate>, Option<NaiveDate>),
     description: Option<String>,
 ) -> Result<Outcome, DomainError> {
-    let old = calendar
-        .marks()
-        .find(|mark| mark.id == id)
-        .cloned()
-        .ok_or(DomainError::UnknownMark(id))?;
+    let old = calendar.mark(id)?.clone();
     let mark = Mark {
         id,
         kind: kind.unwrap_or(old.kind),

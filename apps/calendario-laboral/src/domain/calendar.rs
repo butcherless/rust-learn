@@ -329,13 +329,16 @@ impl Calendar {
         self.update_year(number, |year| year.with_mark(mark.clone()))
     }
 
+    /// El `Mark` con este id, de cualquier año.
+    pub fn mark(&self, id: MarkId) -> Result<&Mark, DomainError> {
+        self.marks()
+            .find(|mark| mark.id == id)
+            .ok_or(DomainError::UnknownMark(id))
+    }
+
     /// Elimina el `Mark` `id` y lo devuelve (RF-03).
     pub fn without_mark(self, id: MarkId) -> Result<(Self, Mark), DomainError> {
-        let mark = self
-            .marks()
-            .find(|mark| mark.id == id)
-            .cloned()
-            .ok_or(DomainError::UnknownMark(id))?;
+        let mark = self.mark(id)?.clone();
         let years = self
             .years
             .into_iter()
@@ -616,6 +619,19 @@ mod tests {
         assert_eq!(
             calendar.without_year(2030),
             Err(DomainError::UnknownYear(2030))
+        );
+    }
+
+    #[test]
+    fn rf_03_rf_18_finds_a_mark_by_id() {
+        let calendar = marked(&[(MarkKind::Holiday, "2026-03-03", "2026-03-03")]);
+        assert_eq!(
+            calendar.mark(MarkId(1)).map(|mark| mark.range),
+            Ok(range(date(2026, 3, 3), date(2026, 3, 3)))
+        );
+        assert_eq!(
+            calendar.mark(MarkId(9)),
+            Err(DomainError::UnknownMark(MarkId(9)))
         );
     }
 
