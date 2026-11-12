@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-16 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-17 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -82,7 +82,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-01 | Las fechas usan formato ISO `YYYY-MM-DD` y deben existir: `2026-02-30` y `2026-6-5` se rechazan. |
 | RN-02 | Todo `Mark` debe pertenecer a un `Year` existente en el fichero, y los `DateRange` que cruzan de año se rechazan. Consultar un `Year` que no está en el fichero también es un error. |
 | RN-03 | En un `DateRange`, `from` ≤ `to`. |
-| RN-04 | El `Weekend` no se marca: se calcula a partir del día de la semana. Por defecto es sábado y domingo, y solo se cambia editando `weekend` en el fichero. |
+| RN-04 | El `Weekend` no se marca: se calcula a partir del día de la semana. Por defecto es sábado y domingo, y se cambia con `weekend` (RF-17) para todo el calendario; sin días, no hay fin de semana. |
 | RN-05 | Cuando hay `Mark` solapados se conservan todos, y el `DayKind` efectivo lo decide la prioridad (§2.3). |
 | RN-06 | Un `Mark` con el mismo `MarkKind` y `DateRange` que otro existente no se añade, aunque cambie la descripción. Se avisa con el id del existente y no es un error. |
 | RN-07 | Los años bisiestos tienen 366 días. |
@@ -125,6 +125,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-14 | Sumatorio mensual (`MonthTotal`): días laborables, horas laborables y horas acumuladas del año. Se muestra como tabla de 12 meses con fila de total en `summary`, como una línea en `month` y bajo cada mes en `year` (solo horas y días, por el ancho) | Must |
 | RF-15 | Consultar la configuración: los días de `Weekend` y de `ReducedWeekday`, y de cada `Year` su `quota` y sus `Hours` | Should |
 | RF-16 | Configurar los días de la semana de la regla `ReducedWeekday`, o ninguno (RN-18) | Should |
+| RF-17 | Configurar los días de la semana del `Weekend`, o ninguno (RN-04) | Should |
 
 ## 5. Interfaz de consola
 
@@ -144,6 +145,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `quota <año> <días>` | 10 | `calendario quota 2026 25` |
 | `config` | 15 | `calendario config` |
 | `reduced-days <día>… \| --ninguno` | 16 | `calendario reduced-days viernes` |
+| `weekend <día>… \| --ninguno` | 17 | `calendario weekend sábado domingo` |
 
 - **`<tipo>`** (`MarkKind`): `reducido`, `festivo` y `vacaciones`.
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
@@ -274,6 +276,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RN-25: las `Hours` pasan del `Calendar` a cada `Year`. Al ser comunes, cambiar la jornada de un año reescribía las horas de los años pasados. `hours` recibe el año, como `quota`. El JSON pasa a la versión 2, con `hours` en cada año, y la versión 1 se sigue leyendo. Un año nuevo hereda las horas del anterior, porque la jornada suele mantenerse de un año a otro. |
 | 2026-11-12 | RF-15: `config` muestra la configuración, que antes solo se veía abriendo el JSON: los días de fin de semana y de jornada reducida, y una fila por año con su cupo y las horas de cada jornada. Se imprime siempre en la consola, como `day` y `list`. |
 | 2026-11-12 | RF-16: `reduced-days` cambia los días de jornada reducida, que antes solo se cambiaban en el JSON. Para no tener ninguno hay que pedirlo con `--ninguno`, así un comando sin días no los borra por error. Como el fin de semana, es una regla común a todos los años. |
+| 2026-11-12 | RF-17: `weekend` cambia los días del fin de semana, igual que `reduced-days` y también con `--ninguno`. |
 
 ### Pendiente o posibles ampliaciones
 

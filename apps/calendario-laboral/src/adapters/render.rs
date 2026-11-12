@@ -568,6 +568,7 @@ pub fn event(event: &Event) -> Message {
             format!("Jornada {shift} de {year}: {} h.", decimal(*hours))
         }
         Event::ReducedDaysSet(days) => format!("Jornada reducida: {}.", weekday_list(days)),
+        Event::WeekendSet(days) => format!("Fin de semana: {}.", weekday_list(days)),
         Event::QuotaSet { year, days: quota } => {
             format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
         }
@@ -584,6 +585,7 @@ pub fn event(event: &Event) -> Message {
         | Event::Unmarked(_)
         | Event::HoursSet { .. }
         | Event::ReducedDaysSet(_)
+        | Event::WeekendSet(_)
         | Event::QuotaSet { .. } => None,
     };
     Message { text, warning }
@@ -1142,6 +1144,11 @@ mod tests {
             (
                 Event::ReducedDaysSet(Vec::new()),
                 "Jornada reducida: ninguno.",
+                None,
+            ),
+            (
+                Event::WeekendSet(vec![Weekday::Sat, Weekday::Sun]),
+                "Fin de semana: sábado y domingo.",
                 None,
             ),
             (

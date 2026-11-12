@@ -48,6 +48,8 @@ pub enum Command {
     Config,
     /// RF-16: configurar los días de la regla `ReducedWeekday`; vacío, ninguno.
     ReducedDays(Vec<Weekday>),
+    /// RF-17: configurar los días del `Weekend`; vacío, ninguno.
+    Weekend(Vec<Weekday>),
     /// RF-09: configurar las horas de un `Shift` en un `Year` (RN-25).
     Hours { year: i32, shift: Shift, hours: f64 },
     /// RF-10: configurar el cupo de vacaciones de un año.
@@ -98,6 +100,8 @@ pub enum Event {
     Unmarked(Mark),
     /// Se han configurado los días de jornada reducida, de lunes a domingo.
     ReducedDaysSet(Vec<Weekday>),
+    /// Se han configurado los días del fin de semana, de lunes a domingo.
+    WeekendSet(Vec<Weekday>),
     /// Se han configurado las horas de un `Shift` en un `Year`.
     HoursSet { year: i32, shift: Shift, hours: f64 },
     /// Se ha configurado el cupo de un año.
@@ -190,6 +194,13 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             )))
         }
         Command::Config => Ok(Outcome::Report(Report::Config(calendar))),
+        Command::Weekend(days) => {
+            let calendar = calendar.with_weekend(&days);
+            Ok(Outcome::Changed {
+                event: Event::WeekendSet(calendar.weekend().to_vec()),
+                calendar,
+            })
+        }
         Command::ReducedDays(days) => {
             let calendar = calendar.with_reduced_days(&days);
             Ok(Outcome::Changed {
@@ -660,6 +671,30 @@ mod tests {
             none.map(|(calendar, _)| calendar.reduced_days().is_empty()),
             Some(true)
         );
+    }
+
+    #[test]
+    fn rf_17_rn_04_sets_the_weekend_in_week_order() {
+        let set = changed(execute(
+            calendar(),
+            Command::Weekend(vec![Weekday::Sat, Weekday::Fri]),
+        ));
+        assert_eq!(
+            set.as_ref()
+                .map(|(calendar, event)| (calendar.weekend().to_vec(), event.clone())),
+            Some((
+                vec![Weekday::Fri, Weekday::Sat],
+                Event::WeekendSet(vec![Weekday::Fri, Weekday::Sat])
+            ))
+        );
+        // El domingo 2026-03-01 deja de ser fin de semana y el viernes 2026-03-06 pasa a serlo.
+        let kind = |day| {
+            set.as_ref()
+                .and_then(|(calendar, _)| resolve_day(calendar, day).ok())
+                .map(|day| day.kind)
+        };
+        assert_eq!(kind(date(2026, 3, 1)), Some(DayKind::Working));
+        assert_eq!(kind(date(2026, 3, 6)), Some(DayKind::Weekend));
     }
 
     #[test]

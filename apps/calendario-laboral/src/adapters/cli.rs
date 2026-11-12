@@ -57,6 +57,23 @@ pub struct Args {
 }
 
 /// Los subcomandos.
+/// Unos días de la semana, o ninguno con `--ninguno`, que hay que pedir explícitamente para que
+/// un comando sin días no los borre por error (RF-16, RF-17).
+#[derive(Debug, clap::Args)]
+pub struct WeekdaysArg {
+    /// Días de la semana, con o sin tilde.
+    #[arg(
+        value_name = "DÍA",
+        value_parser = weekday_arg(),
+        required_unless_present = "none",
+        conflicts_with = "none"
+    )]
+    days: Vec<Weekday>,
+    /// Ningún día.
+    #[arg(long = "ninguno", help_heading = "Opciones")]
+    none: bool,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum CommandArg {
     /// Añade un año al calendario.
@@ -135,20 +152,17 @@ pub enum CommandArg {
     /// Muestra la configuración: fin de semana, jornada reducida, y cupo y horas de cada año.
     #[command(help_template = HELP)]
     Config,
+    /// Configura los días del fin de semana de todos los años [por defecto: sábado y domingo].
+    #[command(help_template = HELP, next_help_heading = "Argumentos")]
+    Weekend {
+        #[command(flatten)]
+        days: WeekdaysArg,
+    },
     /// Configura los días de jornada reducida de todos los años [por defecto: viernes].
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     ReducedDays {
-        /// Días de la semana, con o sin tilde.
-        #[arg(
-            value_name = "DÍA",
-            value_parser = weekday_arg(),
-            required_unless_present = "none",
-            conflicts_with = "none"
-        )]
-        days: Vec<Weekday>,
-        /// Ningún día de jornada reducida.
-        #[arg(long = "ninguno", help_heading = "Opciones")]
-        none: bool,
+        #[command(flatten)]
+        days: WeekdaysArg,
     },
     /// Configura las horas de una jornada en un año.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
@@ -283,7 +297,8 @@ impl CommandArg {
             Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
             Self::Config => Command::Config,
-            Self::ReducedDays { days, .. } => Command::ReducedDays(days),
+            Self::Weekend { days } => Command::Weekend(days.days),
+            Self::ReducedDays { days } => Command::ReducedDays(days.days),
             Self::Hours { year, shift, hours } => Command::Hours { year, shift, hours },
             Self::Quota { year, days } => Command::Quota { year, days },
         }
@@ -352,6 +367,11 @@ mod tests {
                 &["reduced-days", "--ninguno"][..],
                 Command::ReducedDays(Vec::new()),
             ),
+            (
+                &["weekend", "viernes", "sábado"][..],
+                Command::Weekend(vec![Weekday::Fri, Weekday::Sat]),
+            ),
+            (&["weekend", "--ninguno"][..], Command::Weekend(Vec::new())),
             (&["list", "--year", "2026"][..], Command::List(Some(2026))),
             (&["day", "2026-06-08"][..], Command::Day(date(2026, 6, 8))),
             (
@@ -486,6 +506,7 @@ mod tests {
             (&["month", "2026"][..], ErrorKind::MissingRequiredArgument),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
+            (&["weekend"][..], ErrorKind::MissingRequiredArgument),
             (&["reduced-days", "friday"][..], ErrorKind::InvalidValue),
             (
                 &["reduced-days", "viernes", "--ninguno"][..],
