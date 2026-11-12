@@ -11,6 +11,10 @@
 - Use official documentation for the programming language and libraries.
 - Use functional programming techniques where appropriate.
 - Use stable and well-maintained libraries.
+- Avoid using deprecated libraries or features.
+- Avoid code duplication.
+- Avoid using deprecated libraries or features.
+- Avoid code duplication.
 
 ## Continuous integration
 
