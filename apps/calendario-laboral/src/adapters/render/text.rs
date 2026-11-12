@@ -155,8 +155,10 @@ pub fn event(event: &Event) -> Message {
                 days(*quota as usize)
             );
             match holidays {
-                Some((from, 1)) => format!("{added} y 1 festivo copiado de {from}."),
-                Some((from, count)) => format!("{added} y {count} festivos copiados de {from}."),
+                Some((from, copied)) => format!(
+                    "{added} y {} de {from}.",
+                    count(*copied, "festivo copiado", "festivos copiados")
+                ),
                 None => format!("{added}."),
             }
         }
@@ -164,8 +166,12 @@ pub fn event(event: &Event) -> Message {
             format!("Marca #{} añadida: {} {}.", mark.id, mark.kind, mark.range)
         }
         Event::YearRemoved { year, marks: 0 } => format!("Año {year} eliminado."),
-        Event::YearRemoved { year, marks: 1 } => format!("Año {year} eliminado, con 1 marca."),
-        Event::YearRemoved { year, marks } => format!("Año {year} eliminado, con {marks} marcas."),
+        Event::YearRemoved { year, marks } => {
+            format!(
+                "Año {year} eliminado, con {}.",
+                count(*marks, "marca", "marcas")
+            )
+        }
         Event::Edited { mark, .. } => {
             format!(
                 "Marca #{} modificada: {} {}.",

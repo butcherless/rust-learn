@@ -70,11 +70,13 @@ pub fn decimal(hours: f64) -> String {
     text.replace('.', ",")
 }
 
-fn days(count: usize) -> String {
-    match count {
-        1 => "1 día".to_owned(),
-        _ => format!("{count} días"),
-    }
+/// `n` con su palabra en singular solo si es 1: `1 día`, `0 días`, `25 días`.
+fn count(n: usize, singular: &str, plural: &str) -> String {
+    format!("{n} {}", if n == 1 { singular } else { plural })
+}
+
+fn days(n: usize) -> String {
+    count(n, "día", "días")
 }
 
 /// El nombre en español del mes.
@@ -628,6 +630,13 @@ mod tests {
             ),
             "Fin de semana: domingo\nJornada reducida: ninguno\n\nNo hay años; añade uno con «calendario add-year <año>».\n"
         );
+    }
+
+    #[test]
+    fn counts_use_the_singular_only_for_one() {
+        [(0, "0 días"), (1, "1 día"), (2, "2 días"), (25, "25 días")]
+            .into_iter()
+            .for_each(|(n, expected)| assert_eq!(count(n, "día", "días"), expected, "{n}"));
     }
 
     #[test]
