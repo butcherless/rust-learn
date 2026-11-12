@@ -115,7 +115,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
   - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.
   - `remove-year` con `Mark` necesita `confirmed`; si no, devuelve `DomainError::YearHasMarks`.
 - **`adapters`**:
-  - `cli`: clap derive.
+  - `cli`: clap derive. `mod.rs` define los argumentos y los convierte en `Command`; `values.rs`, los parsers de valores; y `errors.rs`, los errores y la ayuda en español.
     - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias, y los días de la semana el nombre con o sin tilde (`weekday_arg`).
     - `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
