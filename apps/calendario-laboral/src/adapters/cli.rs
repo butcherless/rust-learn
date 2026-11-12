@@ -132,6 +132,9 @@ pub enum CommandArg {
         #[arg(value_name = "AÑO")]
         year: Option<i32>,
     },
+    /// Muestra la configuración: fin de semana, jornada reducida, y cupo y horas de cada año.
+    #[command(help_template = HELP)]
+    Config,
     /// Configura las horas de una jornada en un año.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Hours {
@@ -237,6 +240,7 @@ impl CommandArg {
             },
             Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
+            Self::Config => Command::Config,
             Self::Hours { year, shift, hours } => Command::Hours { year, shift, hours },
             Self::Quota { year, days } => Command::Quota { year, days },
         }
@@ -292,6 +296,7 @@ mod tests {
             ),
             (&["unmark", "4"][..], Command::Unmark(MarkId(4))),
             (&["list"][..], Command::List(None)),
+            (&["config"][..], Command::Config),
             (&["list", "--year", "2026"][..], Command::List(Some(2026))),
             (&["day", "2026-06-08"][..], Command::Day(date(2026, 6, 8))),
             (

@@ -39,6 +39,7 @@ cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026
 cargo cal year 2026                                # RF-07; necesita 130 columnas (en la ventana, lo que no cabe se corta)
 cargo cal year 2026 --no-tui                       # en la consola, como antes de RN-22
 cargo cal summary 2026                             # RF-08, RF-14: incluye las horas por mes y el acumulado
+cargo cal config                                   # RF-15: fin de semana, jornada reducida, y cupo y horas de cada año
 cargo cal month 2026 6 > junio.txt                 # al redirigir no hay ventana, ni color, y van letras en lugar de barras; sin color también con NO_COLOR=1
 CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color (barras) aunque la salida no sea un terminal
 ```

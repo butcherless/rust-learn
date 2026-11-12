@@ -44,6 +44,8 @@ pub enum Command {
     Year(i32),
     /// RF-08: resumir un año.
     Summary(i32),
+    /// RF-15: consultar la configuración.
+    Config,
     /// RF-09: configurar las horas de un `Shift` en un `Year` (RN-25).
     Hours { year: i32, shift: Shift, hours: f64 },
     /// RF-10: configurar el cupo de vacaciones de un año.
@@ -116,6 +118,8 @@ pub enum Report {
     Year(Vec<MonthView>, Summary),
     /// El resumen de un año.
     Summary(Summary),
+    /// La configuración: el `Calendar`, del que se muestran sus días y cada `Year` (RF-15).
+    Config(Calendar),
 }
 
 /// Los días resueltos de un mes y los `Mark` que lo tocan.
@@ -181,6 +185,7 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
                 summary_of(year, &days),
             )))
         }
+        Command::Config => Ok(Outcome::Report(Report::Config(calendar))),
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
@@ -501,9 +506,11 @@ mod tests {
                     Report::Marks(marks) => {
                         Some(marks.iter().map(|mark| mark.id.0).collect::<Vec<_>>())
                     }
-                    Report::Day(_) | Report::Month(..) | Report::Year(..) | Report::Summary(_) => {
-                        None
-                    }
+                    Report::Day(_)
+                    | Report::Month(..)
+                    | Report::Year(..)
+                    | Report::Summary(_)
+                    | Report::Config(_) => None,
                 })
         };
         assert_eq!(ids(None), Some(vec![2, 1, 3]));
@@ -556,7 +563,13 @@ mod tests {
                 );
                 Some(summary.vacation_used)
             }
-            Some(Report::Marks(_) | Report::Day(_) | Report::Year(..) | Report::Summary(_))
+            Some(
+                Report::Marks(_)
+                | Report::Day(_)
+                | Report::Year(..)
+                | Report::Summary(_)
+                | Report::Config(_),
+            )
             | None => None,
         };
         assert_eq!(summary, Some(4));
@@ -572,7 +585,13 @@ mod tests {
                     .map(|month| (month.month, month.days.len()))
                     .collect::<Vec<_>>(),
             ),
-            Some(Report::Marks(_) | Report::Day(_) | Report::Month(..) | Report::Summary(_))
+            Some(
+                Report::Marks(_)
+                | Report::Day(_)
+                | Report::Month(..)
+                | Report::Summary(_)
+                | Report::Config(_),
+            )
             | None => None,
         };
         assert_eq!(
@@ -599,11 +618,26 @@ mod tests {
         let summary = report(calendar(), Command::Summary(2026));
         let used = match summary {
             Some(Report::Summary(summary)) => Some((summary.year, summary.vacation_used)),
-            Some(Report::Marks(_) | Report::Day(_) | Report::Month(..) | Report::Year(..))
+            Some(
+                Report::Marks(_)
+                | Report::Day(_)
+                | Report::Month(..)
+                | Report::Year(..)
+                | Report::Config(_),
+            )
             | None => None,
         };
         // Sin marcas de vacaciones: las vacaciones por defecto usan todo el cupo (RN-14).
         assert_eq!(used, Some((2026, 25)));
+    }
+
+    #[test]
+    fn rf_15_config_reports_the_whole_configuration() {
+        let calendar = calendar().with_year(2027).expect("2027");
+        assert_eq!(
+            execute(calendar.clone(), Command::Config),
+            Ok(Outcome::Report(Report::Config(calendar)))
+        );
     }
 
     #[test]

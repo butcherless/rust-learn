@@ -11,7 +11,8 @@ use chrono::{Datelike, Weekday};
 
 use crate::application::{Event, MonthView, Report};
 use crate::domain::{
-    DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary,
+    Calendar, DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Shift,
+    Summary,
 };
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
@@ -458,6 +459,62 @@ fn summary(summary: &Summary, marker: Marker) -> String {
     )
 }
 
+/// Los días de la semana en español: `lunes`, `lunes y viernes` o `lunes, martes y viernes`.
+fn weekday_list(days: &[Weekday]) -> String {
+    let names: Vec<&str> = days.iter().map(|day| weekday_name(*day)).collect();
+    match names.split_last() {
+        None => "ninguno".to_owned(),
+        Some((last, [])) => (*last).to_owned(),
+        Some((last, rest)) => format!("{} y {last}", rest.join(", ")),
+    }
+}
+
+/// La configuración (RF-15): los días de la semana y una fila por año con su cupo y sus horas.
+/// Las columnas de horas llevan el nombre de la jornada en `hours`.
+fn config(calendar: &Calendar) -> String {
+    let row = |year: &str, quota: &str, hours: &[String]| {
+        let columns: String = Shift::ALL
+            .iter()
+            .zip(hours)
+            .map(|(shift, hours)| format!("  {hours:>width$}", width = shift.name().len()))
+            .collect();
+        format!("{year:<4}  {quota:>4}{columns}")
+    };
+    let header = row(
+        "Año",
+        "Cupo",
+        &Shift::ALL.map(|shift| shift.name().to_owned()),
+    );
+    let years: Vec<String> = calendar
+        .years()
+        .iter()
+        .map(|year| {
+            row(
+                &year.number().to_string(),
+                &year.vacation_quota().to_string(),
+                &Shift::ALL.map(|shift| format!("{} h", decimal(year.hours().of(shift)))),
+            )
+        })
+        .collect();
+    let table = if years.is_empty() {
+        vec!["No hay años; añade uno con «calendario add-year <año>».".to_owned()]
+    } else {
+        iter::once(header).chain(years).collect()
+    };
+    lines(
+        [
+            format!("Fin de semana: {}", weekday_list(calendar.weekend())),
+            format!(
+                "Jornada reducida: {}",
+                weekday_list(calendar.reduced_days())
+            ),
+            String::new(),
+        ]
+        .into_iter()
+        .chain(table),
+    )
+}
+
 fn day(day: &ResolvedDay, marker: Marker) -> String {
     let parts = [
         format!("{} ({})", day.date, weekday_name(day.date.weekday())),
@@ -482,6 +539,7 @@ pub fn report(report: &Report, marker: Marker) -> String {
         Report::Month(view, totals) => month(view, totals, marker),
         Report::Year(months, totals) => year(months, totals, marker),
         Report::Summary(totals) => summary(totals, marker),
+        Report::Config(calendar) => config(calendar),
     }
 }
 
@@ -954,6 +1012,57 @@ mod tests {
         assert_eq!(
             shown(Calendar::default(), Command::List(None)),
             "No hay marcas.\n"
+        );
+    }
+
+    #[test]
+    fn rf_15_config_shows_the_weekend_the_reduced_days_and_each_year() {
+        let calendar = calendar()
+            .with_reduced_days(&[Weekday::Mon, Weekday::Fri])
+            .with_year(2027)
+            .and_then(|calendar| calendar.with_shift_hours(2027, Shift::Working, 8.0))
+            .and_then(|calendar| calendar.with_quota(2027, 23))
+            .expect("calendar");
+        let text = shown(calendar, Command::Config);
+        let words: Vec<Vec<&str>> = text
+            .lines()
+            .map(|line| line.split_whitespace().collect())
+            .collect();
+        assert_eq!(
+            words,
+            [
+                vec!["Fin", "de", "semana:", "sábado", "y", "domingo"],
+                vec!["Jornada", "reducida:", "lunes", "y", "viernes"],
+                vec![],
+                vec![
+                    "Año",
+                    "Cupo",
+                    "laborable",
+                    "reducido",
+                    "laborable-verano",
+                    "reducido-verano"
+                ],
+                vec!["2026", "25", "8,5", "h", "6,0", "h", "8,5", "h", "6,0", "h"],
+                vec!["2027", "23", "8,0", "h", "6,0", "h", "8,5", "h", "6,0", "h"],
+            ],
+            "{text}"
+        );
+        assert!(
+            text.lines().skip(3).all(|line| line.chars().count()
+                == text
+                    .lines()
+                    .nth(3)
+                    .map_or(0, |header| header.chars().count())),
+            "columnas alineadas: {text}"
+        );
+        assert_eq!(
+            shown(
+                Calendar::default()
+                    .with_weekend(&[Weekday::Sun])
+                    .with_reduced_days(&[]),
+                Command::Config
+            ),
+            "Fin de semana: domingo\nJornada reducida: ninguno\n\nNo hay años; añade uno con «calendario add-year <año>».\n"
         );
     }
 

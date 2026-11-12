@@ -22,7 +22,7 @@ use crate::application::Report;
 pub fn opens(report: &Report, no_tui: bool, terminal: bool) -> bool {
     let fills_screen = match report {
         Report::Month(..) | Report::Year(..) | Report::Summary(..) => true,
-        Report::Marks(..) | Report::Day(..) => false,
+        Report::Marks(..) | Report::Day(..) | Report::Config(..) => false,
     };
     fills_screen && terminal && !no_tui
 }

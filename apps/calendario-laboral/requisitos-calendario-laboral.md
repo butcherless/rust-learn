@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14, RF-15 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -123,6 +123,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-12 | Importar festivos desde un fichero | Could |
 | RF-13 | Exportar el calendario resuelto en CSV o JSON | Could |
 | RF-14 | Sumatorio mensual (`MonthTotal`): días laborables, horas laborables y horas acumuladas del año. Se muestra como tabla de 12 meses con fila de total en `summary`, como una línea en `month` y bajo cada mes en `year` (solo horas y días, por el ancho) | Must |
+| RF-15 | Consultar la configuración: los días de `Weekend` y de `ReducedWeekday`, y de cada `Year` su `quota` y sus `Hours` | Should |
 
 ## 5. Interfaz de consola
 
@@ -140,6 +141,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `summary [<año>]` | 08, 14 | `calendario summary 2026` |
 | `hours <año> <jornada> <horas>` | 09 | `calendario hours 2026 laborable-verano 8,5` |
 | `quota <año> <días>` | 10 | `calendario quota 2026 25` |
+| `config` | 15 | `calendario config` |
 
 - **`<tipo>`** (`MarkKind`): `reducido`, `festivo` y `vacaciones`.
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
@@ -267,6 +269,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-11 | RN-24: la vista de año termina con el total de horas del año y la media mensual (total / 12), para ver el esfuerzo mensual medio sin abrir `summary`. La media divide siempre entre 12, no entre los meses con horas. La vista de año pasa de 46 a 48 líneas. |
 | 2026-11-11 | RN-24: el paréntesis de la media mensual pasa de repetir la operación (`1888,5 h / 12 meses`) a dar la media en días de 8 h, que se entiende mejor como esfuerzo. Las 8 h son una referencia fija y no las 8,5 h de la jornada `Working`, para que el número no cambie al configurar las horas. |
 | 2026-11-12 | RN-25: las `Hours` pasan del `Calendar` a cada `Year`. Al ser comunes, cambiar la jornada de un año reescribía las horas de los años pasados. `hours` recibe el año, como `quota`. El JSON pasa a la versión 2, con `hours` en cada año, y la versión 1 se sigue leyendo. Un año nuevo hereda las horas del anterior, porque la jornada suele mantenerse de un año a otro. |
+| 2026-11-12 | RF-15: `config` muestra la configuración, que antes solo se veía abriendo el JSON: los días de fin de semana y de jornada reducida, y una fila por año con su cupo y las horas de cada jornada. Se imprime siempre en la consola, como `day` y `list`. |
 
 ### Pendiente o posibles ampliaciones
 
