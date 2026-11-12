@@ -83,6 +83,9 @@ jobs:
       matrix:
         package: ${{ fromJSON(needs.projects.outputs.packages) }}
     name: build-and-test (${{ matrix.package }})
+    # Passed through the environment, not expanded into the scripts (zizmor: template-injection).
+    env:
+      PACKAGE: ${{ matrix.package }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -100,17 +103,17 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-${{ matrix.package }}-
     # The optimized binary, as the READMEs build it.
-    - run: cargo build --release --locked -p ${{ matrix.package }}
+    - run: cargo build --release --locked -p "$PACKAGE"
     - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
       with:
         # Pinned like the toolchain, so a new release can't break CI without a code change.
         tool: cargo-llvm-cov@0.9.1
     # Runs the project's unit and integration tests once with coverage, prints the per-file
     # summary, and fails if the project's line coverage is below the minimum.
-    - run: cargo llvm-cov --locked -p ${{ matrix.package }} --fail-under-lines 90
+    - run: cargo llvm-cov --locked -p "$PACKAGE" --fail-under-lines 90
     # The HTML report is built from the data above, without running the tests again.
     - if: ${{ !cancelled() }}
-      run: cargo llvm-cov report --html -p ${{ matrix.package }}
+      run: cargo llvm-cov report --html -p "$PACKAGE"
     - if: ${{ !cancelled() }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:

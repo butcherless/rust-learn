@@ -7,6 +7,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # A release must be a week old before it's proposed, so a compromised one is likely caught first.
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns: [ "*" ]
@@ -17,6 +20,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # A release must be a week old before it's proposed, so a compromised one is likely caught first.
+    cooldown:
+      default-days: 7
     groups:
       # A single PR: separate ones would conflict with each other in the shared Cargo.lock.
       # For 0.x crates a "minor" bump (0.30 → 0.31) can break the API; CI checks it.
