@@ -294,6 +294,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RN-26: vuelve el `MarkKind` `Working` (`laborable`) para forzar la jornada completa en un viernes concreto. Va entre `Vacation` y `Reduced` en la prioridad: gana a la jornada reducida, por regla o por marca, y no a ausencias ni fines de semana. Trabajar un sábado queda fuera: haría falta otra prioridad por encima de `Weekend`. |
 | 2026-11-12 | RF-20: `remove-year` elimina un año. Con `Mark` exige `--confirmar`, porque no se puede deshacer y un error al escribir el año borraría sus marcas; un año sin `Mark` se elimina sin más. |
 | 2026-11-12 | RNF-07: los errores de argumentos de clap se muestran en español. clap no se puede traducir, así que `cli::error_text` monta el mensaje a partir del tipo de error y su contexto (argumento, valor, valores posibles, sugerencias y uso). Los tipos de error poco habituales se muestran con el texto de clap. |
+| 2026-11-12 | RNF-07: la ayuda también se traduce sobre el texto que genera clap: `[possible values: …]`, `[default: …]`, `[env: …]` y `[OPTIONS]` pasan a `[valores posibles: …]`, `[por defecto: …]`, `[variable: …]` y `[OPCIONES]`. |
 
 ### Pendiente o posibles ampliaciones
 

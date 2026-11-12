@@ -32,11 +32,12 @@ fn main() -> ExitCode {
     )
 }
 
-/// Muestra el error de argumentos en español, o la ayuda y la versión como las da clap, y
+/// Muestra el error de argumentos o la ayuda en español, o la versión como la da clap, y
 /// devuelve su código de salida: 2 para los errores y 0 para la ayuda (RNF-07).
 fn argument_error(error: &clap::Error) -> ExitCode {
     match error_text(error) {
-        Some(text) => anstream::eprint!("{text}"),
+        Some(text) if error.use_stderr() => anstream::eprint!("{text}"),
+        Some(text) => anstream::print!("{text}"),
         None => error.print().unwrap_or(()),
     }
     ExitCode::from(u8::try_from(error.exit_code()).unwrap_or(2))

@@ -305,11 +305,33 @@ fn month_arg() -> impl TypedValueParser<Value = Month> {
     }))
 }
 
-/// El texto en español de un error de argumentos, con el uso y la pista de `--help` (RNF-07).
-/// `None` para la ayuda, la versión y los errores poco habituales, que muestra clap tal cual.
+/// Traduce los textos en inglés que clap añade a la ayuda y al uso (RNF-07).
+fn spanish_clap(text: &str) -> String {
+    [
+        ("[possible values: ", "[valores posibles: "),
+        ("[default: ", "[por defecto: "),
+        ("[env: ", "[variable: "),
+        ("[OPTIONS]", "[OPCIONES]"),
+        ("Usage:", "Uso:"),
+    ]
+    .into_iter()
+    .fold(text.to_owned(), |text, (english, spanish)| {
+        text.replace(english, spanish)
+    })
+}
+
+/// El texto en español de un error de argumentos, con el uso y la pista de `--help`, o de la
+/// ayuda (RNF-07). `None` para la versión y los errores poco habituales, que muestra clap tal
+/// cual. Va a stderr si `error.use_stderr()`, y si no a stdout.
 pub fn error_text(error: &clap::Error) -> Option<String> {
     use clap::error::{ContextKind, ErrorKind};
 
+    if matches!(
+        error.kind(),
+        ErrorKind::DisplayHelp | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+    ) {
+        return Some(spanish_clap(&error.render().ansi().to_string()));
+    }
     let context = |kind| error.get(kind).map(ToString::to_string);
     let arg = context(ContextKind::InvalidArg).unwrap_or_default();
     let value = context(ContextKind::InvalidValue).unwrap_or_default();
@@ -364,7 +386,7 @@ pub fn error_text(error: &clap::Error) -> Option<String> {
     };
     message.map(|message| {
         let usage = context(ContextKind::Usage)
-            .map(|usage| format!("\n\n{}", usage.replacen("Usage:", "Uso:", 1)))
+            .map(|usage| format!("\n\n{}", spanish_clap(&usage)))
             .unwrap_or_default();
         format!("error: {message}{usage}\n\nPara más información, prueba con «--help».\n")
     })
@@ -483,7 +505,7 @@ mod tests {
             ),
             (
                 &["marca"][..],
-                "error: comando desconocido «marca»; ¿querías decir «unmark» o «mark»?\n\nUso: calendario [OPTIONS] <COMANDO>",
+                "error: comando desconocido «marca»; ¿querías decir «unmark» o «mark»?\n\nUso: calendario [OPCIONES] <COMANDO>",
             ),
             (
                 &["unmark"][..],
@@ -502,7 +524,7 @@ mod tests {
                 "{args:?}"
             );
         });
-        assert_eq!(spanish(&["--help"]), None, "la ayuda la muestra clap");
+        assert_eq!(spanish(&["--version"]), None, "la versión la muestra clap");
     }
 
     #[test]

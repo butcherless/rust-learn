@@ -283,6 +283,28 @@ fn help_is_in_spanish() {
     assert!(mark.contains("Argumentos:"), "{mark}");
     assert!(mark.contains("--desc <TEXTO>"), "{mark}");
     assert!(!mark.contains("Options"), "{mark}");
+    // RNF-07: tampoco quedan los textos en inglés que añade clap.
+    assert!(
+        mark.contains("Uso: calendario mark [OPCIONES] <TIPO> <FECHA> [HASTA]"),
+        "{mark}"
+    );
+    assert!(
+        mark.contains("[valores posibles: laborable, reducido, festivo, vacaciones]"),
+        "{mark}"
+    );
+    assert!(
+        mark.contains("[variable: CALENDARIO_FILE=] [por defecto: calendario.json]"),
+        "{mark}"
+    );
+    ["possible values", "default:", "env:", "OPTIONS"]
+        .into_iter()
+        .for_each(|english| assert!(!mark.contains(english), "{english}: {mark}"));
+    let unknown = run(&file, &["marca"]);
+    assert!(
+        stderr(&unknown).contains("Uso: calendario [OPCIONES] <COMANDO>"),
+        "{}",
+        stderr(&unknown)
+    );
 }
 
 #[test]
