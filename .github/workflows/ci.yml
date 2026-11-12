@@ -6,6 +6,8 @@ on:
       - 'main'
   pull_request:
 
+# Actions are pinned to a commit SHA, with the version in a comment, so a moved tag can't change
+# what runs; Dependabot updates the SHA and the comment together.
 permissions:
   contents: read
 
@@ -22,14 +24,14 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     # Installs the toolchain of rust-toolchain.toml only; `rustup update` would also download the
     # latest stable, which the pinned toolchain doesn't use.
     - run: rustup toolchain install
     - run: cargo fmt --all --check
-    - uses: actions/cache@v6
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -48,7 +50,7 @@ jobs:
     outputs:
       packages: ${{ steps.list.outputs.packages }}
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     - id: list
@@ -66,13 +68,13 @@ jobs:
         package: ${{ fromJSON(needs.projects.outputs.packages) }}
     name: build-and-test (${{ matrix.package }})
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     # Installs the toolchain of rust-toolchain.toml only; `rustup update` would also download the
     # latest stable, which the pinned toolchain doesn't use.
     - run: rustup toolchain install
-    - uses: actions/cache@v6
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -83,7 +85,7 @@ jobs:
           ${{ runner.os }}-cargo-${{ matrix.package }}-
     # The optimized binary, as the READMEs build it.
     - run: cargo build --release --locked -p ${{ matrix.package }}
-    - uses: taiki-e/install-action@v2
+    - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
       with:
         tool: cargo-llvm-cov
     # Runs the project's unit and integration tests once with coverage, prints the per-file
@@ -93,7 +95,7 @@ jobs:
     - if: ${{ !cancelled() }}
       run: cargo llvm-cov report --html -p ${{ matrix.package }}
     - if: ${{ !cancelled() }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: coverage-html-${{ matrix.package }}
         path: target/llvm-cov/html
