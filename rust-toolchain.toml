@@ -1,3 +1,6 @@
 [toolchain]
-channel = "stable"
+# Pinned to 1.99.1: with 1.100.0, cargo-llvm-cov reports blank lines, comments and test
+# attributes as uncovered, and every project falls below the 90% minimum. Go back to "stable"
+# when a newer release fixes it (check with `cargo +stable llvm-cov -p <package>`).
+channel = "1.99.1"
 components = ["clippy", "rustfmt", "llvm-tools-preview"]

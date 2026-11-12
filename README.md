@@ -18,8 +18,8 @@ Each project's README explains how to use it.
 
 ## Requirements
 
-- [Rust](https://www.rust-lang.org/tools/install). `rust-toolchain.toml` selects the stable
-  toolchain with clippy, rustfmt and `llvm-tools-preview`.
+- [Rust](https://www.rust-lang.org/tools/install). `rust-toolchain.toml` selects the toolchain,
+  pinned to 1.99.1 for now (see the file), with clippy, rustfmt and `llvm-tools-preview`.
 - For coverage only, [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): install it once
   with `brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`.
 
