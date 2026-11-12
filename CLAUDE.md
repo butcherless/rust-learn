@@ -15,6 +15,7 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
 - `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks (blank lines and test attributes count as uncovered). Try `cargo +stable llvm-cov -p <package>` on each new stable release and go back to `channel = "stable"` when it matches.
 - Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
+- `docs/`: workspace documents. `docs/recurring-tasks.md` lists the periodic reviews (code against SOLID, official docs, functional style and maintained libraries; CI efficiency and security). When asked to apply it, present a coded, prioritized plan first and apply only the approved actions, one commit each.
 - `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`).
 - `.idea/` is ignored. The README explains how to open the workspace in IntelliJ.
 

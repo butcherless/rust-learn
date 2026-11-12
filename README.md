@@ -90,7 +90,9 @@ Cargo.toml          workspace manifest: members, shared package fields and depen
 .cargo/config.toml  run aliases
 apps/<project>/     one binary package per project
 libs/<library>/     shared libraries, created when two projects need the same code
+docs/               workspace documents, such as the recurring review tasks
 ```
 
 [CLAUDE.md](CLAUDE.md) holds the workspace conventions, and each project's `CLAUDE.md` its
-architecture.
+architecture. [docs/recurring-tasks.md](docs/recurring-tasks.md) lists the reviews to repeat
+periodically: code and CI.
