@@ -3,7 +3,7 @@
 ## Goal
 
 - Read this document and apply the steps to the project.
-- presenta el plan con las acciones codificadas y priorizadas para valorar y proceder con las que aporten valor
+- Present the plan with coded, prioritized actions, to assess them and carry out the ones that add value.
 
 ## Code review
 
