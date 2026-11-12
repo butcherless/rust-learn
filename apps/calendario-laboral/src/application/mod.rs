@@ -3,7 +3,7 @@
 //! Quien la llama carga el calendario, ejecuta [`execute`], guarda el calendario nuevo si lo hay
 //! y muestra el resultado. Aquí no hay E/S.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, Weekday};
 
 use crate::domain::{
     Calendar, DEFAULT_VACATION_QUOTA, DateRange, DomainError, Mark, MarkId, MarkKind, Marking,
@@ -46,6 +46,8 @@ pub enum Command {
     Summary(i32),
     /// RF-15: consultar la configuración.
     Config,
+    /// RF-16: configurar los días de la regla `ReducedWeekday`; vacío, ninguno.
+    ReducedDays(Vec<Weekday>),
     /// RF-09: configurar las horas de un `Shift` en un `Year` (RN-25).
     Hours { year: i32, shift: Shift, hours: f64 },
     /// RF-10: configurar el cupo de vacaciones de un año.
@@ -94,6 +96,8 @@ pub enum Event {
     AlreadyMarked(MarkId),
     /// Se ha eliminado un `Mark`.
     Unmarked(Mark),
+    /// Se han configurado los días de jornada reducida, de lunes a domingo.
+    ReducedDaysSet(Vec<Weekday>),
     /// Se han configurado las horas de un `Shift` en un `Year`.
     HoursSet { year: i32, shift: Shift, hours: f64 },
     /// Se ha configurado el cupo de un año.
@@ -186,6 +190,13 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             )))
         }
         Command::Config => Ok(Outcome::Report(Report::Config(calendar))),
+        Command::ReducedDays(days) => {
+            let calendar = calendar.with_reduced_days(&days);
+            Ok(Outcome::Changed {
+                event: Event::ReducedDaysSet(calendar.reduced_days().to_vec()),
+                calendar,
+            })
+        }
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
@@ -629,6 +640,26 @@ mod tests {
         };
         // Sin marcas de vacaciones: las vacaciones por defecto usan todo el cupo (RN-14).
         assert_eq!(used, Some((2026, 25)));
+    }
+
+    #[test]
+    fn rf_16_sets_the_reduced_days_in_week_order() {
+        let set = changed(execute(
+            calendar(),
+            Command::ReducedDays(vec![Weekday::Fri, Weekday::Mon]),
+        ));
+        assert_eq!(
+            set.map(|(calendar, event)| (calendar.reduced_days().to_vec(), event)),
+            Some((
+                vec![Weekday::Mon, Weekday::Fri],
+                Event::ReducedDaysSet(vec![Weekday::Mon, Weekday::Fri])
+            ))
+        );
+        let none = changed(execute(calendar(), Command::ReducedDays(Vec::new())));
+        assert_eq!(
+            none.map(|(calendar, _)| calendar.reduced_days().is_empty()),
+            Some(true)
+        );
     }
 
     #[test]

@@ -4,13 +4,13 @@
 
 use std::path::PathBuf;
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, Weekday};
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Parser, Subcommand};
 
-use crate::adapters::render::month_name;
+use crate::adapters::render::{month_name, weekday_name};
 use crate::application::Command;
-use crate::domain::{DomainError, MarkId, MarkKind, Month, MonthExt, Shift, parse_date};
+use crate::domain::{DomainError, MarkId, MarkKind, Month, MonthExt, Shift, WEEK, parse_date};
 
 /// La plantilla de la ayuda, con encabezados en español en lugar de los de clap.
 const HELP: &str = "{about-with-newline}\nUso: {usage}\n\n{all-args}{after-help}";
@@ -135,6 +135,21 @@ pub enum CommandArg {
     /// Muestra la configuración: fin de semana, jornada reducida, y cupo y horas de cada año.
     #[command(help_template = HELP)]
     Config,
+    /// Configura los días de jornada reducida de todos los años [por defecto: viernes].
+    #[command(help_template = HELP, next_help_heading = "Argumentos")]
+    ReducedDays {
+        /// Días de la semana, con o sin tilde.
+        #[arg(
+            value_name = "DÍA",
+            value_parser = weekday_arg(),
+            required_unless_present = "none",
+            conflicts_with = "none"
+        )]
+        days: Vec<Weekday>,
+        /// Ningún día de jornada reducida.
+        #[arg(long = "ninguno", help_heading = "Opciones")]
+        none: bool,
+    },
     /// Configura las horas de una jornada en un año.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Hours {
@@ -189,6 +204,33 @@ fn shift_arg() -> impl TypedValueParser<Value = Shift> {
     choice(Shift::ALL.map(|shift| (shift, PossibleValue::new(shift.name()))))
 }
 
+/// El nombre del día en español, también sin tilde (`miercoles`, `sabado`).
+fn weekday_arg() -> impl TypedValueParser<Value = Weekday> {
+    choice(WEEK.map(|day| {
+        let name = weekday_name(day);
+        let plain: String = name
+            .chars()
+            .map(|c| match c {
+                'á' => 'a',
+                'é' => 'e',
+                'í' => 'i',
+                'ó' => 'o',
+                'ú' => 'u',
+                other => other,
+            })
+            .collect();
+        let value = PossibleValue::new(name);
+        (
+            day,
+            if plain == name {
+                value
+            } else {
+                value.alias(plain)
+            },
+        )
+    }))
+}
+
 /// El nombre del mes en minúsculas, o su número con o sin cero (`6`, `06`); también `setiembre`.
 fn month_arg() -> impl TypedValueParser<Value = Month> {
     choice(Month::ALL.map(|month| {
@@ -241,6 +283,7 @@ impl CommandArg {
             Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
             Self::Config => Command::Config,
+            Self::ReducedDays { days, .. } => Command::ReducedDays(days),
             Self::Hours { year, shift, hours } => Command::Hours { year, shift, hours },
             Self::Quota { year, days } => Command::Quota { year, days },
         }
@@ -297,6 +340,18 @@ mod tests {
             (&["unmark", "4"][..], Command::Unmark(MarkId(4))),
             (&["list"][..], Command::List(None)),
             (&["config"][..], Command::Config),
+            (
+                &["reduced-days", "viernes", "lunes"][..],
+                Command::ReducedDays(vec![Weekday::Fri, Weekday::Mon]),
+            ),
+            (
+                &["reduced-days", "miercoles", "miércoles", "sabado"][..],
+                Command::ReducedDays(vec![Weekday::Wed, Weekday::Wed, Weekday::Sat]),
+            ),
+            (
+                &["reduced-days", "--ninguno"][..],
+                Command::ReducedDays(Vec::new()),
+            ),
             (&["list", "--year", "2026"][..], Command::List(Some(2026))),
             (&["day", "2026-06-08"][..], Command::Day(date(2026, 6, 8))),
             (
@@ -430,6 +485,12 @@ mod tests {
             (&["hours", "laborable", "8"][..], ErrorKind::ValueValidation),
             (&["month", "2026"][..], ErrorKind::MissingRequiredArgument),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
+            (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
+            (&["reduced-days", "friday"][..], ErrorKind::InvalidValue),
+            (
+                &["reduced-days", "viernes", "--ninguno"][..],
+                ErrorKind::ArgumentConflict,
+            ),
             (&["month", "2026", "june"][..], ErrorKind::InvalidValue),
             (&["unmark", "-1"][..], ErrorKind::UnknownArgument),
             (&["quota", "2026"][..], ErrorKind::MissingRequiredArgument),

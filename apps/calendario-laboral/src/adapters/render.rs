@@ -169,7 +169,7 @@ pub const fn month_name(month: Month) -> &'static str {
     }
 }
 
-const fn weekday_name(day: Weekday) -> &'static str {
+pub const fn weekday_name(day: Weekday) -> &'static str {
     match day {
         Weekday::Mon => "lunes",
         Weekday::Tue => "martes",
@@ -567,6 +567,7 @@ pub fn event(event: &Event) -> Message {
         Event::HoursSet { year, shift, hours } => {
             format!("Jornada {shift} de {year}: {} h.", decimal(*hours))
         }
+        Event::ReducedDaysSet(days) => format!("Jornada reducida: {}.", weekday_list(days)),
         Event::QuotaSet { year, days: quota } => {
             format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
         }
@@ -582,6 +583,7 @@ pub fn event(event: &Event) -> Message {
         | Event::AlreadyMarked(_)
         | Event::Unmarked(_)
         | Event::HoursSet { .. }
+        | Event::ReducedDaysSet(_)
         | Event::QuotaSet { .. } => None,
     };
     Message { text, warning }
@@ -1130,6 +1132,16 @@ mod tests {
                     hours: 8.5,
                 },
                 "Jornada laborable-verano de 2026: 8,5 h.",
+                None,
+            ),
+            (
+                Event::ReducedDaysSet(vec![Weekday::Mon, Weekday::Fri]),
+                "Jornada reducida: lunes y viernes.",
+                None,
+            ),
+            (
+                Event::ReducedDaysSet(Vec::new()),
+                "Jornada reducida: ninguno.",
                 None,
             ),
             (

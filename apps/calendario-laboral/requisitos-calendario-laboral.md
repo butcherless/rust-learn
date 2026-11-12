@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14, RF-15 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-16 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -96,7 +96,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-15 | Las horas se muestran con coma decimal (`8,5`) y se aceptan con coma o con punto. |
 | RN-16 | El id de un `Mark` nuevo es el mayor id del fichero más uno, o 1 si no hay `Mark`. |
 | RN-17 | Las horas de un `Shift` están entre 0 y 24. |
-| RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Solo se cambian editando `reduced_days` en el fichero; con una lista vacía no hay días reducidos por regla. |
+| RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Se cambian con `reduced-days` (RF-16) para todo el calendario; sin días, no hay días reducidos por regla. |
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
 | RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra gruesa `▌` (media celda, `15 ▌`), que deja leer mejor los números y muestra bastante color para distinguir los tonos. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
 | RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
@@ -124,6 +124,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-13 | Exportar el calendario resuelto en CSV o JSON | Could |
 | RF-14 | Sumatorio mensual (`MonthTotal`): días laborables, horas laborables y horas acumuladas del año. Se muestra como tabla de 12 meses con fila de total en `summary`, como una línea en `month` y bajo cada mes en `year` (solo horas y días, por el ancho) | Must |
 | RF-15 | Consultar la configuración: los días de `Weekend` y de `ReducedWeekday`, y de cada `Year` su `quota` y sus `Hours` | Should |
+| RF-16 | Configurar los días de la semana de la regla `ReducedWeekday`, o ninguno (RN-18) | Should |
 
 ## 5. Interfaz de consola
 
@@ -142,9 +143,11 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `hours <año> <jornada> <horas>` | 09 | `calendario hours 2026 laborable-verano 8,5` |
 | `quota <año> <días>` | 10 | `calendario quota 2026 25` |
 | `config` | 15 | `calendario config` |
+| `reduced-days <día>… \| --ninguno` | 16 | `calendario reduced-days viernes` |
 
 - **`<tipo>`** (`MarkKind`): `reducido`, `festivo` y `vacaciones`.
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
+- **`<día>`** (`Weekday`): el nombre en español, con o sin tilde (`lunes`… `domingo`, `miercoles`, `sabado`).
 - **`<mes>`** (`Month`): el nombre en español (`enero`… `diciembre`, también `setiembre`) o el número, con o sin cero delante (`6`, `06`).
 - **Argumentos opcionales:** sin año, `month`, `year` y `summary` usan el año actual, y `month` también el mes actual.
 - **Ventana (RN-22):** en un terminal, `month`, `year` y `summary` se abren a pantalla completa y se cierran con `Esc` o `q`. `--no-tui` los imprime en la consola.
@@ -270,6 +273,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-11 | RN-24: el paréntesis de la media mensual pasa de repetir la operación (`1888,5 h / 12 meses`) a dar la media en días de 8 h, que se entiende mejor como esfuerzo. Las 8 h son una referencia fija y no las 8,5 h de la jornada `Working`, para que el número no cambie al configurar las horas. |
 | 2026-11-12 | RN-25: las `Hours` pasan del `Calendar` a cada `Year`. Al ser comunes, cambiar la jornada de un año reescribía las horas de los años pasados. `hours` recibe el año, como `quota`. El JSON pasa a la versión 2, con `hours` en cada año, y la versión 1 se sigue leyendo. Un año nuevo hereda las horas del anterior, porque la jornada suele mantenerse de un año a otro. |
 | 2026-11-12 | RF-15: `config` muestra la configuración, que antes solo se veía abriendo el JSON: los días de fin de semana y de jornada reducida, y una fila por año con su cupo y las horas de cada jornada. Se imprime siempre en la consola, como `day` y `list`. |
+| 2026-11-12 | RF-16: `reduced-days` cambia los días de jornada reducida, que antes solo se cambiaban en el JSON. Para no tener ninguno hay que pedirlo con `--ninguno`, así un comando sin días no los borra por error. Como el fin de semana, es una regla común a todos los años. |
 
 ### Pendiente o posibles ampliaciones
 

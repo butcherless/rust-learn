@@ -55,6 +55,7 @@ cal mark reducido 2026-12-24
 cal unmark 1                                       # RF-03, con el id que muestra `list`
 cal hours 2026 laborable-verano 8,5                # RF-09, RN-25: las horas son de cada año; con coma o punto
 cal quota 2026 23                                  # RF-10
+cal reduced-days lunes viernes                     # RF-16; --ninguno para quitarlos
 ```
 
 ### Verificar
@@ -94,7 +95,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
   - `calendar`: `Calendar`, `Year`, `Mark`, `MarkId` y `Hours`.
     - Las `Hours` son de cada `Year` (RN-25). `with_year` las hereda con `inherited_hours`: del año anterior más cercano, si no del siguiente, y si no las de por defecto.
-    - `Calendar` guarda dos listas de `Weekday`: `weekend` y `reduced_days` (viernes por defecto, RN-18). Las dos se ordenan desde el lunes con `from_monday`.
+    - `Calendar` guarda dos listas de `Weekday`: `weekend` y `reduced_days` (viernes por defecto, RN-18; se cambian con `reduced-days`, RF-16). Las dos se ordenan desde el lunes con `from_monday`.
     - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta (RN-06).
     - El id siguiente es el máximo más uno (RN-16).
   - `resolve`:
