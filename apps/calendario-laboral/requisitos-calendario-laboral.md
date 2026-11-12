@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-18 y RN-01 a RN-25 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-19 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -127,6 +127,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-16 | Configurar los días de la semana de la regla `ReducedWeekday`, o ninguno (RN-18) | Should |
 | RF-17 | Configurar los días de la semana del `Weekend`, o ninguno (RN-04) | Should |
 | RF-18 | Modificar un `Mark` (su `MarkKind`, sus fechas o su descripción) conservando su `id`. Se aplican las reglas de `mark` (RN-01 a RN-03 y RN-11), y si queda idéntico a otro `Mark` (RN-06) es un error | Should |
+| RF-19 | Al añadir un `Year`, copiar los `Mark` `Holiday` de otro `Year` con el mismo día, mes y descripción; los que no existen en el año nuevo (29 de febrero) se saltan, y se avisa de revisar los festivos que cambian de fecha cada año | Could |
 
 ## 5. Interfaz de consola
 
@@ -134,7 +135,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 
 | Comando | RF | Ejemplo |
 |---|---|---|
-| `add-year <año>` | 01 | `calendario add-year 2027` |
+| `add-year <año> [--festivos-de <año>]` | 01, 19 | `calendario add-year 2027 --festivos-de 2026` |
 | `mark <tipo> <fecha> [<hasta>] [--desc <texto>]` | 02 | `calendario mark vacaciones 2026-06-05 2026-06-12` |
 | `unmark <id>…` | 03 | `calendario unmark 4 5` |
 | `edit <id> [--tipo <tipo>] [--desde <fecha>] [--hasta <fecha>] [--desc <texto>]` | 18 | `calendario edit 4 --hasta 2026-06-15` |
@@ -285,6 +286,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-03: `unmark` acepta varios ids (`unmark 4 5`). Es todo o nada: si un id no existe, da error y el fichero no cambia (RN-13). Un id repetido se elimina una vez. |
 | 2026-11-12 | RN-11: `quota` también avisa si el nuevo cupo queda por debajo de las vacaciones ya usadas, con el mismo aviso que al marcar; antes el exceso solo se veía después, en las vistas. |
 | 2026-11-12 | RF-18: `edit` cambia un `Mark` sin borrarlo y volverlo a crear, así conserva su `id`. Hay que indicar al menos un cambio; lo que no se indica se mantiene, y `--desc ""` quita la descripción. Si el resultado es idéntico a otro `Mark` es un error, porque no se pueden fusionar. |
+| 2026-11-12 | RF-19: `add-year --festivos-de` copia los festivos de otro año para no tener que marcarlos uno a uno. Solo se copian los `Holiday`, con la misma fecha; los que cambian cada año (Semana Santa, festivos trasladados a lunes) hay que revisarlos con `edit`, y por eso se avisa siempre. Es todo o nada, como el resto de cambios. |
 
 ### Pendiente o posibles ampliaciones
 

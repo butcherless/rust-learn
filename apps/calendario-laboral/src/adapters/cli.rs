@@ -82,6 +82,9 @@ pub enum CommandArg {
         /// Año, por ejemplo 2027.
         #[arg(value_name = "AÑO")]
         year: i32,
+        /// Copia los festivos de este año, con la misma fecha.
+        #[arg(long = "festivos-de", value_name = "AÑO", help_heading = "Opciones")]
+        holidays_from: Option<i32>,
     },
     /// Marca un día o un rango de días.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
@@ -307,7 +310,13 @@ impl CommandArg {
     /// El [`Command`] de la aplicación; `today` da el año y el mes que falten.
     pub fn into_command(self, today: NaiveDate) -> Command {
         match self {
-            Self::AddYear { year } => Command::AddYear(year),
+            Self::AddYear {
+                year,
+                holidays_from,
+            } => Command::AddYear {
+                year,
+                holidays_from,
+            },
             Self::Mark {
                 kind,
                 from,
@@ -369,7 +378,20 @@ mod tests {
     #[test]
     fn rf_01_to_rf_10_parse_the_subcommands_of_the_table() {
         [
-            (&["add-year", "2027"][..], Command::AddYear(2027)),
+            (
+                &["add-year", "2027"][..],
+                Command::AddYear {
+                    year: 2027,
+                    holidays_from: None,
+                },
+            ),
+            (
+                &["add-year", "2027", "--festivos-de", "2026"][..],
+                Command::AddYear {
+                    year: 2027,
+                    holidays_from: Some(2026),
+                },
+            ),
             (
                 &["mark", "vacaciones", "2026-06-05", "2026-06-12"][..],
                 Command::Mark {

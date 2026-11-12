@@ -546,11 +546,20 @@ pub fn report(report: &Report, marker: Marker) -> String {
 /// La confirmación de un cambio y su aviso, si lo hay.
 pub fn event(event: &Event) -> Message {
     let text = match event {
-        Event::YearAdded { year, quota } => {
-            format!(
-                "Año {year} añadido con un cupo de {} de vacaciones.",
+        Event::YearAdded {
+            year,
+            quota,
+            holidays,
+        } => {
+            let added = format!(
+                "Año {year} añadido con un cupo de {} de vacaciones",
                 days(*quota as usize)
-            )
+            );
+            match holidays {
+                Some((from, 1)) => format!("{added} y 1 festivo copiado de {from}."),
+                Some((from, count)) => format!("{added} y {count} festivos copiados de {from}."),
+                None => format!("{added}."),
+            }
         }
         Event::Marked { mark, .. } => {
             format!("Marca #{} añadida: {} {}.", mark.id, mark.kind, mark.range)
@@ -597,6 +606,12 @@ pub fn event(event: &Event) -> Message {
             "aviso: las vacaciones de {year} superan el cupo en {}",
             days(*excess)
         )),
+        Event::YearAdded {
+            holidays: Some(_), ..
+        } => Some(
+            "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes"
+                .to_owned(),
+        ),
         Event::Marked { .. }
         | Event::Edited { .. }
         | Event::YearAdded { .. }
@@ -1116,9 +1131,32 @@ mod tests {
                 Event::YearAdded {
                     year: 2027,
                     quota: 25,
+                    holidays: None,
                 },
                 "Año 2027 añadido con un cupo de 25 días de vacaciones.",
                 None,
+            ),
+            (
+                Event::YearAdded {
+                    year: 2027,
+                    quota: 25,
+                    holidays: Some((2026, 1)),
+                },
+                "Año 2027 añadido con un cupo de 25 días de vacaciones y 1 festivo copiado de 2026.",
+                Some(
+                    "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes",
+                ),
+            ),
+            (
+                Event::YearAdded {
+                    year: 2027,
+                    quota: 25,
+                    holidays: Some((2026, 9)),
+                },
+                "Año 2027 añadido con un cupo de 25 días de vacaciones y 9 festivos copiados de 2026.",
+                Some(
+                    "aviso: revisa los festivos que cambian de fecha cada año, como Semana Santa o los trasladados a lunes",
+                ),
             ),
             (
                 Event::Marked {

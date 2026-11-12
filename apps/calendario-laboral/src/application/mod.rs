@@ -14,8 +14,11 @@ use crate::domain::{
 /// Una operación pedida por el usuario.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    /// RF-01: añadir un año.
-    AddYear(i32),
+    /// RF-01: añadir un año; RF-19: con los festivos de `holidays_from`.
+    AddYear {
+        year: i32,
+        holidays_from: Option<i32>,
+    },
     /// RF-02: marcar un día, o un rango si se indica `to`.
     Mark {
         /// Lo que se marca.
@@ -95,6 +98,8 @@ pub enum Event {
         year: i32,
         /// Su cupo de vacaciones.
         quota: u32,
+        /// RF-19: el año del que se han copiado los festivos y cuántos.
+        holidays: Option<(i32, usize)>,
     },
     /// Se ha añadido un `Mark`.
     Marked {
@@ -159,13 +164,10 @@ pub struct MonthView {
 /// Ejecuta `command` sobre `calendar`. Un error deja el calendario como estaba (RN-13).
 pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainError> {
     match command {
-        Command::AddYear(year) => Ok(Outcome::Changed {
-            calendar: calendar.with_year(year)?,
-            event: Event::YearAdded {
-                year,
-                quota: DEFAULT_VACATION_QUOTA,
-            },
-        }),
+        Command::AddYear {
+            year,
+            holidays_from,
+        } => add_year(calendar, year, holidays_from),
         Command::Mark {
             kind,
             from,
@@ -257,6 +259,45 @@ fn mark(
             })
         }
     }
+}
+
+/// Añade el año y, con `holidays_from`, copia sus festivos con la misma fecha (RF-19). Los que no
+/// existen en el año nuevo, como un 29 de febrero, se saltan.
+fn add_year(
+    calendar: Calendar,
+    year: i32,
+    holidays_from: Option<i32>,
+) -> Result<Outcome, DomainError> {
+    let holidays: Vec<Mark> = holidays_from
+        .map(|from| calendar.year(from).map(|from| from.marks().to_vec()))
+        .transpose()?
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|mark| mark.kind == MarkKind::Holiday)
+        .collect();
+    let calendar = calendar.with_year(year)?;
+    let (calendar, copied) = holidays
+        .into_iter()
+        .filter_map(|mark| {
+            let from = mark.range.from().with_year(year)?;
+            let to = mark.range.to().with_year(year)?;
+            DateRange::new(from, to)
+                .ok()
+                .map(|range| (range, mark.description))
+        })
+        .try_fold((calendar, 0), |(calendar, copied), (range, description)| {
+            calendar
+                .with_mark(MarkKind::Holiday, range, description)
+                .map(|(calendar, _)| (calendar, copied + 1))
+        })?;
+    Ok(Outcome::Changed {
+        calendar,
+        event: Event::YearAdded {
+            year,
+            quota: DEFAULT_VACATION_QUOTA,
+            holidays: holidays_from.map(|from| (from, copied)),
+        },
+    })
 }
 
 /// La descripción sin espacios alrededor; en blanco, ninguna.
@@ -369,7 +410,7 @@ fn month_view(year: &Year, month: Month, days: &[ResolvedDay]) -> Result<MonthVi
 mod tests {
     use super::*;
     use crate::domain::fixtures::{calendar, date, marked, range};
-    use crate::domain::{DayKind, Origin};
+    use crate::domain::{DayKind, Origin, parse_date};
 
     fn mark_command(kind: MarkKind, from: NaiveDate, to: Option<NaiveDate>) -> Command {
         Command::Mark {
@@ -395,15 +436,106 @@ mod tests {
     }
 
     #[test]
+    fn rf_19_add_year_copies_the_holidays_of_another_year() {
+        let calendar = Calendar::default()
+            .with_year(2024)
+            .and_then(|calendar| {
+                [
+                    (
+                        MarkKind::Holiday,
+                        "2024-01-01",
+                        "2024-01-01",
+                        Some("Año nuevo"),
+                    ),
+                    (MarkKind::Holiday, "2024-02-29", "2024-02-29", None),
+                    (
+                        MarkKind::Holiday,
+                        "2024-12-24",
+                        "2024-12-26",
+                        Some("Navidad"),
+                    ),
+                    (MarkKind::Vacation, "2024-08-05", "2024-08-09", None),
+                    (MarkKind::Reduced, "2024-12-31", "2024-12-31", None),
+                ]
+                .into_iter()
+                .try_fold(calendar, |calendar, (kind, from, to, description)| {
+                    let range = DateRange::new(parse_date(from)?, parse_date(to)?)?;
+                    calendar
+                        .with_mark(kind, range, description.map(str::to_owned))
+                        .map(|(calendar, _)| calendar)
+                })
+            })
+            .expect("2024");
+        let outcome = changed(execute(
+            calendar,
+            Command::AddYear {
+                year: 2025,
+                holidays_from: Some(2024),
+            },
+        ));
+        let copied = outcome.as_ref().map(|(calendar, _)| {
+            calendar
+                .year(2025)
+                .map(|year| {
+                    year.marks()
+                        .iter()
+                        .map(|mark| {
+                            (
+                                mark.id.0,
+                                mark.kind,
+                                mark.range.to_string(),
+                                mark.description.clone(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        });
+        assert_eq!(
+            copied,
+            Some(vec![
+                (
+                    6,
+                    MarkKind::Holiday,
+                    "2025-01-01".to_owned(),
+                    Some("Año nuevo".to_owned())
+                ),
+                (
+                    7,
+                    MarkKind::Holiday,
+                    "2025-12-24 → 2025-12-26".to_owned(),
+                    Some("Navidad".to_owned())
+                ),
+            ]),
+            "solo los festivos, sin el 29 de febrero, con ids nuevos"
+        );
+        assert_eq!(
+            outcome.map(|(_, event)| event),
+            Some(Event::YearAdded {
+                year: 2025,
+                quota: 25,
+                holidays: Some((2024, 2)),
+            })
+        );
+    }
+
+    #[test]
     fn rf_01_add_year_changes_the_calendar() {
-        let outcome = changed(execute(Calendar::default(), Command::AddYear(2027)));
+        let outcome = changed(execute(
+            Calendar::default(),
+            Command::AddYear {
+                year: 2027,
+                holidays_from: None,
+            },
+        ));
         assert_eq!(
             outcome.map(|(calendar, event)| (calendar.years().len(), event)),
             Some((
                 1,
                 Event::YearAdded {
                     year: 2027,
-                    quota: 25
+                    quota: 25,
+                    holidays: None,
                 }
             ))
         );
@@ -650,7 +782,20 @@ mod tests {
                 mark_command(MarkKind::Holiday, date(2027, 3, 3), None),
                 DomainError::UnknownYear(2027),
             ),
-            (Command::AddYear(2026), DomainError::DuplicateYear(2026)),
+            (
+                Command::AddYear {
+                    year: 2026,
+                    holidays_from: None,
+                },
+                DomainError::DuplicateYear(2026),
+            ),
+            (
+                Command::AddYear {
+                    year: 2027,
+                    holidays_from: Some(2025),
+                },
+                DomainError::UnknownYear(2025),
+            ),
             (
                 Command::Unmark(vec![MarkId(3)]),
                 DomainError::UnknownMark(MarkId(3)),
