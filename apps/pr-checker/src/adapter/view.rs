@@ -87,6 +87,9 @@ pub(crate) mod fixtures {
     use crate::domain::model::{PrNumber, PrState, PrTitle, PrUrl, PullRequest};
     use crate::service::ProjectReport;
 
+    /// The address of the first sample pull request, `a/b` #1.
+    pub const FIRST_URL: &str = "https://github.com/a/b/pull/1";
+
     /// A report for `project` with the given outcome.
     pub fn report(project: &str, outcome: Result<Vec<PullRequest>, SourceError>) -> ProjectReport {
         ProjectReport {
@@ -108,7 +111,7 @@ pub(crate) mod fixtures {
 
 #[cfg(test)]
 mod tests {
-    use super::fixtures::{pull_request, report};
+    use super::fixtures::{FIRST_URL, pull_request, report};
     use super::*;
     use crate::domain::error::SourceError;
     use crate::domain::model::PrState;
@@ -145,7 +148,7 @@ mod tests {
         let reports = [report(
             "a/b",
             Ok(vec![
-                pull_request(1, PrState::Open, "https://github.com/a/b/pull/1"),
+                pull_request(1, PrState::Open, FIRST_URL),
                 pull_request(2, PrState::Draft, "https://github.com/a/b/pull/2"),
             ]),
         )];
@@ -155,7 +158,7 @@ mod tests {
                 row(
                     RowKind::OpenPullRequest,
                     ["a/b", "1", "title 1", "open"],
-                    Some("https://github.com/a/b/pull/1")
+                    Some(FIRST_URL)
                 ),
                 row(
                     RowKind::OpenPullRequest,

@@ -214,7 +214,7 @@ pub mod fixtures {
     use crate::domain::error::SourceError;
     use crate::domain::model::PrState;
 
-    pub const FIRST_URL: &str = "https://github.com/a/b/pull/1";
+    pub use crate::adapter::view::fixtures::FIRST_URL;
 
     pub fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)

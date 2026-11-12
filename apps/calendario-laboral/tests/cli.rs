@@ -4,6 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+/// El binario que compila Cargo para estos tests.
+const BIN: &str = env!("CARGO_BIN_EXE_calendario");
+
 /// Un fichero de calendario en el directorio temporal, que se borra al soltarlo.
 struct TempFile(PathBuf);
 
@@ -27,7 +30,7 @@ impl Drop for TempFile {
 }
 
 fn run(file: &TempFile, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_calendario"))
+    Command::new(BIN)
         .args(args)
         .arg("--file")
         .arg(&file.0)
@@ -82,7 +85,7 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
 fn rn_20_a_terminal_with_color_shows_bars_and_redirected_output_letters() {
     let file = TempFile::new("marker");
     run(&file, &["add-year", "2026"]);
-    let colored = Command::new(env!("CARGO_BIN_EXE_calendario"))
+    let colored = Command::new(BIN)
         .args(["month", "2026", "junio", "--file"])
         .arg(&file.0)
         .env("CLICOLOR_FORCE", "1")
@@ -258,7 +261,7 @@ fn a_corrupt_file_is_reported_and_kept() {
 #[test]
 fn the_file_can_come_from_the_environment() {
     let file = TempFile::new("env");
-    let output = Command::new(env!("CARGO_BIN_EXE_calendario"))
+    let output = Command::new(BIN)
         .args(["add-year", "2030"])
         .env("CALENDARIO_FILE", &file.0)
         .output()
