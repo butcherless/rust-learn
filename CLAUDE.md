@@ -92,6 +92,10 @@ These apply to every project; each project's `CLAUDE.md` adds its own.
 
 - Tests must not use the real network or need tokens. Use wiremock for HTTP clients and in-memory fakes for ports.
 - Share test builders instead of copying them: a `#[cfg(test)]` fixtures module for unit tests, and `tests/common/mod.rs` (included with `mod common;`) for integration tests.
+- Literals in tests:
+  - A text that several tests check (a status message, a warning) is a public constant in production. One test pins its exact value with a literal (`assert_eq!(LOADING, "Loading…")`), and the other tests use the constant. A wrong edit then fails one test, and a deliberate change touches two places.
+  - Test data with no meaning of its own (sample URLs, the binary path) is a shared test constant or fixture, not a repeated literal.
+  - External contracts (HTTP headers, API version, JSON fields) and whole expected views stay as literals in the test that specifies them: there the literal is the check, not a copy.
 - Prefer table-driven tests over near-identical test functions: an array of cases, run with `for_each`, and an `assert_eq!` message naming the case.
 
 ## Git
