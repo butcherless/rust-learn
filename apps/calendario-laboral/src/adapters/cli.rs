@@ -120,10 +120,14 @@ pub enum CommandArg {
         #[arg(value_name = "FECHA", value_parser = date_arg)]
         date: NaiveDate,
     },
-    /// Muestra un mes [por defecto: el actual].
-    #[command(help_template = HELP, next_help_heading = "Argumentos")]
+    /// Muestra un mes [por defecto: el actual; con solo el mes, del año actual].
+    #[command(
+        help_template = HELP,
+        next_help_heading = "Argumentos",
+        allow_missing_positional = true
+    )]
     Month {
-        /// Año.
+        /// Año. Con un solo argumento, ese argumento es el mes.
         #[arg(value_name = "AÑO", requires = "month", display_order = 1)]
         year: Option<i32>,
         /// Mes, por nombre o número: junio o 6.
@@ -450,13 +454,27 @@ mod tests {
     }
 
     #[test]
-    fn views_default_to_the_current_month_and_year() {
+    fn rf_06_views_default_to_the_current_month_and_year() {
         [
             (
                 &["month"][..],
                 Command::Month {
                     year: 2026,
                     month: Month::November,
+                },
+            ),
+            (
+                &["month", "junio"][..],
+                Command::Month {
+                    year: 2026,
+                    month: Month::June,
+                },
+            ),
+            (
+                &["month", "12"][..],
+                Command::Month {
+                    year: 2026,
+                    month: Month::December,
                 },
             ),
             (&["year"][..], Command::Year(2026)),
@@ -503,7 +521,7 @@ mod tests {
                 ErrorKind::InvalidValue,
             ),
             (&["hours", "laborable", "8"][..], ErrorKind::ValueValidation),
-            (&["month", "2026"][..], ErrorKind::MissingRequiredArgument),
+            (&["month", "2026"][..], ErrorKind::InvalidValue),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["reduced-days"][..], ErrorKind::MissingRequiredArgument),
             (&["list", "--year", "2026"][..], ErrorKind::UnknownArgument),

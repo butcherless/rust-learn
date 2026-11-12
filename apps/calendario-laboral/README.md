@@ -12,7 +12,7 @@ Desde la raíz del workspace (los requisitos están en su [README](../../README.
 ```bash
 cargo cal add-year 2026                            # crea el fichero con el primer cambio
 cargo cal mark vacaciones 2026-06-05 2026-06-12
-cargo cal month 2026 junio                         # sin argumentos, el mes actual
+cargo cal month 2026 junio                         # `month junio`: del año actual; sin argumentos, el mes actual
 cargo cal year 2026
 cargo cal summary 2026
 cargo cal --help                                   # y `cargo cal <comando> --help`

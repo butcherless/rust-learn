@@ -138,7 +138,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `unmark <id>` | 03 | `calendario unmark 4` |
 | `list [<año>]` | 04 | `calendario list 2026` |
 | `day <fecha>` | 05 | `calendario day 2026-06-08` |
-| `month [<año> <mes>]` | 06, 14 | `calendario month 2026 junio` |
+| `month [[<año>] <mes>]` | 06, 14 | `calendario month 2026 junio` |
 | `year [<año>]` | 07, 14 | `calendario year 2026` |
 | `summary [<año>]` | 08, 14 | `calendario summary 2026` |
 | `hours <año> <jornada> <horas>` | 09 | `calendario hours 2026 laborable-verano 8,5` |
@@ -151,7 +151,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 - **`<jornada>`** (`Shift`): `laborable`, `reducido`, `laborable-verano` y `reducido-verano`.
 - **`<día>`** (`Weekday`): el nombre en español, con o sin tilde (`lunes`… `domingo`, `miercoles`, `sabado`).
 - **`<mes>`** (`Month`): el nombre en español (`enero`… `diciembre`, también `setiembre`) o el número, con o sin cero delante (`6`, `06`).
-- **Argumentos opcionales:** sin año, `month`, `year` y `summary` usan el año actual, y `month` también el mes actual.
+- **Argumentos opcionales:** sin año, `month`, `year` y `summary` usan el año actual; `month` sin mes usa también el mes actual, y con solo el mes (`month junio`), el del año actual.
 - **Ventana (RN-22):** en un terminal, `month`, `year` y `summary` se abren a pantalla completa y se cierran con `Esc` o `q`. `--no-tui` los imprime en la consola.
 - **Fichero:** se indica con `--file <ruta>`; si no, con la variable `CALENDARIO_FILE`; y si tampoco, se usa `./calendario.json`.
 - **Salidas:**
@@ -278,6 +278,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-16: `reduced-days` cambia los días de jornada reducida, que antes solo se cambiaban en el JSON. Para no tener ninguno hay que pedirlo con `--ninguno`, así un comando sin días no los borra por error. Como el fin de semana, es una regla común a todos los años. |
 | 2026-11-12 | RF-17: `weekend` cambia los días del fin de semana, igual que `reduced-days` y también con `--ninguno`. |
 | 2026-11-12 | RF-04: `list` recibe el año como argumento posicional (`list 2026`), como `year`, `summary` y `quota`, en lugar de la opción `--year`. |
+| 2026-11-12 | RF-06: `month junio` (o `month 6`) muestra ese mes del año actual; antes había que dar también el año. Un solo argumento es siempre el mes, así que `month 2026` es un mes no válido. |
 
 ### Pendiente o posibles ampliaciones
 
