@@ -260,6 +260,22 @@ impl Calendar {
         }
     }
 
+    /// El mismo calendario sin el año `number`, y ese año con sus `Mark` (RF-20).
+    pub fn without_year(self, number: i32) -> Result<(Self, Year), DomainError> {
+        let year = self.year(number)?.clone();
+        Ok((
+            Self {
+                years: self
+                    .years
+                    .into_iter()
+                    .filter(|year| year.number != number)
+                    .collect(),
+                ..self
+            },
+            year,
+        ))
+    }
+
     /// El mismo calendario con `hours` para todos los `Shift` del año `number`, sin tocar las
     /// de los demás años (RN-25).
     pub fn with_year_hours(self, number: i32, hours: Hours) -> Result<Self, DomainError> {
@@ -634,6 +650,30 @@ mod tests {
                 "{mark:?}"
             );
         });
+    }
+
+    #[test]
+    fn rf_20_removes_a_year_with_its_marks() {
+        let calendar = marked(&[(MarkKind::Holiday, "2026-03-03", "2026-03-03")])
+            .with_year(2027)
+            .expect("2027");
+        let removed = calendar.clone().without_year(2026);
+        assert_eq!(
+            removed.as_ref().map(|(calendar, year)| (
+                calendar
+                    .years()
+                    .iter()
+                    .map(Year::number)
+                    .collect::<Vec<_>>(),
+                year.number(),
+                year.marks().len()
+            )),
+            Ok((vec![2027], 2026, 1))
+        );
+        assert_eq!(
+            calendar.without_year(2030),
+            Err(DomainError::UnknownYear(2030))
+        );
     }
 
     #[test]

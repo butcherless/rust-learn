@@ -564,6 +564,9 @@ pub fn event(event: &Event) -> Message {
         Event::Marked { mark, .. } => {
             format!("Marca #{} añadida: {} {}.", mark.id, mark.kind, mark.range)
         }
+        Event::YearRemoved { year, marks: 0 } => format!("Año {year} eliminado."),
+        Event::YearRemoved { year, marks: 1 } => format!("Año {year} eliminado, con 1 marca."),
+        Event::YearRemoved { year, marks } => format!("Año {year} eliminado, con {marks} marcas."),
         Event::Edited { mark, .. } => {
             format!(
                 "Marca #{} modificada: {} {}.",
@@ -614,6 +617,7 @@ pub fn event(event: &Event) -> Message {
         ),
         Event::Marked { .. }
         | Event::Edited { .. }
+        | Event::YearRemoved { .. }
         | Event::YearAdded { .. }
         | Event::AlreadyMarked(_)
         | Event::Unmarked(_)
@@ -1127,6 +1131,21 @@ mod tests {
             description: None,
         };
         [
+            (
+                Event::YearRemoved { year: 2025, marks: 0 },
+                "Año 2025 eliminado.",
+                None,
+            ),
+            (
+                Event::YearRemoved { year: 2025, marks: 1 },
+                "Año 2025 eliminado, con 1 marca.",
+                None,
+            ),
+            (
+                Event::YearRemoved { year: 2025, marks: 12 },
+                "Año 2025 eliminado, con 12 marcas.",
+                None,
+            ),
             (
                 Event::YearAdded {
                     year: 2027,

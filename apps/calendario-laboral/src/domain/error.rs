@@ -36,6 +36,17 @@ pub enum DomainError {
     /// El año ya está en el calendario.
     #[error("el año {0} ya existe en el calendario")]
     DuplicateYear(i32),
+    /// RF-20: eliminar un año con `Mark` necesita confirmación.
+    #[error(
+        "el año {year} tiene {}; repite el comando con --confirmar para eliminarlo con ellas",
+        marks_text(*marks)
+    )]
+    YearHasMarks {
+        /// El año.
+        year: i32,
+        /// Cuántos `Mark` tiene.
+        marks: usize,
+    },
     /// Ningún `Mark` tiene este id.
     #[error("no existe ninguna marca con id {0}")]
     UnknownMark(MarkId),
@@ -48,4 +59,11 @@ pub enum DomainError {
     /// RN-17: las horas de un `Shift` son negativas, mayores de 24 o no son un número.
     #[error("horas no válidas: {0}; deben estar entre 0 y 24")]
     InvalidHours(f64),
+}
+/// `1 marca` o `N marcas`.
+fn marks_text(marks: usize) -> String {
+    match marks {
+        1 => "1 marca".to_owned(),
+        _ => format!("{marks} marcas"),
+    }
 }

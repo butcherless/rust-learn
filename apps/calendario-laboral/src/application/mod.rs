@@ -30,6 +30,8 @@ pub enum Command {
         /// Texto opcional; un texto en blanco cuenta como ausente.
         description: Option<String>,
     },
+    /// RF-20: eliminar un año; con `Mark`, solo si está confirmado.
+    RemoveYear { year: i32, confirmed: bool },
     /// RF-18: modificar un `Mark`; lo que es `None` se mantiene.
     Edit {
         id: MarkId,
@@ -110,6 +112,8 @@ pub enum Event {
     },
     /// Ya existía un `Mark` idéntico (RN-06).
     AlreadyMarked(MarkId),
+    /// Se ha eliminado un año con sus `Mark`.
+    YearRemoved { year: i32, marks: usize },
     /// Se ha modificado un `Mark`; `excess` lleva el aviso de RN-11.
     Edited { mark: Mark, excess: usize },
     /// Se han eliminado uno o varios `Mark`, en el orden pedido.
@@ -180,6 +184,17 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
             description,
         ),
         Command::Unmark(ids) => unmark(calendar, &ids),
+        Command::RemoveYear { year, confirmed } => {
+            let marks = calendar.year(year)?.marks().len();
+            if marks > 0 && !confirmed {
+                return Err(DomainError::YearHasMarks { year, marks });
+            }
+            let (calendar, _) = calendar.without_year(year)?;
+            Ok(Outcome::Changed {
+                calendar,
+                event: Event::YearRemoved { year, marks },
+            })
+        }
         Command::Edit {
             id,
             kind,
@@ -520,6 +535,54 @@ mod tests {
     }
 
     #[test]
+    fn rf_20_rn_13_remove_year_needs_confirmation_when_it_has_marks() {
+        let with_marks = marked(&[(MarkKind::Holiday, "2026-03-03", "2026-03-03")]);
+        let remove = |calendar: &Calendar, confirmed| {
+            execute(
+                calendar.clone(),
+                Command::RemoveYear {
+                    year: 2026,
+                    confirmed,
+                },
+            )
+        };
+        assert_eq!(
+            remove(&with_marks, false),
+            Err(DomainError::YearHasMarks {
+                year: 2026,
+                marks: 1
+            })
+        );
+        assert_eq!(
+            changed(remove(&with_marks, true))
+                .map(|(calendar, event)| (calendar.years().len(), event)),
+            Some((
+                0,
+                Event::YearRemoved {
+                    year: 2026,
+                    marks: 1
+                }
+            ))
+        );
+        assert_eq!(
+            changed(remove(&calendar(), false)).map(|(_, event)| event),
+            Some(Event::YearRemoved {
+                year: 2026,
+                marks: 0
+            }),
+            "sin marcas no hace falta confirmar"
+        );
+        assert_eq!(
+            DomainError::YearHasMarks {
+                year: 2026,
+                marks: 2
+            }
+            .to_string(),
+            "el año 2026 tiene 2 marcas; repite el comando con --confirmar para eliminarlo con ellas"
+        );
+    }
+
+    #[test]
     fn rf_01_add_year_changes_the_calendar() {
         let outcome = changed(execute(
             Calendar::default(),
@@ -620,16 +683,12 @@ mod tests {
             .map(|(calendar, _)| calendar)
             .expect("mark");
         let edited = |command| {
-            changed(execute(calendar.clone(), command)).and_then(|(_, event)| match event {
-                Event::Edited { mark, excess } => Some((mark, excess)),
-                Event::YearAdded { .. }
-                | Event::Marked { .. }
-                | Event::AlreadyMarked(_)
-                | Event::Unmarked(_)
-                | Event::ReducedDaysSet(_)
-                | Event::WeekendSet(_)
-                | Event::HoursSet { .. }
-                | Event::QuotaSet { .. } => None,
+            changed(execute(calendar.clone(), command)).and_then(|(_, event)| {
+                if let Event::Edited { mark, excess } = event {
+                    Some((mark, excess))
+                } else {
+                    None
+                }
             })
         };
         let original = Mark {

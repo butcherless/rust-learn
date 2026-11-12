@@ -86,6 +86,16 @@ pub enum CommandArg {
         #[arg(long = "festivos-de", value_name = "AÑO", help_heading = "Opciones")]
         holidays_from: Option<i32>,
     },
+    /// Elimina un año con sus marcas; si tiene marcas, hay que confirmarlo.
+    #[command(help_template = HELP, next_help_heading = "Argumentos")]
+    RemoveYear {
+        /// Año.
+        #[arg(value_name = "AÑO")]
+        year: i32,
+        /// Confirma que se eliminan también sus marcas.
+        #[arg(long = "confirmar", help_heading = "Opciones")]
+        confirmed: bool,
+    },
     /// Marca un día o un rango de días.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Mark {
@@ -341,6 +351,7 @@ impl CommandArg {
                 to,
                 description,
             },
+            Self::RemoveYear { year, confirmed } => Command::RemoveYear { year, confirmed },
             Self::Unmark { ids } => Command::Unmark(ids.into_iter().map(MarkId).collect()),
             Self::List { year } => Command::List(year),
             Self::Day { date } => Command::Day(date.unwrap_or(today)),
@@ -420,6 +431,20 @@ mod tests {
                 },
             ),
             (&["unmark", "4"][..], Command::Unmark(vec![MarkId(4)])),
+            (
+                &["remove-year", "2025"][..],
+                Command::RemoveYear {
+                    year: 2025,
+                    confirmed: false,
+                },
+            ),
+            (
+                &["remove-year", "2025", "--confirmar"][..],
+                Command::RemoveYear {
+                    year: 2025,
+                    confirmed: true,
+                },
+            ),
             (
                 &["mark", "laborable", "2026-03-06"][..],
                 Command::Mark {

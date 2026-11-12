@@ -49,6 +49,7 @@ Los cambios escriben en el fichero; para probarlos sin tocar el calendario real,
 ```bash
 cal() { cargo run -q -p calendario-laboral -- --file /tmp/calendario.json "$@"; }
 cal add-year 2026                                  # RF-01; --festivos-de 2025 copia sus festivos (RF-19)
+cal remove-year 2026 --confirmar                   # RF-20; --confirmar solo si tiene marcas
 cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
 cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
 cal mark reducido 2026-12-24

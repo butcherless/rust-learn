@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-19 y RN-01 a RN-26 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-26 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -130,6 +130,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-17 | Configurar los días de la semana del `Weekend`, o ninguno (RN-04) | Should |
 | RF-18 | Modificar un `Mark` (su `MarkKind`, sus fechas o su descripción) conservando su `id`. Se aplican las reglas de `mark` (RN-01 a RN-03 y RN-11), y si queda idéntico a otro `Mark` (RN-06) es un error | Should |
 | RF-19 | Al añadir un `Year`, copiar los `Mark` `Holiday` de otro `Year` con el mismo día, mes y descripción; los que no existen en el año nuevo (29 de febrero) se saltan, y se avisa de revisar los festivos que cambian de fecha cada año | Could |
+| RF-20 | Eliminar un `Year` con su configuración y sus `Mark`. Si tiene `Mark`, hay que confirmarlo; si no, es un error que dice cuántos tiene (RN-13) | Could |
 
 ## 5. Interfaz de consola
 
@@ -138,6 +139,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | Comando | RF | Ejemplo |
 |---|---|---|
 | `add-year <año> [--festivos-de <año>]` | 01, 19 | `calendario add-year 2027 --festivos-de 2026` |
+| `remove-year <año> [--confirmar]` | 20 | `calendario remove-year 2025 --confirmar` |
 | `mark <tipo> <fecha> [<hasta>] [--desc <texto>]` | 02 | `calendario mark vacaciones 2026-06-05 2026-06-12` |
 | `unmark <id>…` | 03 | `calendario unmark 4 5` |
 | `edit <id> [--tipo <tipo>] [--desde <fecha>] [--hasta <fecha>] [--desc <texto>]` | 18 | `calendario edit 4 --hasta 2026-06-15` |
@@ -290,6 +292,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-18: `edit` cambia un `Mark` sin borrarlo y volverlo a crear, así conserva su `id`. Hay que indicar al menos un cambio; lo que no se indica se mantiene, y `--desc ""` quita la descripción. Si el resultado es idéntico a otro `Mark` es un error, porque no se pueden fusionar. |
 | 2026-11-12 | RF-19: `add-year --festivos-de` copia los festivos de otro año para no tener que marcarlos uno a uno. Solo se copian los `Holiday`, con la misma fecha; los que cambian cada año (Semana Santa, festivos trasladados a lunes) hay que revisarlos con `edit`, y por eso se avisa siempre. Es todo o nada, como el resto de cambios. |
 | 2026-11-12 | RN-26: vuelve el `MarkKind` `Working` (`laborable`) para forzar la jornada completa en un viernes concreto. Va entre `Vacation` y `Reduced` en la prioridad: gana a la jornada reducida, por regla o por marca, y no a ausencias ni fines de semana. Trabajar un sábado queda fuera: haría falta otra prioridad por encima de `Weekend`. |
+| 2026-11-12 | RF-20: `remove-year` elimina un año. Con `Mark` exige `--confirmar`, porque no se puede deshacer y un error al escribir el año borraría sus marcas; un año sin `Mark` se elimina sin más. |
 
 ### Pendiente o posibles ampliaciones
 
