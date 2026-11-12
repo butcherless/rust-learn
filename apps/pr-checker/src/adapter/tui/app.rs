@@ -1,27 +1,17 @@
 //! The terminal UI's model, following The Elm Architecture: [`message`] turns a key into a
 //! [`Message`], [`App::update`] turns the current state and a message into the next state and an
-//! [`Effect`], and [`App::view`] draws a state. All three are free of I/O, so they are tested
-//! directly; the event loop in the parent module performs the effects.
+//! [`Effect`], and [`super::view::draw`] draws a state. All three are free of I/O, so they are
+//! tested directly; the event loop in the parent module performs the effects.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, BorderType, Row, Table, TableState};
 
-use crate::adapter::view::{DisplayRow, HEADER, ORANGE, RowKind, rows};
+use crate::adapter::view::{DisplayRow, rows};
 use crate::domain::model::PrUrl;
 use crate::service::ProjectReport;
 
-const TITLE: &str = " Open pull requests ";
-const HELP: &str = "↑/↓ move · Enter open in browser · r refresh · q quit";
 const LOADING: &str = "Loading…";
 const NOT_A_PULL_REQUEST: &str = "This row is not a pull request";
 const SAFE_SCHEME: &str = "https://";
-const HIGHLIGHT_SYMBOL: &str = "▶ ";
-const NUMBER_WIDTH: u16 = 6;
-const STATE_WIDTH: u16 = 6;
 
 /// A change of the selected row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +74,8 @@ enum Status {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct App {
     reports: Vec<ProjectReport>,
+    /// The rows of `reports`, computed once when they load instead of on every key and draw.
+    rows: Vec<DisplayRow>,
     selected: Option<usize>,
     status: Status,
 }
@@ -104,6 +96,11 @@ pub fn message(key: KeyEvent) -> Option<Message> {
 }
 
 impl App {
+    /// The rows shown, one per pull request or per project without any.
+    pub fn rows(&self) -> &[DisplayRow] {
+        &self.rows
+    }
+
     /// The index of the selected row.
     pub fn selected(&self) -> Option<usize> {
         self.selected
@@ -147,9 +144,11 @@ impl App {
 
     fn loaded(self, reports: Vec<ProjectReport>) -> Self {
         // Keeps the selection on the same line when it still exists.
-        let selected = clamp(self.selected.unwrap_or(0), rows(&reports).len());
+        let rows = rows(&reports);
+        let selected = clamp(self.selected.unwrap_or(0), rows.len());
         Self {
             reports,
+            rows,
             selected,
             status: Status::Summary,
         }
@@ -163,15 +162,15 @@ impl App {
             Move::First => 0,
             Move::Last => usize::MAX,
         };
-        let selected = clamp(target, rows(&self.reports).len());
+        let selected = clamp(target, self.rows.len());
         Self { selected, ..self }
     }
 
     fn open_selected(self) -> (Self, Effect) {
         let url = self
             .selected
-            .and_then(|index| rows(&self.reports).into_iter().nth(index))
-            .and_then(|row| row.url);
+            .and_then(|index| self.rows.get(index))
+            .and_then(|row| row.url.clone());
         match url {
             // The address comes from the API, so only web pages are handed to the system opener.
             Some(url) if url.as_str().starts_with(SAFE_SCHEME) => (self, Effect::Open(url)),
@@ -179,71 +178,11 @@ impl App {
             None => (self.with_status(Status::NotAPullRequest), Effect::None),
         }
     }
-
-    /// Draws the whole screen.
-    pub fn view(&self, frame: &mut Frame) {
-        let [table_area, status_area, help_area] = Layout::vertical([
-            Constraint::Fill(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .areas(frame.area());
-        let display_rows = rows(&self.reports);
-        // The selection is part of the model; ratatui derives the scroll offset from it.
-        let mut table_state = TableState::default().with_selected(self.selected);
-
-        frame.render_stateful_widget(table(&display_rows), table_area, &mut table_state);
-        frame.render_widget(Line::from(self.status()), status_area);
-        frame.render_widget(Line::from(HELP).dim(), help_area);
-    }
 }
 
 /// The index `index` limited to the last of `len` rows, or `None` when there are no rows.
 fn clamp(index: usize, len: usize) -> Option<usize> {
     len.checked_sub(1).map(|last| index.min(last))
-}
-
-fn table(display_rows: &[DisplayRow]) -> Table<'static> {
-    let body = display_rows
-        .iter()
-        .map(|row| Row::new(row.cells.clone()).style(Style::new().fg(color(row.kind))));
-    Table::new(body, column_widths(display_rows))
-        .header(Row::new(HEADER).style(Style::new().bold()))
-        .block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title(TITLE),
-        )
-        .row_highlight_style(Style::new().add_modifier(Modifier::REVERSED))
-        .highlight_symbol(HIGHLIGHT_SYMBOL)
-}
-
-/// The project column fits its longest entry; the title takes the remaining space.
-fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 4] {
-    let project_width = display_rows
-        .iter()
-        .map(|row| row.cells[0].chars().count())
-        .chain([HEADER[0].len()])
-        .max()
-        .and_then(|width| u16::try_from(width).ok())
-        .unwrap_or(u16::MAX);
-    [
-        Constraint::Length(project_width),
-        Constraint::Length(NUMBER_WIDTH),
-        Constraint::Fill(1),
-        Constraint::Length(STATE_WIDTH),
-    ]
-}
-
-fn color(kind: RowKind) -> Color {
-    match kind {
-        RowKind::NoPullRequests => Color::Green,
-        RowKind::OpenPullRequest => {
-            let (r, g, b) = ORANGE;
-            Color::Rgb(r, g, b)
-        }
-        RowKind::Failed => Color::Red,
-    }
 }
 
 fn summary(reports: &[ProjectReport]) -> String {
@@ -267,27 +206,24 @@ fn summary(reports: &[ProjectReport]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
-
+pub mod fixtures {
     use super::*;
     use crate::adapter::view::fixtures::{pull_request, report};
     use crate::domain::error::SourceError;
     use crate::domain::model::PrState;
 
-    const FIRST_URL: &str = "https://github.com/a/b/pull/1";
+    pub const FIRST_URL: &str = "https://github.com/a/b/pull/1";
 
-    fn key(code: KeyCode) -> KeyEvent {
+    pub fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
-    fn url(text: &str) -> PrUrl {
+    pub fn url(text: &str) -> PrUrl {
         PrUrl(text.to_owned())
     }
 
     /// Rows: 0 = a/b PR #1, 1 = a/b PR #2 (http), 2 = c/d without PRs, 3 = e/f failed.
-    fn reports() -> Vec<ProjectReport> {
+    pub fn reports() -> Vec<ProjectReport> {
         vec![
             report(
                 "a/b",
@@ -302,30 +238,26 @@ mod tests {
     }
 
     /// Applies `messages` in order, returning the final state and the last effect.
-    fn run(app: App, messages: impl IntoIterator<Item = Message>) -> (App, Effect) {
+    pub fn run(app: App, messages: impl IntoIterator<Item = Message>) -> (App, Effect) {
         messages
             .into_iter()
             .fold((app, Effect::None), |(app, _), message| app.update(message))
     }
 
-    fn loaded() -> App {
+    pub fn loaded() -> App {
         run(App::default(), [Message::Loaded(reports())]).0
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use super::fixtures::{FIRST_URL, key, loaded, reports, run, url};
+    use crate::adapter::view::fixtures::report;
 
     fn moves(steps: impl IntoIterator<Item = Move>) -> App {
         run(loaded(), steps.into_iter().map(Message::Move)).0
-    }
-
-    fn screen(app: &App) -> String {
-        let mut terminal = Terminal::new(TestBackend::new(70, 10)).unwrap();
-        terminal.draw(|frame| app.view(frame)).unwrap();
-        terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect()
     }
 
     #[test]
@@ -349,6 +281,12 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(key, expected)| assert_eq!(message(key), expected, "key: {key:?}"));
+    }
+
+    #[test]
+    fn rows_are_computed_when_the_reports_load() {
+        assert_eq!(loaded().rows(), rows(&reports()));
+        assert!(App::default().rows().is_empty());
     }
 
     #[test]
@@ -451,21 +389,5 @@ mod tests {
             ))
             .0;
         assert_eq!(failed.status(), "Cannot open the browser: no browser");
-    }
-
-    #[test]
-    fn draws_rows_status_and_help() {
-        let screen = screen(&loaded());
-        [
-            "Open pull requests",
-            "Project",
-            "title 1",
-            "no open pull requests",
-            "error: repository not found",
-            "2 open pull requests",
-            "q quit",
-        ]
-        .into_iter()
-        .for_each(|text| assert!(screen.contains(text), "missing {text:?} in {screen}"));
     }
 }

@@ -46,10 +46,11 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
   - `tui`: the `--tui` UI.
 - **`main.rs`**: composition root. Startup errors exit with 2, project failures with 1. It hardcodes `DEFAULT_BASE_URL`, so tests exercise `GithubClient::new(&server.uri(), ...)` directly.
 
-`tui::app` follows The Elm Architecture, as ratatui recommends:
+`tui::app` and `tui::view` follow The Elm Architecture, as ratatui recommends, split like `severance-pay-calculator`:
 - `message(key)` maps a key to a `Message`.
 - `App::update(self, Message) -> (App, Effect)` consumes the state and returns the next one.
-- `App::view(&self)` only draws. The selection is plain data; `view` builds a fresh `TableState` from it.
+- `App` keeps the display rows, computed once when the reports load, so moving and drawing don't rebuild them.
+- `tui::view::draw(&App, frame)` only draws. The selection is plain data; `draw` builds a fresh `TableState` from it.
 
 `tui::run` is the only code with side effects. It performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and sends the result back as a `Message`, so tests never touch a terminal or a browser. Rendering is tested with ratatui's `TestBackend`.
 
@@ -63,7 +64,7 @@ The shared rules are in the root `CLAUDE.md`. In this project:
 ### Tests
 
 - Tests must not need `GITHUB_TOKEN`. Use wiremock for `GithubClient` and an in-memory fake for `PullRequestSource`.
-- Shared builders: `view::fixtures` (`#[cfg(test)]`) for unit tests, and `tests/common/mod.rs` for integration tests.
+- Shared builders: `view::fixtures` and `tui::app::fixtures` (`#[cfg(test)]`) for unit tests, and `tests/common/mod.rs` for integration tests.
 - The full status-to-error table is unit tested on `map_status`. Wiremock tests only check the wiring.
 - `tests/cli_exit_codes.rs` runs the compiled binary (`CARGO_BIN_EXE_pr-checker`) for startup errors only, which stop before any HTTP call. Config files used by tests live in `tests/fixtures/`.
 

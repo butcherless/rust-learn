@@ -3,6 +3,7 @@
 //! [`app`] holds the pure model; this module is the event loop that performs its effects.
 
 pub mod app;
+pub mod view;
 
 use std::io;
 
@@ -56,7 +57,7 @@ async fn fetch<S: PullRequestSource>(
     source: &S,
     projects: &[Project],
 ) -> io::Result<Message> {
-    terminal.draw(|frame| app.view(frame))?;
+    terminal.draw(|frame| view::draw(app, frame))?;
     let reports = list_open_prs(source, projects.to_vec(), MAX_CONCURRENCY).await;
     Ok(Message::Loaded(reports))
 }
@@ -73,7 +74,7 @@ async fn next_message(
     app: &App,
     events: &mut EventStream,
 ) -> io::Result<Option<Message>> {
-    terminal.draw(|frame| app.view(frame))?;
+    terminal.draw(|frame| view::draw(app, frame))?;
     Ok(match events.next().await.transpose()? {
         Some(event) => event.as_key_press_event().and_then(message),
         None => Some(Message::Quit),
