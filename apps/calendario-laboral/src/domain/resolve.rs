@@ -123,7 +123,7 @@ fn resolve_marks(calendar: &Calendar, year: &Year, date: NaiveDate) -> ResolvedD
     ResolvedDay {
         date,
         kind,
-        hours: kind.shift().map_or(0.0, |shift| calendar.hours().of(shift)),
+        hours: kind.shift().map_or(0.0, |shift| year.hours().of(shift)),
         origin: winner.map_or(Origin::Default, |(_, origin, _)| origin),
         description: winner.and_then(|(_, _, description)| description.map(str::to_owned)),
     }
@@ -286,7 +286,7 @@ fn month_totals(days: &[ResolvedDay]) -> Vec<MonthTotal> {
 mod tests {
     use super::*;
     use crate::domain::fixtures::{calendar, date, marked};
-    use crate::domain::{DateRange, Hours, Shift};
+    use crate::domain::{DateRange, Shift};
 
     fn kind_of(calendar: &Calendar, day: NaiveDate) -> Result<(DayKind, Origin), DomainError> {
         resolve_day(calendar, day).map(|day| (day.kind, day.origin))
@@ -535,8 +535,7 @@ mod tests {
             (MarkKind::Vacation, "2026-06-05", "2026-06-12"),
             (MarkKind::Reduced, "2026-12-24", "2026-12-24"),
             (MarkKind::Reduced, "2026-07-31", "2026-07-31"),
-        ])
-        .with_hours(Hours::default());
+        ]);
         let summary = summarize(&calendar, 2026);
         assert_eq!(
             summary.as_ref().map(|summary| summary.counts),
@@ -573,8 +572,8 @@ mod tests {
             (MarkKind::Vacation, "2026-06-12", "2026-06-12"),
             (MarkKind::Reduced, "2026-06-19", "2026-06-19"),
         ])
-        .with_shift_hours(Shift::Reduced, 7.0)
-        .and_then(|calendar| calendar.with_shift_hours(Shift::SummerReduced, 5.0))
+        .with_shift_hours(2026, Shift::Reduced, 7.0)
+        .and_then(|calendar| calendar.with_shift_hours(2026, Shift::SummerReduced, 5.0))
         .expect("hours");
         let resolved =
             |day| resolve_day(&calendar, day).map(|day| (day.kind, day.hours, day.origin));
@@ -619,9 +618,27 @@ mod tests {
     }
 
     #[test]
+    fn rn_25_changing_the_hours_of_a_year_leaves_the_other_years_alone() {
+        let before = calendar().with_year(2027).expect("2027");
+        let after = before
+            .clone()
+            .with_shift_hours(2027, Shift::Working, 7.0)
+            .expect("hours");
+        let hours = |calendar: &Calendar, year| {
+            summarize(calendar, year).map(|summary| summary.working_hours)
+        };
+        assert_eq!(hours(&after, 2026), hours(&before, 2026), "2026 no cambia");
+        assert_ne!(hours(&after, 2027), hours(&before, 2027), "2027 sí");
+        assert_eq!(
+            resolve_day(&after, date(2027, 3, 3)).map(|day| day.hours),
+            Ok(7.0)
+        );
+    }
+
+    #[test]
     fn rn_09_working_hours_use_the_configured_shifts() {
         let calendar = marked(&[(MarkKind::Vacation, "2026-01-02", "2026-01-02")])
-            .with_shift_hours(Shift::SummerWorking, 7.0);
+            .with_shift_hours(2026, Shift::SummerWorking, 7.0);
         assert_eq!(
             calendar
                 .and_then(|calendar| resolve_day(&calendar, date(2026, 7, 1)))
@@ -664,8 +681,8 @@ mod tests {
                 (MarkKind::Reduced, "2026-07-31", "2026-08-05"),
             ]),
             calendar()
-                .with_shift_hours(Shift::SummerWorking, 7.5)
-                .and_then(|calendar| calendar.with_shift_hours(Shift::SummerReduced, 7.0))
+                .with_shift_hours(2026, Shift::SummerWorking, 7.5)
+                .and_then(|calendar| calendar.with_shift_hours(2026, Shift::SummerReduced, 7.0))
                 .expect("hours"),
         ]
         .into_iter()

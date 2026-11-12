@@ -44,8 +44,8 @@ pub enum Command {
     Year(i32),
     /// RF-08: resumir un año.
     Summary(i32),
-    /// RF-09: configurar las horas de un `Shift`.
-    Hours(Shift, f64),
+    /// RF-09: configurar las horas de un `Shift` en un `Year` (RN-25).
+    Hours { year: i32, shift: Shift, hours: f64 },
     /// RF-10: configurar el cupo de vacaciones de un año.
     Quota {
         /// El año.
@@ -92,8 +92,8 @@ pub enum Event {
     AlreadyMarked(MarkId),
     /// Se ha eliminado un `Mark`.
     Unmarked(Mark),
-    /// Se han configurado las horas de un `Shift`.
-    HoursSet(Shift, f64),
+    /// Se han configurado las horas de un `Shift` en un `Year`.
+    HoursSet { year: i32, shift: Shift, hours: f64 },
     /// Se ha configurado el cupo de un año.
     QuotaSet {
         /// El año.
@@ -184,9 +184,9 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
-        Command::Hours(shift, hours) => Ok(Outcome::Changed {
-            calendar: calendar.with_shift_hours(shift, hours)?,
-            event: Event::HoursSet(shift, hours),
+        Command::Hours { year, shift, hours } => Ok(Outcome::Changed {
+            calendar: calendar.with_shift_hours(year, shift, hours)?,
+            event: Event::HoursSet { year, shift, hours },
         }),
         Command::Quota { year, days } => Ok(Outcome::Changed {
             calendar: calendar.with_quota(year, days)?,
@@ -426,8 +426,20 @@ mod tests {
             (Command::Year(2027), DomainError::UnknownYear(2027)),
             (Command::Summary(2027), DomainError::UnknownYear(2027)),
             (
-                Command::Hours(Shift::Reduced, 25.0),
+                Command::Hours {
+                    year: 2026,
+                    shift: Shift::Reduced,
+                    hours: 25.0,
+                },
                 DomainError::InvalidHours(25.0),
+            ),
+            (
+                Command::Hours {
+                    year: 2027,
+                    shift: Shift::Reduced,
+                    hours: 6.0,
+                },
+                DomainError::UnknownYear(2027),
             ),
             (
                 Command::Quota {
@@ -598,11 +610,27 @@ mod tests {
     fn rf_09_rf_10_set_hours_and_quota() {
         let hours = changed(execute(
             calendar(),
-            Command::Hours(Shift::SummerWorking, 7.5),
+            Command::Hours {
+                year: 2026,
+                shift: Shift::SummerWorking,
+                hours: 7.5,
+            },
         ));
         assert_eq!(
-            hours.map(|(calendar, event)| (calendar.hours().of(Shift::SummerWorking), event)),
-            Some((7.5, Event::HoursSet(Shift::SummerWorking, 7.5)))
+            hours.map(|(calendar, event)| (
+                calendar
+                    .year(2026)
+                    .map(|year| year.hours().of(Shift::SummerWorking)),
+                event
+            )),
+            Some((
+                Ok(7.5),
+                Event::HoursSet {
+                    year: 2026,
+                    shift: Shift::SummerWorking,
+                    hours: 7.5
+                }
+            ))
         );
         let quota = changed(execute(
             calendar(),

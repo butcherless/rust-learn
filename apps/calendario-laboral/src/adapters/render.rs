@@ -506,7 +506,9 @@ pub fn event(event: &Event) -> Message {
                 mark.id, mark.kind, mark.range
             )
         }
-        Event::HoursSet(shift, hours) => format!("Jornada {shift}: {} h.", decimal(*hours)),
+        Event::HoursSet { year, shift, hours } => {
+            format!("Jornada {shift} de {year}: {} h.", decimal(*hours))
+        }
         Event::QuotaSet { year, days: quota } => {
             format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
         }
@@ -521,7 +523,7 @@ pub fn event(event: &Event) -> Message {
         | Event::YearAdded { .. }
         | Event::AlreadyMarked(_)
         | Event::Unmarked(_)
-        | Event::HoursSet(..)
+        | Event::HoursSet { .. }
         | Event::QuotaSet { .. } => None,
     };
     Message { text, warning }
@@ -1013,8 +1015,12 @@ mod tests {
                 None,
             ),
             (
-                Event::HoursSet(Shift::SummerWorking, 8.5),
-                "Jornada laborable-verano: 8,5 h.",
+                Event::HoursSet {
+                    year: 2026,
+                    shift: Shift::SummerWorking,
+                    hours: 8.5,
+                },
+                "Jornada laborable-verano de 2026: 8,5 h.",
                 None,
             ),
             (

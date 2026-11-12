@@ -17,8 +17,9 @@ use crate::domain::{
     WEEK, parse_date,
 };
 
-/// La versión del formato que este programa lee y escribe.
-pub const VERSION: u32 = 1;
+/// La versión del formato que este programa escribe. Lee también las anteriores: la 1 tenía
+/// unas `hours` comunes en la raíz, que se aplican a los años sin las suyas (RN-25).
+pub const VERSION: u32 = 2;
 
 /// El texto del fichero no es un calendario válido.
 #[derive(Debug, Error)]
@@ -27,7 +28,7 @@ pub enum DecodeError {
     #[error("{0}")]
     Json(#[from] serde_json::Error),
     /// El fichero lo escribió otra versión.
-    #[error("versión {0} no soportada; se esperaba la {VERSION}")]
+    #[error("versión {0} no soportada; se esperaba la {VERSION} o anterior")]
     Version(u32),
     /// Un día de `weekend` o de `reduced_days` no es un nombre de día en inglés.
     #[error("día de la semana no válido: «{0}»; usa monday, tuesday… sunday")]
@@ -73,8 +74,9 @@ struct FileDto {
     weekend: Vec<String>,
     #[serde(default = "default_reduced_days")]
     reduced_days: Vec<String>,
-    #[serde(default)]
-    hours: HoursDto,
+    /// Solo en la versión 1: las horas comunes a todos los años.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hours: Option<HoursDto>,
     #[serde(default)]
     years: Vec<YearDto>,
 }
@@ -85,12 +87,6 @@ struct HoursDto {
     reducido: f64,
     laborable_verano: f64,
     reducido_verano: f64,
-}
-
-impl Default for HoursDto {
-    fn default() -> Self {
-        Self::from(Hours::default())
-    }
 }
 
 impl From<Hours> for HoursDto {
@@ -113,6 +109,15 @@ impl HoursDto {
             Shift::SummerReduced => self.reducido_verano,
         }
     }
+
+    /// Las `Hours`, comprobando que cada valor esté entre 0 y 24 (RN-17).
+    fn to_hours(&self) -> Result<Hours, DomainError> {
+        Shift::ALL
+            .into_iter()
+            .try_fold(Hours::default(), |hours, shift| {
+                hours.with(shift, self.of(shift))
+            })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,6 +125,8 @@ struct YearDto {
     year: i32,
     #[serde(default = "default_quota")]
     vacation_quota: u32,
+    #[serde(default)]
+    hours: Option<HoursDto>,
     #[serde(default)]
     marks: Vec<MarkDto>,
 }
@@ -231,24 +238,28 @@ impl TryFrom<FileDto> for Calendar {
     type Error = DecodeError;
 
     fn try_from(dto: FileDto) -> Result<Self, Self::Error> {
-        if dto.version != VERSION {
+        if !(1..=VERSION).contains(&dto.version) {
             return Err(DecodeError::Version(dto.version));
         }
         let weekend = parse_weekdays(&dto.weekend)?;
         let reduced_days = parse_weekdays(&dto.reduced_days)?;
-        let hours = Shift::ALL
-            .into_iter()
-            .try_fold(Hours::default(), |hours, shift| {
-                hours.with(shift, dto.hours.of(shift))
-            })?;
+        // Las de la raíz (versión 1) se comprueban aunque no haya años.
+        let common = dto.hours.as_ref().map(HoursDto::to_hours).transpose()?;
         let base = Self::default()
             .with_weekend(&weekend)
-            .with_reduced_days(&reduced_days)
-            .with_hours(hours);
+            .with_reduced_days(&reduced_days);
         Ok(dto.years.into_iter().try_fold(base, |calendar, year| {
+            let hours = year
+                .hours
+                .as_ref()
+                .map(HoursDto::to_hours)
+                .transpose()?
+                .or(common)
+                .unwrap_or_default();
             let calendar = calendar
                 .with_year(year.year)?
-                .with_quota(year.year, year.vacation_quota)?;
+                .with_quota(year.year, year.vacation_quota)?
+                .with_year_hours(year.year, hours)?;
             year.marks.into_iter().try_fold(calendar, |calendar, mark| {
                 calendar.restore_mark(mark.try_into()?)
             })
@@ -262,13 +273,14 @@ impl From<&Calendar> for FileDto {
             version: VERSION,
             weekend: weekday_names(calendar.weekend()),
             reduced_days: weekday_names(calendar.reduced_days()),
-            hours: calendar.hours().into(),
+            hours: None,
             years: calendar
                 .years()
                 .iter()
                 .map(|year| YearDto {
                     year: year.number(),
                     vacation_quota: year.vacation_quota(),
+                    hours: Some(year.hours().into()),
                     marks: year.marks().iter().map(MarkDto::from).collect(),
                 })
                 .collect(),
@@ -322,16 +334,18 @@ pub fn save(path: &Path, calendar: &Calendar) -> Result<(), StoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::Year;
     use crate::domain::fixtures::{date, marked};
 
     const EXAMPLE: &str = r#"{
-  "version": 1,
+  "version": 2,
   "weekend": ["saturday", "sunday"],
-  "hours": { "laborable": 8.5, "reducido": 6.0, "laborable_verano": 8.5, "reducido_verano": 6.0 },
+  "reduced_days": ["friday"],
   "years": [
     {
       "year": 2026,
       "vacation_quota": 25,
+      "hours": { "laborable": 8.5, "reducido": 6.0, "laborable_verano": 8.5, "reducido_verano": 6.0 },
       "marks": [
         { "id": 1, "kind": "festivo", "from": "2026-03-03", "to": "2026-03-03", "description": "Fiesta local" },
         { "id": 2, "kind": "vacaciones", "from": "2026-06-05", "to": "2026-06-12" }
@@ -350,10 +364,11 @@ mod tests {
         let marks: Vec<Mark> = calendar.marks().cloned().collect();
         assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
         assert_eq!(calendar.reduced_days(), [Weekday::Fri]);
-        assert_eq!(calendar.hours(), Hours::default());
         assert_eq!(
-            calendar.year(2026).map(|year| year.vacation_quota()),
-            Ok(25)
+            calendar
+                .year(2026)
+                .map(|year| (year.vacation_quota(), year.hours())),
+            Ok((25, Hours::default()))
         );
         assert_eq!(
             marks,
@@ -382,9 +397,10 @@ mod tests {
         ])
         .with_weekend(&[Weekday::Fri, Weekday::Sat])
         .with_reduced_days(&[Weekday::Mon, Weekday::Thu])
-        .with_shift_hours(Shift::SummerReduced, 5.5)
+        .with_shift_hours(2026, Shift::SummerReduced, 5.5)
         .and_then(|calendar| calendar.with_quota(2026, 23))
         .and_then(|calendar| calendar.with_year(2027))
+        .and_then(|calendar| calendar.with_shift_hours(2027, Shift::Working, 8.0))
         .expect("calendar");
         let json = encode(&calendar).expect("encoded");
         assert_eq!(decode(&json).ok(), Some(calendar));
@@ -394,13 +410,43 @@ mod tests {
             "{json}"
         );
         assert!(!json.contains("description"), "{json}");
+        assert!(json.starts_with("{\n  \"version\": 2,"), "{json}");
+    }
+
+    #[test]
+    fn rn_25_version_1_common_hours_apply_to_every_year() {
+        let calendar = decode(
+            r#"{ "version": 1,
+                 "hours": { "laborable": 8, "reducido": 7, "laborable_verano": 7.5, "reducido_verano": 5 },
+                 "years": [{ "year": 2026 }, { "year": 2027 }] }"#,
+        )
+        .expect("version 1");
+        let expected = Hours::default()
+            .with(Shift::Working, 8.0)
+            .and_then(|hours| hours.with(Shift::Reduced, 7.0))
+            .and_then(|hours| hours.with(Shift::SummerWorking, 7.5))
+            .and_then(|hours| hours.with(Shift::SummerReduced, 5.0))
+            .expect("hours");
+        [2026, 2027].into_iter().for_each(|number| {
+            assert_eq!(
+                calendar.year(number).map(Year::hours),
+                Ok(expected),
+                "{number}"
+            );
+        });
+        let json = encode(&calendar).expect("encoded");
+        assert!(
+            json.contains("\"version\": 2"),
+            "se guarda en la versión 2: {json}"
+        );
+        assert_eq!(decode(&json).ok(), Some(calendar));
     }
 
     #[test]
     fn rf_11_missing_fields_take_the_defaults() {
-        let calendar = decode(r#"{ "version": 1, "years": [{ "year": 2026 }] }"#).expect("valid");
+        let calendar = decode(r#"{ "version": 2, "years": [{ "year": 2026 }] }"#).expect("valid");
         assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
-        assert_eq!(calendar.hours(), Hours::default());
+        assert_eq!(calendar.year(2026).map(Year::hours), Ok(Hours::default()));
         assert_eq!(
             calendar.year(2026).map(|year| year.vacation_quota()),
             Ok(25)
@@ -416,7 +462,7 @@ mod tests {
         };
         [
             ("{".to_owned(), "EOF while parsing an object at line 1 column 1"),
-            (r#"{ "version": 2 }"#.to_owned(), "versión 2 no soportada; se esperaba la 1"),
+            (r#"{ "version": 3 }"#.to_owned(), "versión 3 no soportada; se esperaba la 2 o anterior"),
             (
                 r#"{ "version": 1, "weekend": ["sabado"] }"#.to_owned(),
                 "día de la semana no válido: «sabado»; usa monday, tuesday… sunday",
@@ -429,6 +475,11 @@ mod tests {
                 r#"{ "version": 1, "hours": { "laborable": 30, "reducido": 6, "laborable_verano": 8.5, "reducido_verano": 6 } }"#
                     .to_owned(),
                 "horas no válidas: 30; deben estar entre 0 y 24",
+            ),
+            (
+                r#"{ "version": 2, "years": [{ "year": 2026, "hours": { "laborable": 8, "reducido": -1, "laborable_verano": 8.5, "reducido_verano": 6 } }] }"#
+                    .to_owned(),
+                "horas no válidas: -1; deben estar entre 0 y 24",
             ),
             (
                 r#"{ "version": 1, "years": [{ "year": 2026 }, { "year": 2026 }] }"#.to_owned(),
@@ -494,7 +545,7 @@ mod tests {
         assert_eq!(
             invalid.err(),
             Some(format!(
-                "el fichero «{}» no es válido: versión 9 no soportada; se esperaba la 1",
+                "el fichero «{}» no es válido: versión 9 no soportada; se esperaba la 2 o anterior",
                 path.display()
             ))
         );

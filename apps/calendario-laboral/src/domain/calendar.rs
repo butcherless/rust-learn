@@ -103,21 +103,28 @@ pub struct Mark {
     pub description: Option<String>,
 }
 
-/// Un año del calendario con su cupo de vacaciones y sus `Mark`.
+/// Un año del calendario con su cupo de vacaciones, sus `Hours` y sus `Mark`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Year {
     number: i32,
     vacation_quota: u32,
+    hours: Hours,
     marks: Vec<Mark>,
 }
 
 impl Year {
-    const fn new(number: i32) -> Self {
+    const fn new(number: i32, hours: Hours) -> Self {
         Self {
             number,
             vacation_quota: DEFAULT_VACATION_QUOTA,
+            hours,
             marks: Vec::new(),
         }
+    }
+
+    /// Las horas de cada `Shift` en este año (RN-25).
+    pub const fn hours(&self) -> Hours {
+        self.hours
     }
 
     /// El número del año.
@@ -180,7 +187,6 @@ pub enum Marking {
 pub struct Calendar {
     weekend: Vec<Weekday>,
     reduced_days: Vec<Weekday>,
-    hours: Hours,
     years: Vec<Year>,
 }
 
@@ -191,7 +197,6 @@ impl Default for Calendar {
         Self {
             weekend: vec![Weekday::Sat, Weekday::Sun],
             reduced_days: vec![Weekday::Fri],
-            hours: Hours::default(),
             years: Vec::new(),
         }
     }
@@ -206,11 +211,6 @@ impl Calendar {
     /// Los días de la regla `ReducedWeekday`, desde el lunes (RN-18).
     pub fn reduced_days(&self) -> &[Weekday] {
         &self.reduced_days
-    }
-
-    /// Las horas de los `Shift`.
-    pub const fn hours(&self) -> Hours {
-        self.hours
     }
 
     /// Los años, en orden ascendente.
@@ -260,16 +260,29 @@ impl Calendar {
         }
     }
 
-    /// El mismo calendario con `hours` para todos los `Shift`.
-    #[must_use]
-    pub fn with_hours(self, hours: Hours) -> Self {
-        Self { hours, ..self }
+    /// El mismo calendario con `hours` para todos los `Shift` del año `number`, sin tocar las
+    /// de los demás años (RN-25).
+    pub fn with_year_hours(self, number: i32, hours: Hours) -> Result<Self, DomainError> {
+        self.update_year(number, |year| Year { hours, ..year })
     }
 
-    /// El mismo calendario con `hours` para `shift` (RF-09).
-    pub fn with_shift_hours(self, shift: Shift, hours: f64) -> Result<Self, DomainError> {
-        let hours = self.hours.with(shift, hours)?;
-        Ok(self.with_hours(hours))
+    /// El mismo calendario con `hours` para `shift` en el año `number` (RF-09, RN-25).
+    pub fn with_shift_hours(
+        self,
+        number: i32,
+        shift: Shift,
+        hours: f64,
+    ) -> Result<Self, DomainError> {
+        let hours = self.year(number)?.hours.with(shift, hours)?;
+        self.with_year_hours(number, hours)
+    }
+
+    /// Las `Hours` que hereda un `Year` nuevo: las del anterior más cercano; si no hay, las del
+    /// siguiente; y sin años, las de por defecto (RN-25).
+    fn inherited_hours(&self, number: i32) -> Hours {
+        let previous = self.years.iter().rev().find(|year| year.number < number);
+        let next = self.years.iter().find(|year| year.number > number);
+        previous.or(next).map_or_else(Hours::default, Year::hours)
     }
 
     /// El mismo calendario con el año `number`, el cupo por defecto y sin `Mark` (RF-01).
@@ -278,6 +291,7 @@ impl Calendar {
         if self.year(number).is_ok() {
             return Err(DomainError::DuplicateYear(number));
         }
+        let year = Year::new(number, self.inherited_hours(number));
         let (before, after): (Vec<Year>, Vec<Year>) = self
             .years
             .into_iter()
@@ -285,7 +299,7 @@ impl Calendar {
         Ok(Self {
             years: before
                 .into_iter()
-                .chain(iter::once(Year::new(number)))
+                .chain(iter::once(year))
                 .chain(after)
                 .collect(),
             ..self
@@ -618,8 +632,8 @@ mod tests {
     fn rf_09_sets_the_hours_of_each_shift() {
         Shift::ALL.into_iter().for_each(|shift| {
             let hours = calendar()
-                .with_shift_hours(shift, 7.25)
-                .map(|calendar| calendar.hours());
+                .with_shift_hours(2026, shift, 7.25)
+                .and_then(|calendar| calendar.year(2026).map(Year::hours));
             assert_eq!(
                 hours.clone().map(|hours| hours.of(shift)),
                 Ok(7.25),
@@ -638,6 +652,43 @@ mod tests {
                 "{shift}"
             );
         });
+    }
+
+    #[test]
+    fn rn_25_each_year_has_its_hours_and_a_new_year_inherits_them() {
+        let hours = |calendar: &Calendar, number| {
+            calendar
+                .year(number)
+                .map(|year| year.hours().of(Shift::Working))
+        };
+        let calendar = calendar()
+            .with_shift_hours(2026, Shift::Working, 8.0)
+            .and_then(|calendar| calendar.with_year(2028))
+            .and_then(|calendar| calendar.with_year(2025))
+            .and_then(|calendar| calendar.with_shift_hours(2028, Shift::Working, 7.0))
+            .and_then(|calendar| calendar.with_year(2027))
+            .expect("calendar");
+        [
+            (2025, 8.0, "sin año anterior, hereda del siguiente"),
+            (2026, 8.0, "las suyas"),
+            (2027, 8.0, "hereda del anterior más cercano, 2026"),
+            (2028, 7.0, "las suyas, sin cambiar las de 2026"),
+        ]
+        .into_iter()
+        .for_each(|(number, expected, case)| {
+            assert_eq!(hours(&calendar, number), Ok(expected), "{number}: {case}");
+        });
+        assert_eq!(
+            Calendar::default()
+                .with_year(2030)
+                .and_then(|calendar| calendar.year(2030).map(Year::hours)),
+            Ok(Hours::default()),
+            "sin años, las de por defecto"
+        );
+        assert_eq!(
+            calendar.with_shift_hours(2031, Shift::Working, 8.0),
+            Err(DomainError::UnknownYear(2031))
+        );
     }
 
     #[test]

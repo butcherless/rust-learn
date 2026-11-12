@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-24 |
+| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 y RN-01 a RN-25 |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -33,7 +33,7 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Marker` | Cómo se identifica el tipo junto al número del día: `Bar` (barra de color) o `Letter` (RN-20) | `15 ▌` o `15 F` |
 | `Category` | Clase de un `DayKind`: `Working`, `NonWorking` o `Absence` | laborable, no laborable, ausencia |
 | `Shift` | Una de las cuatro jornadas con horas configurables | `<jornada>` de `hours` |
-| `Hours` | Las horas de los cuatro `Shift` | `hours` |
+| `Hours` | Las horas de los cuatro `Shift` de un `Year` | `hours` |
 | `quota` | Días de vacaciones de un `Year` | «cupo», `quota` |
 | `Weekend` | Regla que calcula el fin de semana a partir del día de la semana | «fin de semana» |
 | `ReducedWeekday` | Regla que hace `Reduced` ciertos días de la semana, el viernes por defecto (RN-18) | «jornada reducida de los viernes» |
@@ -70,8 +70,8 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 
 ### 2.4 Entidades
 
-- **`Calendar`**: contiene la configuración común (días de `Weekend`, días de `ReducedWeekday` y `Hours`) y uno o varios `Year`.
-- **`Year`**: tiene un número único entre 1 y 9999, una `quota` (25 días por defecto) y sus `Mark`.
+- **`Calendar`**: contiene la configuración común (días de `Weekend` y días de `ReducedWeekday`) y uno o varios `Year`.
+- **`Year`**: tiene un número único entre 1 y 9999, una `quota` (25 días por defecto), sus `Hours` (RN-25) y sus `Mark`.
 - **`Mark`**: tiene un `id` único en el fichero, un `MarkKind`, un `DateRange` y una descripción opcional. Un día suelto es un `DateRange` con `from` = `to`.
 - **`ResolvedDay`**: es la fecha con su `DayKind` efectivo, sus horas, su `Origin` y la descripción.
 
@@ -103,6 +103,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-22 | Si la salida es un terminal, `month`, `year` y `summary` se muestran en una ventana a pantalla completa (la pantalla alternativa del terminal), con el mismo texto y colores que en la consola y una línea de ayuda abajo. `Esc`, `q` o `Ctrl+C` cierran la ventana y la consola vuelve tal como estaba, sin la vista. Si la vista no cabe, `↑` `↓` (o `k` `j`), `RePág` `AvPág` e `Inicio` `Fin` la desplazan; lo que no cabe a lo ancho se corta. Al redirigir la salida, o con `--no-tui`, la vista se imprime en la consola como hasta ahora. `day`, `list` y los comandos que cambian el fichero siempre imprimen en la consola. |
 | RN-23 | La vista de año empieza con una franja, dentro del marco de la rejilla (RN-21), con el título `Calendario laboral AAAA` centrado y en negrita; una línea `┈` la separa de la primera fila de meses. Como el año ya está en la franja, cada mes se titula solo con su nombre (`Enero`). La vista de mes mantiene el año en su título (`Junio 2026`). |
 | RN-24 | La vista de año termina, bajo las vacaciones restantes, con las horas laborables del año (las de RF-08) y la media mensual: esas horas divididas entre 12, aunque algún mes no tenga horas, como medida del esfuerzo mensual medio. Entre paréntesis, esa media en días de 8 h (media / 8), una jornada de referencia fija que no depende de las horas configuradas (RF-09): `Horas laborables del año: 1888,5 h` y `Media mensual: 157,38 h (19,67 días de 8 h)`. |
+| RN-25 | Las `Hours` son de cada `Year`: cambiarlas en un año no altera las horas ni los totales de los demás. Un `Year` nuevo hereda las `Hours` del año anterior más cercano del fichero; si no hay ninguno anterior, las del siguiente; y si el fichero no tiene años, las de por defecto (8,5 h las jornadas completas y 6 h las reducidas). |
 
 ## 4. Requisitos funcionales
 
@@ -116,7 +117,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RF-06 | Vista de mes en cuadrícula de lunes a domingo, con colores, `Mark` del mes, leyenda y vacaciones restantes | Must |
 | RF-07 | Vista del `Year` completo, tres meses por fila | Should |
 | RF-08 | `Summary` anual: días por `DayKind`, días y horas laborables, y vacaciones usadas y restantes | Must |
-| RF-09 | Configurar las `Hours` de los cuatro `Shift` | Must |
+| RF-09 | Configurar las `Hours` de los cuatro `Shift` de un `Year` (RN-25) | Must |
 | RF-10 | Configurar la `quota` de un `Year` | Must |
 | RF-11 | Persistir el `Calendar` en JSON y cargarlo al arrancar | Must |
 | RF-12 | Importar festivos desde un fichero | Could |
@@ -137,7 +138,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 | `month [<año> <mes>]` | 06, 14 | `calendario month 2026 junio` |
 | `year [<año>]` | 07, 14 | `calendario year 2026` |
 | `summary [<año>]` | 08, 14 | `calendario summary 2026` |
-| `hours <jornada> <horas>` | 09 | `calendario hours laborable-verano 8,5` |
+| `hours <año> <jornada> <horas>` | 09 | `calendario hours 2026 laborable-verano 8,5` |
 | `quota <año> <días>` | 10 | `calendario quota 2026 25` |
 
 - **`<tipo>`** (`MarkKind`): `reducido`, `festivo` y `vacaciones`.
@@ -187,18 +188,19 @@ En el fichero JSON solo se guardan la configuración y los `Mark`. El `Weekend`,
 - **Validación:** al cargar se comprueban todas las reglas. Un fichero inválido da error y no se modifica.
 - **Escritura:** se escribe en `<fichero>.tmp` y después se renombra, así un fallo nunca deja un fichero a medias.
 - **Campos opcionales:** `weekend`, `reduced_days`, `hours`, `vacation_quota` y `marks` toman los valores por defecto si faltan. Un fichero anterior sin `reduced_days` pasa a tener los viernes reducidos.
+- **Versiones:** se escribe la versión 2, con las `hours` dentro de cada año (RN-25). Se lee también la versión 1, que tenía unas `hours` comunes en la raíz: se aplican a cada año que no tenga las suyas, y al guardar el fichero pasa a la versión 2.
 - **Valores de `kind`:** van en español (`reducido`, `festivo`, `vacaciones`), igual que en la CLI.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "weekend": ["saturday", "sunday"],
   "reduced_days": ["friday"],
-  "hours": { "laborable": 8.5, "reducido": 6.0, "laborable_verano": 8.5, "reducido_verano": 6.0 },
   "years": [
     {
       "year": 2026,
       "vacation_quota": 25,
+      "hours": { "laborable": 8.5, "reducido": 6.0, "laborable_verano": 8.5, "reducido_verano": 6.0 },
       "marks": [
         { "id": 1, "kind": "festivo", "from": "2026-03-03", "to": "2026-03-03", "description": "Fiesta local" },
         { "id": 2, "kind": "vacaciones", "from": "2026-06-05", "to": "2026-06-12" }
@@ -264,6 +266,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-11 | RN-23: el año se repetía en el título de los 12 meses de la vista de año; ahora aparece una vez, en una franja superior `Calendario laboral AAAA` dentro del marco, y los meses llevan solo el nombre. La vista de año pasa de 44 a 46 líneas. |
 | 2026-11-11 | RN-24: la vista de año termina con el total de horas del año y la media mensual (total / 12), para ver el esfuerzo mensual medio sin abrir `summary`. La media divide siempre entre 12, no entre los meses con horas. La vista de año pasa de 46 a 48 líneas. |
 | 2026-11-11 | RN-24: el paréntesis de la media mensual pasa de repetir la operación (`1888,5 h / 12 meses`) a dar la media en días de 8 h, que se entiende mejor como esfuerzo. Las 8 h son una referencia fija y no las 8,5 h de la jornada `Working`, para que el número no cambie al configurar las horas. |
+| 2026-11-12 | RN-25: las `Hours` pasan del `Calendar` a cada `Year`. Al ser comunes, cambiar la jornada de un año reescribía las horas de los años pasados. `hours` recibe el año, como `quota`. El JSON pasa a la versión 2, con `hours` en cada año, y la versión 1 se sigue leyendo. Un año nuevo hereda las horas del anterior, porque la jornada suele mantenerse de un año a otro. |
 
 ### Pendiente o posibles ampliaciones
 

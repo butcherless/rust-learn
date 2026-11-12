@@ -52,7 +52,7 @@ cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
 cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
 cal mark reducido 2026-12-24
 cal unmark 1                                       # RF-03, con el id que muestra `list`
-cal hours laborable-verano 8,5                     # RF-09; con coma o punto
+cal hours 2026 laborable-verano 8,5                # RF-09, RN-25: las horas son de cada año; con coma o punto
 cal quota 2026 23                                  # RF-10
 ```
 
@@ -85,13 +85,14 @@ Fechas de referencia para los casos de test:
 
 Las dependencias apuntan hacia dentro: `main → adapters → application → domain`.
 
-- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `without_mark`, `with_quota`, `with_shift_hours` y `restore_mark`.
+- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours` y `restore_mark`.
   - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
   - `kind`: `MarkKind` (`Reduced`, `Holiday`, `Vacation`; no existe un `Mark` laborable), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
   - `date`:
     - `parse_date` es ISO estricto (RN-01); chrono por sí solo acepta días de un dígito.
     - `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
   - `calendar`: `Calendar`, `Year`, `Mark`, `MarkId` y `Hours`.
+    - Las `Hours` son de cada `Year` (RN-25). `with_year` las hereda con `inherited_hours`: del año anterior más cercano, si no del siguiente, y si no las de por defecto.
     - `Calendar` guarda dos listas de `Weekday`: `weekend` y `reduced_days` (viernes por defecto, RN-18). Las dos se ordenan desde el lunes con `from_monday`.
     - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta (RN-06).
     - El id siguiente es el máximo más uno (RN-16).
@@ -127,6 +128,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `load` devuelve un `Calendar` vacío si el fichero no existe.
     - `weekend` y `reduced_days` son nombres de día en inglés; si faltan, toman el valor por defecto.
     - `save` escribe `<fichero>.tmp` y lo renombra.
+    - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión 2.
 - **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
   - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
   - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (lo hace clap).

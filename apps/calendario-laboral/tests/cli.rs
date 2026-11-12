@@ -128,8 +128,8 @@ fn rf_07_rf_08_rf_09_rf_10_configuration_changes_the_views() {
     let file = TempFile::new("config");
     run(&file, &["add-year", "2026"]);
     assert_eq!(
-        stdout(&run(&file, &["hours", "laborable", "8"])),
-        "Jornada laborable: 8,0 h.\n"
+        stdout(&run(&file, &["hours", "2026", "laborable", "8"])),
+        "Jornada laborable de 2026: 8,0 h.\n"
     );
     assert_eq!(
         stdout(&run(&file, &["quota", "2026", "20"])),
@@ -208,7 +208,7 @@ fn rn_13_invalid_operations_fail_and_leave_the_file_untouched() {
         (&["add-year", "2026"][..], "error: el año 2026 ya existe en el calendario\n"),
         (&["unmark", "9"][..], "error: no existe ninguna marca con id 9\n"),
         (
-            &["hours", "reducido", "25"][..],
+            &["hours", "2026", "reducido", "25"][..],
             "error: horas no válidas: 25; deben estar entre 0 y 24\n",
         ),
     ]

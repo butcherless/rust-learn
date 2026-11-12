@@ -132,14 +132,17 @@ pub enum CommandArg {
         #[arg(value_name = "AÑO")]
         year: Option<i32>,
     },
-    /// Configura las horas de una jornada.
+    /// Configura las horas de una jornada en un año.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Hours {
+        /// Año, con sus propias horas (RN-25).
+        #[arg(value_name = "AÑO", display_order = 1)]
+        year: i32,
         /// Jornada.
-        #[arg(value_name = "JORNADA", value_parser = shift_arg(), display_order = 1)]
+        #[arg(value_name = "JORNADA", value_parser = shift_arg(), display_order = 2)]
         shift: Shift,
         /// Horas, con coma o punto decimal: 8,5 u 8.5.
-        #[arg(value_name = "HORAS", value_parser = hours_arg, display_order = 2)]
+        #[arg(value_name = "HORAS", value_parser = hours_arg, display_order = 3)]
         hours: f64,
     },
     /// Configura el cupo de vacaciones de un año.
@@ -234,7 +237,7 @@ impl CommandArg {
             },
             Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
-            Self::Hours { shift, hours } => Command::Hours(shift, hours),
+            Self::Hours { year, shift, hours } => Command::Hours { year, shift, hours },
             Self::Quota { year, days } => Command::Quota { year, days },
         }
     }
@@ -301,20 +304,36 @@ mod tests {
             (&["year", "2027"][..], Command::Year(2027)),
             (&["summary", "2025"][..], Command::Summary(2025)),
             (
-                &["hours", "laborable-verano", "8.5"][..],
-                Command::Hours(Shift::SummerWorking, 8.5),
+                &["hours", "2026", "laborable-verano", "8.5"][..],
+                Command::Hours {
+                    year: 2026,
+                    shift: Shift::SummerWorking,
+                    hours: 8.5,
+                },
             ),
             (
-                &["hours", "laborable", "7,25"][..],
-                Command::Hours(Shift::Working, 7.25),
+                &["hours", "2026", "laborable", "7,25"][..],
+                Command::Hours {
+                    year: 2026,
+                    shift: Shift::Working,
+                    hours: 7.25,
+                },
             ),
             (
-                &["hours", "reducido", "6"][..],
-                Command::Hours(Shift::Reduced, 6.0),
+                &["hours", "2026", "reducido", "6"][..],
+                Command::Hours {
+                    year: 2026,
+                    shift: Shift::Reduced,
+                    hours: 6.0,
+                },
             ),
             (
-                &["hours", "reducido-verano", "5"][..],
-                Command::Hours(Shift::SummerReduced, 5.0),
+                &["hours", "2027", "reducido-verano", "5"][..],
+                Command::Hours {
+                    year: 2027,
+                    shift: Shift::SummerReduced,
+                    hours: 5.0,
+                },
             ),
             (
                 &["quota", "2026", "25"][..],
@@ -396,10 +415,14 @@ mod tests {
             ),
             (&["day", "mañana"][..], ErrorKind::ValueValidation),
             (
-                &["hours", "laborable", "ocho"][..],
+                &["hours", "2026", "laborable", "ocho"][..],
                 ErrorKind::ValueValidation,
             ),
-            (&["hours", "nocturna", "8"][..], ErrorKind::InvalidValue),
+            (
+                &["hours", "2026", "nocturna", "8"][..],
+                ErrorKind::InvalidValue,
+            ),
+            (&["hours", "laborable", "8"][..], ErrorKind::ValueValidation),
             (&["month", "2026"][..], ErrorKind::MissingRequiredArgument),
             (&["month", "2026", "13"][..], ErrorKind::InvalidValue),
             (&["month", "2026", "june"][..], ErrorKind::InvalidValue),
