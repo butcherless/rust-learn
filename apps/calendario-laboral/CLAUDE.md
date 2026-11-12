@@ -109,7 +109,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `summarize` devuelve el `Summary`, con los 12 `MonthTotal` (RF-14): días, horas y acumulado, calculados con `scan`. `summary_of` lo calcula a partir de días ya resueltos, para que las vistas de mes y de año resuelvan el año una sola vez.
     - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría «-0,0».
   - `fixtures` (`#[cfg(test)]`): `date`, `range`, `calendar` (solo 2026) y `marked`.
-- **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`.
+- **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`. `mod.rs` tiene los tipos, `execute` (solo reparte cada `Command`) y los tests; los casos de uso están en `marks.rs`, `years.rs`, `settings.rs` y `views.rs`.
   - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el resultado de una consulta (`Report::Config` lleva el `Calendar`).
   - Los comandos de varios pasos (`unmark` con varios ids, `add-year --festivos-de`, `edit`) encadenan los cambios con `try_fold`: si uno falla, falla todo y no hay nada que guardar (RN-13).
   - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.

@@ -3,6 +3,11 @@
 //! Quien la llama carga el calendario, ejecuta [`execute`], guarda el calendario nuevo si lo hay
 //! y muestra el resultado. Aquí no hay E/S.
 
+mod marks;
+mod settings;
+mod views;
+mod years;
+
 use chrono::{Datelike, NaiveDate, Weekday};
 
 use crate::domain::{
@@ -171,254 +176,50 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
         Command::AddYear {
             year,
             holidays_from,
-        } => add_year(calendar, year, holidays_from),
+        } => years::add_year(calendar, year, holidays_from),
+        Command::RemoveYear { year, confirmed } => years::remove_year(calendar, year, confirmed),
         Command::Mark {
             kind,
             from,
             to,
             description,
-        } => mark(
+        } => marks::mark(
             calendar,
             kind,
             DateRange::new(from, to.unwrap_or(from))?,
             description,
         ),
-        Command::Unmark(ids) => unmark(calendar, &ids),
-        Command::RemoveYear { year, confirmed } => {
-            let marks = calendar.year(year)?.marks().len();
-            if marks > 0 && !confirmed {
-                return Err(DomainError::YearHasMarks { year, marks });
-            }
-            let (calendar, _) = calendar.without_year(year)?;
-            Ok(Outcome::Changed {
-                calendar,
-                event: Event::YearRemoved { year, marks },
-            })
-        }
         Command::Edit {
             id,
             kind,
             from,
             to,
             description,
-        } => edit(calendar, id, kind, (from, to), description),
+        } => marks::edit(calendar, id, kind, (from, to), description),
+        Command::Unmark(ids) => marks::unmark(calendar, &ids),
         Command::List(year) => {
-            list(&calendar, year).map(|marks| Outcome::Report(Report::Marks(marks)))
+            marks::list(&calendar, year).map(|marks| Outcome::Report(Report::Marks(marks)))
         }
         Command::Day(date) => {
             resolve_day(&calendar, date).map(|day| Outcome::Report(Report::Day(day)))
         }
-        Command::Month { year, month } => {
-            let (days, year) = (resolve_year(&calendar, year)?, calendar.year(year)?);
-            Ok(Outcome::Report(Report::Month(
-                month_view(year, month, &days)?,
-                summary_of(year, &days),
-            )))
-        }
-        Command::Year(year) => {
-            let (days, year) = (resolve_year(&calendar, year)?, calendar.year(year)?);
-            Ok(Outcome::Report(Report::Year(
-                Month::ALL
-                    .into_iter()
-                    .map(|month| month_view(year, month, &days))
-                    .collect::<Result<_, _>>()?,
-                summary_of(year, &days),
-            )))
-        }
-        Command::Config => Ok(Outcome::Report(Report::Config(calendar))),
-        Command::Weekend(days) => {
-            let calendar = calendar.with_weekend(&days);
-            Ok(Outcome::Changed {
-                event: Event::WeekendSet(calendar.weekend().to_vec()),
-                calendar,
-            })
-        }
-        Command::ReducedDays(days) => {
-            let calendar = calendar.with_reduced_days(&days);
-            Ok(Outcome::Changed {
-                event: Event::ReducedDaysSet(calendar.reduced_days().to_vec()),
-                calendar,
-            })
-        }
+        Command::Month { year, month } => views::month(&calendar, year, month),
+        Command::Year(year) => views::year(&calendar, year),
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
-        Command::Hours { year, shift, hours } => Ok(Outcome::Changed {
-            calendar: calendar.with_shift_hours(year, shift, hours)?,
-            event: Event::HoursSet { year, shift, hours },
-        }),
-        Command::Quota { year, days } => {
-            let calendar = calendar.with_quota(year, days)?;
-            let excess = summarize(&calendar, year)?.vacation_excess();
-            Ok(Outcome::Changed {
-                calendar,
-                event: Event::QuotaSet { year, days, excess },
-            })
-        }
+        Command::Config => Ok(Outcome::Report(Report::Config(calendar))),
+        Command::Weekend(days) => Ok(settings::weekend(calendar, &days)),
+        Command::ReducedDays(days) => Ok(settings::reduced_days(calendar, &days)),
+        Command::Hours { year, shift, hours } => settings::hours(calendar, year, shift, hours),
+        Command::Quota { year, days } => settings::quota(calendar, year, days),
     }
-}
-
-fn mark(
-    calendar: Calendar,
-    kind: MarkKind,
-    range: DateRange,
-    description: Option<String>,
-) -> Result<Outcome, DomainError> {
-    match calendar.with_mark(kind, range, trimmed(description))? {
-        (_, Marking::Existing(id)) => Ok(Outcome::Unchanged(Event::AlreadyMarked(id))),
-        (calendar, Marking::Added(mark)) => {
-            let excess = vacation_excess(&calendar, &mark)?;
-            Ok(Outcome::Changed {
-                calendar,
-                event: Event::Marked { mark, excess },
-            })
-        }
-    }
-}
-
-/// Añade el año y, con `holidays_from`, copia sus festivos con la misma fecha (RF-19). Los que no
-/// existen en el año nuevo, como un 29 de febrero, se saltan.
-fn add_year(
-    calendar: Calendar,
-    year: i32,
-    holidays_from: Option<i32>,
-) -> Result<Outcome, DomainError> {
-    let holidays: Vec<Mark> = holidays_from
-        .map(|from| calendar.year(from).map(|from| from.marks().to_vec()))
-        .transpose()?
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|mark| mark.kind == MarkKind::Holiday)
-        .collect();
-    let calendar = calendar.with_year(year)?;
-    let (calendar, copied) = holidays
-        .into_iter()
-        .filter_map(|mark| {
-            let from = mark.range.from().with_year(year)?;
-            let to = mark.range.to().with_year(year)?;
-            DateRange::new(from, to)
-                .ok()
-                .map(|range| (range, mark.description))
-        })
-        .try_fold((calendar, 0), |(calendar, copied), (range, description)| {
-            calendar
-                .with_mark(MarkKind::Holiday, range, description)
-                .map(|(calendar, _)| (calendar, copied + 1))
-        })?;
-    Ok(Outcome::Changed {
-        calendar,
-        event: Event::YearAdded {
-            year,
-            quota: DEFAULT_VACATION_QUOTA,
-            holidays: holidays_from.map(|from| (from, copied)),
-        },
-    })
-}
-
-/// La descripción sin espacios alrededor; en blanco, ninguna.
-fn trimmed(description: Option<String>) -> Option<String> {
-    description
-        .map(|text| text.trim().to_owned())
-        .filter(|text| !text.is_empty())
-}
-
-/// Los días de vacaciones por encima del cupo tras guardar `mark`, para el aviso de RN-11.
-fn vacation_excess(calendar: &Calendar, mark: &Mark) -> Result<usize, DomainError> {
-    match mark.kind {
-        MarkKind::Vacation => Ok(summarize(calendar, mark.range.from().year())?.vacation_excess()),
-        MarkKind::Working | MarkKind::Reduced | MarkKind::Holiday => Ok(0),
-    }
-}
-
-/// Cambia lo indicado de un `Mark` y mantiene el resto, también su id (RF-18). Con
-/// `description`, una en blanco quita la que tuviera.
-fn edit(
-    calendar: Calendar,
-    id: MarkId,
-    kind: Option<MarkKind>,
-    (from, to): (Option<NaiveDate>, Option<NaiveDate>),
-    description: Option<String>,
-) -> Result<Outcome, DomainError> {
-    let old = calendar
-        .marks()
-        .find(|mark| mark.id == id)
-        .cloned()
-        .ok_or(DomainError::UnknownMark(id))?;
-    let mark = Mark {
-        id,
-        kind: kind.unwrap_or(old.kind),
-        range: DateRange::new(
-            from.unwrap_or(old.range.from()),
-            to.unwrap_or(old.range.to()),
-        )?,
-        description: description.map_or(old.description, |text| trimmed(Some(text))),
-    };
-    let (calendar, _) = calendar.with_replaced_mark(mark.clone())?;
-    let excess = vacation_excess(&calendar, &mark)?;
-    Ok(Outcome::Changed {
-        calendar,
-        event: Event::Edited { mark, excess },
-    })
-}
-
-/// Elimina los `Mark` de `ids` uno tras otro; el primero que no existe hace fallar todo y el
-/// fichero no cambia (RN-13). Un id repetido se elimina una vez.
-fn unmark(calendar: Calendar, ids: &[MarkId]) -> Result<Outcome, DomainError> {
-    let unique = ids.iter().fold(Vec::new(), |unique: Vec<MarkId>, id| {
-        if unique.contains(id) {
-            unique
-        } else {
-            unique.into_iter().chain([*id]).collect()
-        }
-    });
-    let (calendar, removed) = unique.into_iter().try_fold(
-        (calendar, Vec::new()),
-        |(calendar, removed): (Calendar, Vec<Mark>), id| {
-            calendar
-                .without_mark(id)
-                .map(|(calendar, mark)| (calendar, removed.into_iter().chain([mark]).collect()))
-        },
-    )?;
-    Ok(Outcome::Changed {
-        calendar,
-        event: Event::Unmarked(removed),
-    })
 }
 
 fn sorted(marks: impl Iterator<Item = Mark>) -> Vec<Mark> {
     let mut marks: Vec<Mark> = marks.collect();
     marks.sort_by_key(|mark| (mark.range.from(), mark.id));
     marks
-}
-
-fn list(calendar: &Calendar, year: Option<i32>) -> Result<Vec<Mark>, DomainError> {
-    match year {
-        Some(year) => calendar
-            .year(year)
-            .map(|year| sorted(year.marks().iter().cloned())),
-        None => Ok(sorted(calendar.marks().cloned())),
-    }
-}
-
-/// La vista de un mes a partir de los días del año ya resueltos, que se resuelven una sola vez
-/// aunque la vista de año pida los 12 meses.
-fn month_view(year: &Year, month: Month, days: &[ResolvedDay]) -> Result<MonthView, DomainError> {
-    let range = DateRange::month(year.number(), month)?;
-    Ok(MonthView {
-        year: year.number(),
-        month,
-        days: days
-            .iter()
-            .filter(|day| range.contains(day.date))
-            .cloned()
-            .collect(),
-        marks: sorted(
-            year.marks()
-                .iter()
-                .filter(|mark| mark.range.overlaps(range))
-                .cloned(),
-        ),
-    })
 }
 
 #[cfg(test)]
