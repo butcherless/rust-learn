@@ -100,3 +100,4 @@ jobs:
       with:
         name: coverage-html-${{ matrix.package }}
         path: target/llvm-cov/html
+        retention-days: 14
