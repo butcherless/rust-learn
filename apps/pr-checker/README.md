@@ -16,7 +16,7 @@ table or in an interactive terminal UI.
 
 ## Quick start
 
-From the workspace root (see its [README](../../README.md) for requirements), the `cargo pr` alias
+From the workspace root (see its [README](../../README.md#requirements) for requirements), the `cargo pr` alias
 runs this project with `apps/pr-checker/projects.toml`:
 
 ```bash

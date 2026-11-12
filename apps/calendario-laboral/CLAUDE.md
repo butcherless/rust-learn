@@ -90,7 +90,7 @@ Fechas de referencia para los casos de test:
 
 Las dependencias apuntan hacia dentro: `main → adapters → application → domain`.
 
-- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `with_mark`, `with_replaced_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours` y `restore_mark`.
+- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `without_year`, `with_mark`, `with_replaced_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours`, `with_weekend`, `with_reduced_days` y `restore_mark`.
   - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
   - `kind`: `MarkKind` (`Working`, `Reduced`, `Holiday`, `Vacation`; `Working` fuerza la jornada completa, RN-26), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
   - `date`:
@@ -110,16 +110,19 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría «-0,0».
   - `fixtures` (`#[cfg(test)]`): `date`, `range`, `calendar` (solo 2026) y `marked`.
 - **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`.
-  - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el resultado de una consulta.
-  - `Event::Marked.excess` lleva el aviso de RN-11.
+  - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el resultado de una consulta (`Report::Config` lleva el `Calendar`).
+  - Los comandos de varios pasos (`unmark` con varios ids, `add-year --festivos-de`, `edit`) encadenan los cambios con `try_fold`: si uno falla, falla todo y no hay nada que guardar (RN-13).
+  - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.
+  - `remove-year` con `Mark` necesita `confirmed`; si no, devuelve `DomainError::YearHasMarks`.
 - **`adapters`**:
   - `cli`: clap derive.
-    - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias.
+    - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias, y los días de la semana el nombre con o sin tilde (`weekday_arg`).
+    - `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
-    - `error_text` monta en español los errores de argumentos de clap, a partir de su `ErrorKind` y su contexto; `main` los muestra con `try_parse` y sale con 2. Los tipos poco habituales, la ayuda y la versión los muestra clap.
+    - `error_text` da en español los errores de argumentos de clap, montados a partir de su `ErrorKind` y su contexto, y la ayuda, con `spanish_clap` sobre el texto de clap (`[valores posibles: …]`, `[OPCIONES]`…). La versión y los errores poco habituales los muestra clap.
   - `render`: todo el texto de consola, en español.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
-    - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::marker` elige con `anstream::AutoStream::choice(&stdout())`: `Letter` si será `Never`.
+    - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::color` mira `anstream::AutoStream::choice(&stdout())` y `Marker::for_color` elige `Letter` si no habrá color.
     - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
     - Cada mes ocupa `MONTH_WIDTH` = 40 columnas; la vista de año pone 3 por fila (130 columnas), dentro de una rejilla gris punteada con marco (RN-21): `┊` a los lados y entre meses, y líneas `┈` arriba, abajo y entre filas, con esquinas y cruces `┌┬┐├┼┤└┴┘`. Arriba, dentro del marco, la franja `Calendario laboral AAAA` en negrita (RN-23); por eso `month_grid` recibe el título: solo el nombre en la vista de año y `Junio 2026` en la de mes.
     - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12) y, entre paréntesis, `monthly_average_days` (media / `REFERENCE_DAY_HOURS`, 8 h fijas) (RN-24).
@@ -128,7 +131,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `opens(report, no_tui, terminal)` decide si se abre: solo `Month`, `Year` y `Summary`, en un terminal y sin `--no-tui`.
     - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI) y la primera visible. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
     - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
-  - `json`: DTOs con serde; el dominio no conoce serde.
+  - `json`: DTOs con serde; el dominio no conoce serde. `KindDto` repite a propósito los nombres de `MarkKind`, porque son el formato del fichero.
     - `decode` valida a través de los constructores del dominio.
     - `load` devuelve un `Calendar` vacío si el fichero no existe.
     - `weekend` y `reduced_days` son nombres de día en inglés; si faltan, toman el valor por defecto.
@@ -136,7 +139,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión 2.
 - **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
   - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
-  - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (lo hace clap).
+  - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (`argument_error`, con `Args::try_parse`).
   - Los avisos van a stderr.
 
 ## Convenciones
@@ -154,7 +157,7 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 - **clap 4.6**: features `derive`, `env` y `string` (los nombres y alias de mes se generan en tiempo de ejecución).
 - **anstyle / anstream 1.0**: ya son dependencias de clap. `format!("{style}texto{style:#}")` aplica el estilo y lo cierra.
 - **crossterm 0.29**: la del workspace, la misma que usa ratatui. `Event::as_key_press_event` filtra las pulsaciones; sin él, en Windows llegarían también las teclas soltadas.
-- **chrono 0.4**: `NaiveDate::iter_days` recibe `&self`, así que se mapea con un closure. Los nombres de meses y días en español son tablas en `render`, no los locales inestables de chrono.
+- **chrono 0.4**: `NaiveDate::iter_days` recibe `&self`, así que se mapea con un closure. Los nombres de meses y días en español son tablas en `render` (`month_name`, `weekday_name`), que también usa la CLI, no los locales inestables de chrono.
 - **serde_json**: indica los valores de `kind` desconocidos con línea y columna, y un test fija ese texto.
 
 ## IntelliJ

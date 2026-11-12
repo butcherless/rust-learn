@@ -4,10 +4,10 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 
 | | |
 |---|---|
-| **Fecha** | 2026-11-11 |
-| **Estado** | v1 implementada: RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-26 |
+| **Fecha** | 2026-11-12 |
+| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-26; pendientes RF-12 y RF-13 (§9) |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
-| **Guía de desarrollo** | `CLAUDE.md`: comandos para construir, ejecutar y verificar, arquitectura y convenciones |
+| **Guía de desarrollo** | [CLAUDE.md](CLAUDE.md): comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
 Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuario (textos, subcomandos, valores de la CLI y del JSON) está en español; el glosario (§2.1) relaciona ambos.
 
@@ -24,9 +24,9 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 
 | Concepto | Significado | Para el usuario |
 |---|---|---|
-| `Calendar` | El contenido del fichero: configuración común y años | fichero `calendario.json` |
-| `Year` | Un año con su `quota` y sus `Mark` | `add-year`, `year` |
-| `Mark` | Un `MarkKind` sobre un `DateRange`, con id y descripción opcional | «marca», `mark`, `unmark` |
+| `Calendar` | El contenido del fichero: configuración común y años | fichero `calendario.json`, `config` |
+| `Year` | Un año con su `quota`, sus `Hours` y sus `Mark` | `add-year`, `remove-year`, `year` |
+| `Mark` | Un `MarkKind` sobre un `DateRange`, con id y descripción opcional | «marca», `mark`, `edit`, `unmark`, `list` |
 | `MarkKind` | Lo que fija un `Mark`: `Working`, `Reduced`, `Holiday` o `Vacation` | `laborable`, `reducido`, `festivo`, `vacaciones` |
 | `DateRange` | Rango de días `[from, to]`, ambos incluidos | `<fecha> [<hasta>]` |
 | `DayKind` | Tipo efectivo de un día (§2.2) | nombre, color y barra `▌` o letra |
@@ -35,9 +35,9 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Shift` | Una de las cuatro jornadas con horas configurables | `<jornada>` de `hours` |
 | `Hours` | Las horas de los cuatro `Shift` de un `Year` | `hours` |
 | `quota` | Días de vacaciones de un `Year` | «cupo», `quota` |
-| `Weekend` | Regla que calcula el fin de semana a partir del día de la semana | «fin de semana» |
-| `ReducedWeekday` | Regla que hace `Reduced` ciertos días de la semana, el viernes por defecto (RN-18) | «jornada reducida de los viernes» |
-| `Month` | Un mes del año, de `January` a `December` | «junio» o «6» en `month` |
+| `Weekend` | Regla que calcula el fin de semana a partir del día de la semana (RN-04) | «fin de semana», `weekend` |
+| `ReducedWeekday` | Regla que hace `Reduced` ciertos días de la semana, el viernes por defecto (RN-18) | «jornada reducida de los viernes», `reduced-days` |
+| `Month` | Un mes del año, de `January` a `December` (`chrono::Month`) | «junio» o «6» en `month` |
 | `Summer` | Periodo fijo formado por `Month::July` y `Month::August` | «verano» |
 | `DefaultVacation` | Vacaciones calculadas de un `Year` sin `Vacation` marcadas (RN-14) | «vacaciones por defecto» |
 | `ResolvedDay` | Fecha con su `DayKind`, horas, `Origin` y descripción | `day` |
@@ -134,7 +134,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 
 ## 5. Interfaz de consola
 
-El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo, consulta `CLAUDE.md`.
+El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo, consulta [CLAUDE.md](CLAUDE.md).
 
 | Comando | RF | Ejemplo |
 |---|---|---|
@@ -252,24 +252,24 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
   2. Escribir o ajustar los tests con su ID.
   3. Cambiar el código.
 
-  Los comandos de verificación están en `CLAUDE.md`.
+  Los comandos de verificación están en [CLAUDE.md](CLAUDE.md#verificar).
 
 ## 9. Decisiones
 
 | Fecha | Decisión |
 |---|---|
 | 2026-11-08 | CLI por subcomandos con clap; se descarta el modo interactivo (REPL). |
-| 2026-11-08 | Librerías tomadas de `../severance-pay-calculator`: `clap` 4 (derive, env), `chrono`, `thiserror` 2, más `serde`/`serde_json`. Para los colores, `anstyle` + `anstream` en lugar de `owo-colors`: ya son dependencias de clap y quitan el color al redirigir. |
-| 2026-11-08 | Se elimina el `MarkKind` `laborable`: con la prioridad más baja nunca cambiaba el `DayKind`. |
+| 2026-11-08 | Librerías tomadas de [severance-pay-calculator](../severance-pay-calculator), entonces un repositorio aparte: `clap` 4 (derive, env), `chrono`, `thiserror` 2, más `serde`/`serde_json`. Para los colores, `anstyle` + `anstream` en lugar de `owo-colors`: ya son dependencias de clap y quitan el color al redirigir. |
+| 2026-11-08 | Se elimina el `MarkKind` `laborable`: con la prioridad más baja nunca cambiaba el `DayKind`. Vuelve el 2026-11-12 con otra prioridad (RN-26). |
 | 2026-11-08 | `DefaultVacation` desde el 1 de julio en los `Year` sin `Mark` `Vacation`; se calcula y no se guarda (RN-14). |
 | 2026-11-08 | Los `DateRange` que cruzan de año se rechazan; no se dividen automáticamente (RN-02). |
 | 2026-11-08 | Los ids se reutilizan si se borra el `Mark` con el id más alto (RN-16). |
 | 2026-11-08 | RF-12 y RF-13 quedan fuera de la v1. |
 | 2026-11-08 | Documentación en español; conceptos y código en inglés (RNF-07). |
 | 2026-11-08 | RN-20: símbolo de color a la derecha del número en lugar de la letra pegada (`15F`), para leer mejor los números. Se probó un punto pegado (`15●`) y se eligió una barra separada por un espacio, con dos espacios entre días (`15 ▎  16 ▎`). La letra se mantiene sin color, en el mismo sitio. La vista de año sigue con 3 meses por fila (~126 columnas). |
-| 2026-11-08 | Enumeraciones antes que códigos numéricos (RNF-08): el mes es la enumeración `Month` del dominio. RN-14 empieza en `Month::July` y el `Summer` es `Month::July` y `Month::August`. La CLI acepta el mes por nombre o por número. |
+| 2026-11-08 | Enumeraciones antes que códigos numéricos (RNF-08): el mes es la enumeración `Month` del dominio (desde el 2026-11-11, `chrono::Month`). RN-14 empieza en `Month::July` y el `Summer` es `Month::July` y `Month::August`. La CLI acepta el mes por nombre o por número. |
 | 2026-11-08 | RF-14: horas teóricas, no registradas; columnas de días, horas y acumulado; se calcula en el dominio (`Summary.months`) y se muestra en `summary`, `month` y `year`. No se muestran horas de ausencias, ni objetivo anual, ni CSV (queda para RF-13). Un mes a 0 h por las vacaciones por defecto se muestra tal cual. |
-| 2026-11-08 | Todos los viernes son reducidos (RN-18). Se reutilizan los `Shift` `Reduced` y `SummerReduced` en lugar de crear jornadas nuevas, y los días son configurables en el JSON como el `Weekend`. |
+| 2026-11-08 | Todos los viernes son reducidos (RN-18). Se reutilizan los `Shift` `Reduced` y `SummerReduced` en lugar de crear jornadas nuevas, y los días son configurables en el JSON como el `Weekend` (desde el 2026-11-12, también con `reduced-days`, RF-16). |
 | 2026-11-10 | RN-21: rejilla gris punteada entre los meses de la vista de año (`┊`, `┈` y `┼`). Se probó primero solo con líneas interiores y se añadió el marco exterior (arriba, abajo, izquierda y derecha), aunque la vista pasa de ~126 a 130 columnas. |
 | 2026-11-10 | RN-20: la barra fina `▎` pasa a `▌` (media celda), porque con tan poca superficie de color se confundían el rojo de `Holiday` y el magenta de `Vacation`; se descartaron `║` (igual de fina) y `▎▎` (la vista de año pasaba a ~151 columnas). `Vacation` pasa de magenta a blanco brillante, el único color ANSI básico libre; en un terminal de fondo claro se verá poco. |
 | 2026-11-10 | Colores de los `DayKind` laborables por parejas, con la jornada completa más oscura que la reducida: `Working` en azul marino (el azul ANSI, que cada tema pinta a su manera; se descartó el azul marino de la paleta de 256, que apenas se ve sobre fondo oscuro) y `Reduced` en cian; en `Summer`, `SummerWorking` en verde y `SummerReduced` en un verde pálido, más tenue (color 151 de la paleta de 256; el verde brillante ANSI resultaba más intenso que el normal), para que ningún tipo comparta color. |
@@ -301,6 +301,6 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 - [ ] RF-12: importar festivos. Hay que definir antes el formato del fichero de entrada.
 - [ ] RF-13: exportar en CSV o JSON.
 - [ ] ¿Subcomandos en español (`marcar`, `anadir-anio`…), o alias? Ahora siguen los nombres de §5.
-- [ ] Interfaz ratatui para navegar meses, como en el proyecto hermano.
+- [ ] Navegar entre meses y años en la ventana de RN-22.
 - [ ] Objetivo de horas anuales del convenio y diferencia con las horas del calendario.
 - [ ] Horas de ausencias por mes (vacaciones y festivos valorados en horas).

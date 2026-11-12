@@ -6,7 +6,7 @@ resumen anual con días y horas laborables y el cupo de vacaciones.
 
 ## Inicio rápido
 
-Desde la raíz del workspace (los requisitos están en su [README](../../README.md)), el alias
+Desde la raíz del workspace (lo que hay que instalar está en su [README](../../README.md#requirements)), el alias
 `cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, que git ignora:
 
 ```bash
@@ -15,6 +15,9 @@ cargo cal mark vacaciones 2026-06-05 2026-06-12
 cargo cal month 2026 junio                         # `month junio`: del año actual; sin argumentos, el mes actual
 cargo cal year 2026
 cargo cal summary 2026
+cargo cal list 2026                                # las marcas, con su id
+cargo cal edit 2 --hasta 2026-06-14                # cambia una marca; `unmark 2` la borra
+cargo cal config                                   # fin de semana, jornada reducida, cupo y horas
 cargo cal --help                                   # y `cargo cal <comando> --help`
 ```
 

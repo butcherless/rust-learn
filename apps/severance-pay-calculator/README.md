@@ -8,7 +8,7 @@ It is a port of a Python script (`calc_amount.py`) and gives the same figures.
 
 ## Quick start
 
-From the workspace root (see its [README](../../README.md) for requirements):
+From the workspace root (see its [README](../../README.md#requirements) for requirements):
 
 ```bash
 cargo sev                       # interactive UI, needs a real terminal
