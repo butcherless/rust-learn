@@ -129,7 +129,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12) y, entre paréntesis, `monthly_average_days` (media / `REFERENCE_DAY_HOURS`, 8 h fijas) (RN-24).
     - Las horas llevan coma decimal (`decimal`).
   - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
-    - `opens(report, no_tui, terminal)` decide si se abre: solo `Month`, `Year` y `Summary`, en un terminal y sin `--no-tui`.
+    - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con `Output::Window`. `Args::output(terminal)` elige una vez entre `Window` y `Console`: la ventana solo en un terminal y sin `--no-tui`.
     - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI) y la primera visible. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
     - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
   - `json`: DTOs con serde; el dominio no conoce serde. `KindDto` repite a propósito los nombres de `MarkKind`, porque son el formato del fichero.
@@ -139,7 +139,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `save` escribe `<fichero>.tmp` y lo renombra.
     - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión 2.
 - **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
-  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
+  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con el `Output` que `main` calcula a partir de `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
   - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (`argument_error`, con `Args::try_parse`).
   - Los avisos van a stderr.
 

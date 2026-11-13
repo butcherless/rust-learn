@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use chrono::{Datelike, NaiveDate, Weekday};
 use clap::{ArgAction, Parser, Subcommand};
 
+use crate::adapters::viewer::Output;
 use crate::application::Command;
 use crate::domain::{MarkId, MarkKind, Month, MonthExt, Shift};
 
@@ -58,6 +59,18 @@ pub struct Args {
     /// La operación.
     #[command(subcommand)]
     pub command: CommandArg,
+}
+
+impl Args {
+    /// Dónde pueden mostrarse los informes: la ventana solo si la salida es un `terminal` y no se
+    /// ha pedido `--no-tui` (RN-22).
+    pub const fn output(&self, terminal: bool) -> Output {
+        if terminal && !self.no_tui {
+            Output::Window
+        } else {
+            Output::Console
+        }
+    }
 }
 
 /// Los subcomandos.
@@ -306,6 +319,32 @@ mod tests {
 
     fn command(args: &[&str]) -> Result<Command, ErrorKind> {
         parse(args).map(|(_, command)| command)
+    }
+
+    #[test]
+    fn rn_22_the_window_needs_a_terminal_and_no_no_tui() {
+        [
+            ("terminal", &[][..], true, Output::Window),
+            ("redirected", &[][..], false, Output::Console),
+            ("--no-tui", &["--no-tui"][..], true, Output::Console),
+            (
+                "redirected with --no-tui",
+                &["--no-tui"][..],
+                false,
+                Output::Console,
+            ),
+        ]
+        .into_iter()
+        .for_each(|(case, flags, terminal, expected)| {
+            let args = Args::try_parse_from(
+                ["calendario"]
+                    .into_iter()
+                    .chain(flags.iter().copied())
+                    .chain(["year"]),
+            )
+            .map(|args| args.output(terminal));
+            assert_eq!(args.ok(), Some(expected), "{case}");
+        });
     }
 
     #[test]

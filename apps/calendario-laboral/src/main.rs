@@ -13,6 +13,7 @@ use clap::Parser;
 
 use calendario_laboral::adapters::cli::{Args, error_text};
 use calendario_laboral::adapters::render::Marker;
+use calendario_laboral::adapters::viewer::Output;
 use calendario_laboral::adapters::{json, render, viewer};
 use calendario_laboral::application::{Command, Event, Outcome, Report, execute};
 
@@ -22,8 +23,9 @@ fn main() -> ExitCode {
         Ok(args) => args,
         Err(error) => return argument_error(&error),
     };
+    let output = args.output(std::io::stdout().is_terminal());
     let command = args.command.into_command(chrono::Local::now().date_naive());
-    run(&args.file, command, args.no_tui).map_or_else(
+    run(&args.file, command, output).map_or_else(
         |error| {
             anstream::eprintln!("error: {error}");
             ExitCode::FAILURE
@@ -45,23 +47,23 @@ fn argument_error(error: &clap::Error) -> ExitCode {
 
 /// Solo guarda si el caso de uso ha ido bien, así una operación inválida deja el fichero
 /// como estaba (RN-13).
-fn run(path: &Path, command: Command, no_tui: bool) -> Result<(), Box<dyn Error>> {
+fn run(path: &Path, command: Command, output: Output) -> Result<(), Box<dyn Error>> {
     match execute(json::load(path)?, command)? {
         Outcome::Changed { calendar, event } => {
             json::save(path, &calendar)?;
             show(&event);
         }
         Outcome::Unchanged(event) => show(&event),
-        Outcome::Report(report) => present(&report, no_tui)?,
+        Outcome::Report(report) => present(&report, output)?,
     }
     Ok(())
 }
 
 /// La ventana si [`viewer::opens`] lo decide, y la consola si no.
-fn present(report: &Report, no_tui: bool) -> std::io::Result<()> {
+fn present(report: &Report, output: Output) -> std::io::Result<()> {
     let color = color();
     let text = render::report(report, Marker::for_color(color));
-    if viewer::opens(report, no_tui, std::io::stdout().is_terminal()) {
+    if viewer::opens(report, output) {
         // Con `NO_COLOR`, sin los códigos de color, como haría anstream en la consola.
         viewer::run(&if color {
             text

@@ -17,14 +17,25 @@ use crossterm::{execute, queue};
 
 use crate::application::Report;
 
-/// Si el resultado se muestra en la ventana: solo `month`, `year` y `summary`, solo si la salida
-/// es un terminal y solo si no se ha pedido `--no-tui`.
-pub fn opens(report: &Report, no_tui: bool, terminal: bool) -> bool {
+/// Dónde pueden mostrarse los informes: en la ventana, o solo en la consola si la salida no es un
+/// terminal o se ha pedido `--no-tui` (RN-22).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Output {
+    Window,
+    Console,
+}
+
+/// Si el resultado se muestra en la ventana: solo `month`, `year` y `summary`, y solo si `output`
+/// lo permite.
+pub const fn opens(report: &Report, output: Output) -> bool {
     let fills_screen = match report {
         Report::Month(..) | Report::Year(..) | Report::Summary(..) => true,
         Report::Marks(..) | Report::Day(..) | Report::Config(..) => false,
     };
-    fills_screen && terminal && !no_tui
+    match output {
+        Output::Window => fills_screen,
+        Output::Console => false,
+    }
 }
 
 /// Lo que pide una tecla.
@@ -224,17 +235,16 @@ mod tests {
         let day = report(Command::Day(date(2026, 6, 8)));
         let list = report(Command::List(None));
         [
-            ("month", &month, false, true, true),
-            ("year", &year, false, true, true),
-            ("summary", &summary, false, true, true),
-            ("day", &day, false, true, false),
-            ("list", &list, false, true, false),
-            ("month redirected", &month, false, false, false),
-            ("month with --no-tui", &month, true, true, false),
+            ("month", &month, Output::Window, true),
+            ("year", &year, Output::Window, true),
+            ("summary", &summary, Output::Window, true),
+            ("day", &day, Output::Window, false),
+            ("list", &list, Output::Window, false),
+            ("month on the console", &month, Output::Console, false),
         ]
         .into_iter()
-        .for_each(|(case, report, no_tui, terminal, expected)| {
-            assert_eq!(opens(report, no_tui, terminal), expected, "{case}");
+        .for_each(|(case, report, output, expected)| {
+            assert_eq!(opens(report, output), expected, "{case}");
         });
     }
 
