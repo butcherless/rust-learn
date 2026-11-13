@@ -156,7 +156,7 @@ pub fn event(event: &Event) -> Message {
         } => {
             let added = format!(
                 "Año {year} añadido con un cupo de {} de vacaciones",
-                days(*quota as usize)
+                days(*quota)
             );
             match holidays {
                 Some((from, copied)) => format!(
@@ -203,7 +203,7 @@ pub fn event(event: &Event) -> Message {
         Event::QuotaSet {
             year, days: quota, ..
         } => {
-            format!("Cupo de vacaciones de {year}: {}.", days(*quota as usize))
+            format!("Cupo de vacaciones de {year}: {}.", days(*quota))
         }
     };
     let warning = match event {

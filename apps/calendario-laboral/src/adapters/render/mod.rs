@@ -8,6 +8,7 @@ mod calendar;
 mod style;
 mod text;
 
+use std::fmt::Display;
 use std::iter;
 
 use anstyle::{Ansi256Color, AnsiColor, Color, Style};
@@ -70,12 +71,14 @@ pub fn decimal(hours: f64) -> String {
     text.replace('.', ",")
 }
 
-/// `n` con su palabra en singular solo si es 1: `1 día`, `0 días`, `25 días`.
-fn count(n: usize, singular: &str, plural: &str) -> String {
-    format!("{n} {}", if n == 1 { singular } else { plural })
+/// `n` con su palabra en singular solo si es 1: `1 día`, `0 días`, `25 días`. Vale para cualquier
+/// entero sin signo (`usize` de los recuentos, `u32` del cupo) sin convertirlo con `as`.
+fn count<N: Display + PartialEq + From<u8>>(n: N, singular: &str, plural: &str) -> String {
+    let word = if n == N::from(1) { singular } else { plural };
+    format!("{n} {word}")
 }
 
-fn days(n: usize) -> String {
+fn days<N: Display + PartialEq + From<u8>>(n: N) -> String {
     count(n, "día", "días")
 }
 

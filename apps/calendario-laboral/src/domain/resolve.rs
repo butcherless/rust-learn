@@ -208,7 +208,6 @@ impl Summary {
         self.vacation_used.saturating_sub(self.quota())
     }
 
-    /// El total del mes `month` (RF-14).
     /// Las horas laborables del año repartidas entre los 12 meses (RN-24).
     pub fn monthly_average_hours(&self) -> f64 {
         self.working_hours / Month::ALL.len() as f64

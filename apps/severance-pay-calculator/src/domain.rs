@@ -128,7 +128,7 @@ pub fn calculate(input: Input) -> Result<Report, CalcError> {
 /// it, with the same salary and dismissal type. Each anniversary is counted from the initial date,
 /// so a 29 February start falls on 28 February in non-leap years and on 29 February again in leap
 /// years.
-pub fn forecast(input: Input, years: u32) -> Result<Vec<Report>, CalcError> {
+pub fn forecast(input: Input, years: usize) -> Result<Vec<Report>, CalcError> {
     let anniversaries = (1..)
         .map_while(|year| {
             input
@@ -136,7 +136,7 @@ pub fn forecast(input: Input, years: u32) -> Result<Vec<Report>, CalcError> {
                 .checked_add_months(Months::new(12 * year))
         })
         .skip_while(|anniversary| *anniversary <= input.current_date)
-        .take(usize::try_from(years).unwrap_or(usize::MAX));
+        .take(years);
     std::iter::once(input.current_date)
         .chain(anniversaries)
         .map(|current_date| {

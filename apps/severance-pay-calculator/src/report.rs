@@ -90,7 +90,7 @@ impl Concept {
 }
 
 /// How many anniversaries the forecast covers.
-pub const FORECAST_YEARS: u32 = 5;
+pub const FORECAST_YEARS: usize = 5;
 
 /// A forecast point's offset from the current date: `now`, `+1y`, `+2y`…
 pub fn horizon(years: usize) -> String {

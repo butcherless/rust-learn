@@ -255,7 +255,7 @@ fn input_height() -> u16 {
 
 /// A line per forecast point and the legend.
 fn forecast_height() -> u16 {
-    panel_size(0, FORECAST_YEARS as usize + 2).1
+    panel_size(0, FORECAST_YEARS + 2).1
 }
 
 /// The table: header and rule, each group's heading and rows, spacers between groups, then a
