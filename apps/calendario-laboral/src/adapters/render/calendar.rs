@@ -88,8 +88,9 @@ fn month_grid(view: &MonthView, title: &str, weeks: usize, marker: Marker) -> Ve
     .collect()
 }
 
-fn default_vacation_note(days: &[ResolvedDay]) -> Option<String> {
-    days.iter()
+/// Recorre los días solo hasta el primero de vacaciones por defecto, sin copiarlos.
+fn default_vacation_note<'a>(days: impl IntoIterator<Item = &'a ResolvedDay>) -> Option<String> {
+    days.into_iter()
         .any(|day| day.origin == Origin::DefaultVacation)
         .then(|| {
             "Vacaciones por defecto desde el 1 de julio: el año no tiene marcas de vacaciones."
@@ -209,12 +210,13 @@ pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> S
                 })
                 .chain(iter::once(grid_rule(row.len(), corners)))
         });
-    let all_days: Vec<ResolvedDay> = months.iter().flat_map(|view| view.days.clone()).collect();
     lines(
         top.into_iter()
             .chain(rows)
             .chain(iter::once(String::new()))
-            .chain(default_vacation_note(&all_days))
+            .chain(default_vacation_note(
+                months.iter().flat_map(|view| &view.days),
+            ))
             .chain([legend(marker), vacation_line(summary)])
             .chain(year_hours_lines(summary)),
     )
