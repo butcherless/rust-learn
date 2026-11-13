@@ -2,9 +2,11 @@
 //!
 //! Sigue The Elm Architecture: [`message`] convierte una tecla en un [`Message`], y
 //! [`Viewer::update`] devuelve el estado siguiente y un [`Effect`]. El estado no sabe nada del
-//! terminal; [`run`] es el único código con efectos secundarios.
+//! terminal; [`run`] es el único código con efectos secundarios. La tecla `r` vuelve a leer el
+//! fichero y a dibujar la vista (RN-28).
 
 use std::io::{self, Write};
+use std::iter;
 
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers};
@@ -53,6 +55,8 @@ pub enum Message {
     Home,
     /// Al final.
     End,
+    /// Volver a leer el fichero y a dibujar la vista (RN-28).
+    Reload,
     /// Cerrar la ventana.
     Quit,
 }
@@ -62,6 +66,8 @@ pub enum Message {
 pub enum Effect {
     /// Volver a dibujar y esperar otra tecla.
     None,
+    /// Volver a leer el fichero y pasar el texto nuevo a [`Viewer::reloaded`] (RN-28).
+    Reload,
     /// Cerrar la ventana.
     Quit,
 }
@@ -77,11 +83,12 @@ pub fn message(key: KeyEvent) -> Option<Message> {
         KeyCode::PageDown | KeyCode::Char(' ') => Some(Message::PageDown),
         KeyCode::Home | KeyCode::Char('g') => Some(Message::Home),
         KeyCode::End | KeyCode::Char('G') => Some(Message::End),
+        KeyCode::Char('r' | 'R') => Some(Message::Reload),
         _ => None,
     }
 }
 
-/// Las líneas de la vista y la primera que se ve.
+/// Las líneas de la vista, la primera que se ve y el error de la última recarga, si falló.
 ///
 /// `height` es el número de líneas que caben; llega en cada llamada porque el terminal puede
 /// cambiar de tamaño.
@@ -89,6 +96,7 @@ pub fn message(key: KeyEvent) -> Option<Message> {
 pub struct Viewer {
     lines: Vec<String>,
     top: usize,
+    error: Option<String>,
 }
 
 impl Viewer {
@@ -97,6 +105,22 @@ impl Viewer {
         Self {
             lines: text.lines().map(str::to_owned).collect(),
             top: 0,
+            error: None,
+        }
+    }
+
+    /// La vista tras recargar (RN-28): con el texto nuevo desde la misma línea, o la de antes con
+    /// el error en la línea de ayuda si no se ha podido leer.
+    pub fn reloaded(self, text: Result<String, String>) -> Self {
+        match text {
+            Ok(text) => Self {
+                top: self.top,
+                ..Self::new(&text)
+            },
+            Err(error) => Self {
+                error: Some(error),
+                ..self
+            },
         }
     }
 
@@ -106,6 +130,7 @@ impl Viewer {
         let page = height.max(1);
         let next = match message {
             Message::Quit => return (self, Effect::Quit),
+            Message::Reload => return (self, Effect::Reload),
             Message::Up => top.saturating_sub(1),
             Message::Down => top.saturating_add(1),
             Message::PageUp => top.saturating_sub(page),
@@ -126,18 +151,25 @@ impl Viewer {
             .map(String::as_str)
     }
 
-    /// La línea de ayuda: las teclas y, si la vista no cabe, qué líneas se ven.
+    /// La línea de ayuda: el error de la última recarga, si falló, qué líneas se ven, si la vista
+    /// no cabe, y las teclas.
     pub fn help(&self, height: usize) -> String {
         let total = self.lines.len();
-        if total <= height {
-            "Esc o q: salir".to_owned()
-        } else {
+        let error = self
+            .error
+            .as_ref()
+            .map(|error| format!("No se ha podido recargar: {error}"));
+        let scroll = (total > height).then(|| {
             let first = self.top(height) + 1;
             let last = (self.top(height) + height).min(total);
-            format!(
-                "Líneas {first}–{last} de {total} · ↑ ↓ RePág AvPág Inicio Fin: desplazar · Esc o q: salir"
-            )
-        }
+            format!("Líneas {first}–{last} de {total} · ↑ ↓ RePág AvPág Inicio Fin: desplazar")
+        });
+        error
+            .into_iter()
+            .chain(scroll)
+            .chain(iter::once("r: recargar · Esc o q: salir".to_owned()))
+            .collect::<Vec<_>>()
+            .join(" · ")
     }
 
     /// La primera línea que se ve. Si el terminal ha crecido, sube para no dejar hueco abajo.
@@ -150,19 +182,23 @@ impl Viewer {
     }
 }
 
-/// Muestra `text` en la pantalla alternativa hasta que se cierra con `Esc` o `q`. El terminal se
-/// restaura también si el bucle falla.
-pub fn run(text: &str) -> io::Result<()> {
+/// Muestra `text` en la pantalla alternativa hasta que se cierra con `Esc` o `q`; `r` la cambia
+/// por lo que devuelva `reload` (RN-28). El terminal se restaura también si el bucle falla.
+pub fn run(text: &str, reload: impl FnMut() -> Result<String, String>) -> io::Result<()> {
     let mut out = io::stdout();
     terminal::enable_raw_mode()?;
     let result = execute!(out, EnterAlternateScreen, DisableLineWrap, Hide)
-        .and_then(|()| event_loop(&mut out, Viewer::new(text)));
+        .and_then(|()| event_loop(&mut out, Viewer::new(text), reload));
     let restored =
         execute!(out, Show, EnableLineWrap, LeaveAlternateScreen).and(terminal::disable_raw_mode());
     result.and(restored)
 }
 
-fn event_loop(out: &mut impl Write, initial: Viewer) -> io::Result<()> {
+fn event_loop(
+    out: &mut impl Write,
+    initial: Viewer,
+    mut reload: impl FnMut() -> Result<String, String>,
+) -> io::Result<()> {
     let mut viewer = initial;
     loop {
         let (_, rows) = terminal::size()?;
@@ -174,6 +210,7 @@ fn event_loop(out: &mut impl Write, initial: Viewer) -> io::Result<()> {
             match effect {
                 Effect::Quit => return Ok(()),
                 Effect::None => viewer = next,
+                Effect::Reload => viewer = next.reloaded(reload()),
             }
         }
     }
@@ -272,6 +309,8 @@ mod tests {
             (KeyEvent::from(KeyCode::Char('g')), Some(Message::Home)),
             (KeyEvent::from(KeyCode::End), Some(Message::End)),
             (KeyEvent::from(KeyCode::Char('G')), Some(Message::End)),
+            (KeyEvent::from(KeyCode::Char('r')), Some(Message::Reload)),
+            (KeyEvent::from(KeyCode::Char('R')), Some(Message::Reload)),
             (KeyEvent::from(KeyCode::Char('c')), None),
             (KeyEvent::from(KeyCode::Enter), None),
         ]
@@ -319,9 +358,9 @@ mod tests {
         );
         assert_eq!(
             viewer.help(3),
-            "Líneas 3–5 de 10 · ↑ ↓ RePág AvPág Inicio Fin: desplazar · Esc o q: salir"
+            "Líneas 3–5 de 10 · ↑ ↓ RePág AvPág Inicio Fin: desplazar · r: recargar · Esc o q: salir"
         );
-        assert_eq!(numbered(3).help(3), "Esc o q: salir");
+        assert_eq!(numbered(3).help(3), "r: recargar · Esc o q: salir");
     }
 
     #[test]
@@ -344,6 +383,51 @@ mod tests {
             .for_each(|line| assert!(screen.find(line) < help, "{line}: {screen}"));
         assert!(!screen.contains("línea 2\u{1b}"), "{screen}");
         assert!(!screen.contains("línea 6"), "{screen}");
+    }
+
+    #[test]
+    fn rn_28_reload_asks_for_the_file_without_changing_the_view() {
+        let viewer = numbered(10).scrolled(3);
+        assert_eq!(
+            viewer.clone().update(Message::Reload, 4),
+            (viewer, Effect::Reload)
+        );
+    }
+
+    #[test]
+    fn rn_28_a_reload_shows_the_new_text_from_the_same_line() {
+        let reloaded = numbered(10).scrolled(3).reloaded(Ok(
+            "nueva 1\nnueva 2\nnueva 3\nnueva 4\nnueva 5\nnueva 6\nnueva 7\n".to_owned(),
+        ));
+        assert_eq!(
+            reloaded.visible(2).collect::<Vec<_>>(),
+            ["nueva 4", "nueva 5"]
+        );
+        // Si el texto nuevo es más corto, se ve su final.
+        let shorter = numbered(10)
+            .scrolled(8)
+            .reloaded(Ok("nueva 1\nnueva 2\nnueva 3\n".to_owned()));
+        assert_eq!(
+            shorter.visible(2).collect::<Vec<_>>(),
+            ["nueva 2", "nueva 3"]
+        );
+    }
+
+    #[test]
+    fn rn_28_a_failed_reload_keeps_the_view_and_shows_the_error_until_the_next_one() {
+        let failed = numbered(3).reloaded(Err("JSON no válido".to_owned()));
+        assert_eq!(
+            failed.visible(3).collect::<Vec<_>>(),
+            ["línea 1", "línea 2", "línea 3"]
+        );
+        assert_eq!(
+            failed.help(3),
+            "No se ha podido recargar: JSON no válido · r: recargar · Esc o q: salir"
+        );
+        assert_eq!(
+            failed.reloaded(Ok("nueva\n".to_owned())).help(3),
+            "r: recargar · Esc o q: salir"
+        );
     }
 
     impl Viewer {

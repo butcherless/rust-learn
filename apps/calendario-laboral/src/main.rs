@@ -2,7 +2,7 @@
 //!
 //! Lee el reloj y el fichero, ejecuta el caso de uso, guarda el fichero si ha cambiado y
 //! muestra el resultado: en la consola o, para `month`, `year` y `summary` en un terminal, en
-//! una ventana a pantalla completa (RN-22).
+//! una ventana a pantalla completa (RN-22), que puede volver a leer el fichero (RN-28).
 
 use std::error::Error;
 use std::io::IsTerminal;
@@ -48,30 +48,53 @@ fn argument_error(error: &clap::Error) -> ExitCode {
 /// Solo guarda si el caso de uso ha ido bien, así una operación inválida deja el fichero
 /// como estaba (RN-13).
 fn run(path: &Path, command: Command, output: Output) -> Result<(), Box<dyn Error>> {
-    match execute(json::load(path)?, command)? {
+    match execute(json::load(path)?, command.clone())? {
         Outcome::Changed { calendar, event } => {
             json::save(path, &calendar)?;
             show(&event);
         }
         Outcome::Unchanged(event) => show(&event),
-        Outcome::Report(report) => present(&report, output)?,
+        Outcome::Report(report) => present(&report, output, || query(path, command.clone()))?,
     }
     Ok(())
 }
 
-/// La ventana si [`viewer::opens`] lo decide, y la consola si no.
-fn present(report: &Report, output: Output) -> std::io::Result<()> {
+/// Vuelve a leer el fichero y a lanzar la consulta, para la tecla `r` de la ventana (RN-28).
+fn query(path: &Path, command: Command) -> Result<Report, Box<dyn Error>> {
+    match execute(json::load(path)?, command)? {
+        Outcome::Report(report) => Ok(report),
+        Outcome::Changed { .. } | Outcome::Unchanged(_) => {
+            Err("la consulta ha cambiado el calendario".into())
+        }
+    }
+}
+
+/// La ventana si [`viewer::opens`] lo decide, y la consola si no. En la ventana, `reload` da el
+/// informe con el fichero tal como esté al pulsar `r` (RN-28).
+fn present(
+    report: &Report,
+    output: Output,
+    reload: impl Fn() -> Result<Report, Box<dyn Error>>,
+) -> std::io::Result<()> {
     let color = color();
-    let text = render::report(report, Marker::for_color(color));
+    let marker = Marker::for_color(color);
     if viewer::opens(report, output) {
         // Con `NO_COLOR`, sin los códigos de color, como haría anstream en la consola.
-        viewer::run(&if color {
-            text
-        } else {
-            anstream::adapter::strip_str(&text).to_string()
+        let window_text = |report: &Report| {
+            let text = render::report(report, marker);
+            if color {
+                text
+            } else {
+                anstream::adapter::strip_str(&text).to_string()
+            }
+        };
+        viewer::run(&window_text(report), || {
+            reload()
+                .map(|report| window_text(&report))
+                .map_err(|error| error.to_string())
         })
     } else {
-        anstream::print!("{text}");
+        anstream::print!("{}", render::report(report, marker));
         Ok(())
     }
 }

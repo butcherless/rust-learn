@@ -30,7 +30,7 @@ El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si ta
 
 El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (versionado en git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
 
-Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
+Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se recarga con `r` (RN-28) y se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
 
 ```bash
 cargo cal list                                     # RF-04; `list 2026` para un año
@@ -131,7 +131,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12) y, entre paréntesis, `monthly_average_days` (media / `REFERENCE_DAY_HOURS`, 8 h fijas) (RN-24).
     - `vacation_grid` (RN-27): un cuadro `██` por día del cupo (o por día disfrutado, si pasan del cupo; como mucho 366), cinco por fila y primero los disfrutados, con la leyenda a la derecha centrada en vertical. Sin color, los pendientes son `░░`. `beside_vacations` la pone a la derecha del calendario: en `month`, desde el título, alargando el mes con semanas en blanco si hace falta; en `year`, desde el título de la primera fila de meses (169 columnas en total).
     - Las horas llevan coma decimal (`decimal`).
-  - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
+  - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`. `r` da `Effect::Reload` (RN-28): `run` llama a la función que recibe, y `Viewer::reloaded` cambia el texto manteniendo la línea, o guarda el error para la línea de ayuda.
     - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con `Output::Window`. `Args::output(terminal)` elige una vez entre `Window` y `Console`: la ventana solo en un terminal y sin `--no-tui`.
     - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI) y la primera visible. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
     - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
@@ -142,7 +142,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `save` escribe `<fichero>.tmp` y lo renombra.
     - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión 2.
 - **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
-  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con el `Output` que `main` calcula a partir de `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana.
+  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con el `Output` que `main` calcula a partir de `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana. Para la recarga de RN-28 le pasa `query`, que vuelve a leer el fichero y ejecuta otra vez el mismo `Command`.
   - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (`argument_error`, con `Args::try_parse`).
   - Los avisos van a stderr.
 

@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-13 |
-| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-27; pendientes RF-12 y RF-13 (§9) |
+| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-28; pendientes RF-12 y RF-13 (§9) |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | [CLAUDE.md](CLAUDE.md): comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -108,6 +108,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-25 | Las `Hours` son de cada `Year`: cambiarlas en un año no altera las horas ni los totales de los demás. Un `Year` nuevo hereda las `Hours` del año anterior más cercano del fichero; si no hay ninguno anterior, las del siguiente; y si el fichero no tiene años, las de por defecto (8,5 h las jornadas completas y 6 h las reducidas). |
 | RN-26 | Un `Mark` `Working` (`laborable`) fuerza la jornada completa, `Working` o `SummerWorking` en `Summer`, en días que serían `Reduced` por la regla `ReducedWeekday` o por un `Mark` `Reduced`. Su prioridad está entre `Vacation` y `Reduced` (§2.3), así que no cambia fines de semana, festivos ni vacaciones. |
 | RN-27 | Las vistas de mes y de año muestran, a la derecha del calendario, una cuadrícula con las vacaciones del año: un cuadro por día del cupo, cinco por fila (5×5 con 25 días), primero los **disfrutados** en naranja (el color de `Vacation`) y después los **pendientes** en verde. Disfrutados son los días de `DayKind` `Vacation` hasta hoy, incluido, también los de `DefaultVacation` (RN-14); pendientes, el cupo menos los disfrutados, nunca por debajo de cero. Si los disfrutados superan el cupo, hay un cuadro por cada uno, todos naranjas; como mucho hay 366 cuadros. Cada cuadro son dos columnas (`██`), separados por un espacio. A la derecha, centrados en vertical, el título `Vacaciones` y los días de cada estado (`██ Disfrutadas  20`, `░░ Pendientes    5`). Sin color, los pendientes se dibujan con `░░`. En la vista de mes, la cuadrícula empieza en la línea del título, y la vista cabe en 80 columnas; si la cuadrícula es más alta que el mes (cupo de más de 30 días), el mes se alarga con líneas en blanco. En la de año empieza en el título de la primera fila de meses, a 4 espacios del marco, y la vista ocupa 169 columnas. |
+| RN-28 | En la ventana de RN-22, `r` o `R` recargan la vista: vuelven a leer el fichero y a lanzar la misma consulta, y la vista se redibuja desde la misma línea (o desde la última que deje la pantalla llena, si el texto nuevo es más corto). Así se ven los cambios hechos desde otra consola sin cerrar la ventana. Si el fichero no se puede leer, la vista sigue como estaba y la línea de ayuda muestra `No se ha podido recargar: <error>` hasta la siguiente recarga. La línea de ayuda incluye `r: recargar`. |
 
 ## 4. Requisitos funcionales
 
@@ -161,7 +162,7 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
 - **`<día>`** (`Weekday`): el nombre en español, con o sin tilde (`lunes`… `domingo`, `miercoles`, `sabado`).
 - **`<mes>`** (`Month`): el nombre en español (`enero`… `diciembre`, también `setiembre`) o el número, con o sin cero delante (`6`, `06`).
 - **Argumentos opcionales:** sin año, `month`, `year` y `summary` usan el año actual; `month` sin mes usa también el mes actual, y con solo el mes (`month junio`), el del año actual. `day` sin fecha muestra el día de hoy.
-- **Ventana (RN-22):** en un terminal, `month`, `year` y `summary` se abren a pantalla completa y se cierran con `Esc` o `q`. `--no-tui` los imprime en la consola.
+- **Ventana (RN-22):** en un terminal, `month`, `year` y `summary` se abren a pantalla completa, se recargan con `r` (RN-28) y se cierran con `Esc` o `q`. `--no-tui` los imprime en la consola.
 - **Fichero:** se indica con `--file <ruta>`; si no, con la variable `CALENDARIO_FILE`; y si tampoco, se usa `./calendario.json`.
 - **Salidas:**
   - Los resultados van a stdout, y los errores y avisos a stderr.
@@ -298,6 +299,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RNF-07: los errores de argumentos de clap se muestran en español. clap no se puede traducir, así que `cli::error_text` monta el mensaje a partir del tipo de error y su contexto (argumento, valor, valores posibles, sugerencias y uso). Los tipos de error poco habituales se muestran con el texto de clap. |
 | 2026-11-12 | RNF-07: la ayuda también se traduce sobre el texto que genera clap: `[possible values: …]`, `[default: …]`, `[env: …]` y `[OPTIONS]` pasan a `[valores posibles: …]`, `[por defecto: …]`, `[variable: …]` y `[OPCIONES]`. |
 | 2026-11-13 | RN-27: vacaciones disfrutadas (hasta hoy) en naranja y pendientes en verde, a la derecha del calendario en las vistas de mes y de año. «Disfrutadas» depende de la fecha, así que `month` y `year` reciben el día de hoy, como ya hacían para el mes y el año por defecto. No se separan las planificadas de las sin asignar: eso ya lo dice «Vacaciones restantes», que cuenta todas las marcadas. Primero fue una tarta de 15×8 celdas con medios bloques (`▀` `▄`, dos píxeles por celda, 14,4° por día con 25 días), pero con el interlineado del terminal salían franjas y no se leía bien; se cambió por una cuadrícula de un cuadro por día, 5×5 con el cupo por defecto, que además se cuenta de un vistazo. La vista de año pasa de 130 a 169 columnas: en la ventana de RN-22, lo que no cabe se corta, y la cuadrícula es lo primero que se pierde. |
+| 2026-11-13 | RN-28: `r` recarga la ventana, como en `pr-checker`, para ver las marcas añadidas desde otra consola. Repite la consulta con el mismo día de hoy con que se abrió. `viewer` no sabe de ficheros: `run` recibe una función que devuelve el texto nuevo, y `main` la construye con la ruta y el `Command`. Un error al recargar no cierra la ventana. |
 
 ### Pendiente o posibles ampliaciones
 

@@ -22,8 +22,9 @@ cargo cal --help                                   # y `cargo cal <comando> --he
 ```
 
 En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa: `↑` `↓`,
-`RePág` `AvPág` e `Inicio` `Fin` desplazan la vista si no cabe, y `Esc` o `q` la cierran y vuelven a
-la consola. Con `--no-tui`, o al redirigir la salida, se imprimen en la consola.
+`RePág` `AvPág` e `Inicio` `Fin` desplazan la vista si no cabe, `r` la recarga con los cambios del
+fichero, y `Esc` o `q` la cierran y vuelven a la consola. Con `--no-tui`, o al redirigir la salida,
+se imprimen en la consola.
 
 Para instalar el binario en `~/.cargo/bin`: `cargo install --path apps/calendario-laboral`.
 
