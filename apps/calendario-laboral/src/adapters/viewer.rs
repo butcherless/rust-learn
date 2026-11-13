@@ -244,7 +244,7 @@ mod tests {
     use super::*;
     use crate::application::{Command, Outcome, execute};
     use crate::domain::Month;
-    use crate::domain::fixtures::{calendar, date, today};
+    use crate::domain::fixtures::{calendar, date};
 
     fn report(command: Command) -> Report {
         match execute(calendar(), command) {
@@ -266,12 +266,8 @@ mod tests {
         let month = report(Command::Month {
             year: 2026,
             month: Month::June,
-            today: today(),
         });
-        let year = report(Command::Year {
-            year: 2026,
-            today: today(),
-        });
+        let year = report(Command::Year(2026));
         let summary = report(Command::Summary(2026));
         let day = report(Command::Day(date(2026, 6, 8)));
         let list = report(Command::List(None));

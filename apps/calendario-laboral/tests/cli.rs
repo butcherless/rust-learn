@@ -64,17 +64,17 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
     );
     let month = stdout(&run(&file, &["month", "2026", "6"]));
     assert!(!month.contains('\u{1b}'), "{month}");
-    // RN-27: a la derecha va la tarta de vacaciones, que depende del día de hoy.
-    [
-        "               Junio 2026",
-        "Lu    Ma    Mi    Ju    Vi    Sá    Do",
-        " 1 L   2 L   3 L   4 L   5 V   6 S   7 S",
-        " 8 V   9 V  10 V  11 V  12 V  13 S  14 S",
-    ]
-    .into_iter()
-    .zip(month.lines())
-    .for_each(|(grid, line)| assert!(line.starts_with(grid), "{grid}\n{month}"));
-    assert!(month.contains("█ Disfrutadas"), "{month}");
+    // RN-27: a la derecha, la cuadrícula de vacaciones con las 6 de la marca usadas.
+    assert_eq!(
+        month.lines().take(5).collect::<Vec<_>>(),
+        [
+            "               Junio 2026                   ██ ██ ██ ██ ██",
+            "Lu    Ma    Mi    Ju    Vi    Sá    Do      ██ ░░ ░░ ░░ ░░   Vacaciones",
+            " 1 L   2 L   3 L   4 L   5 V   6 S   7 S    ░░ ░░ ░░ ░░ ░░   ██ Usadas      6",
+            " 8 V   9 V  10 V  11 V  12 V  13 S  14 S    ░░ ░░ ░░ ░░ ░░   ░░ Restantes  19",
+            "15 L  16 L  17 L  18 L  19 R  20 S  21 S    ░░ ░░ ░░ ░░ ░░",
+        ]
+    );
     assert!(
         month.ends_with("Vacaciones restantes: 19 / 25\n"),
         "{month}"

@@ -1,5 +1,5 @@
 //! La cuadrícula de vacaciones, a la derecha del calendario en las vistas de mes y de año
-//! (RN-27): un cuadro por día del cupo, cinco por fila, primero los disfrutados.
+//! (RN-27): un cuadro por día del cupo, cinco por fila, primero los usados.
 
 use std::iter;
 
@@ -22,20 +22,20 @@ pub const GRID_TITLE: &str = "Vacaciones";
 /// El estado de un día del cupo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Share {
-    /// Disfrutado, en el naranja de `Vacation`.
-    Taken,
-    /// Pendiente, en verde.
-    Pending,
+    /// Usado, ya disfrutado o reservado con una marca: en el naranja de `Vacation`.
+    Used,
+    /// Restante, aún libre: en verde.
+    Remaining,
 }
 
 impl Share {
     /// Un cuadro: un bloque de su color o, sin color, un carácter distinto en cada estado.
     fn square(self, marker: Marker) -> String {
         match (marker, self) {
-            (Marker::Bar, Self::Taken) => styled(fg(color(DayKind::Vacation)), "██"),
-            (Marker::Bar, Self::Pending) => styled(fg(AnsiColor::Green.into()), "██"),
-            (Marker::Letter, Self::Taken) => "██".to_owned(),
-            (Marker::Letter, Self::Pending) => "░░".to_owned(),
+            (Marker::Bar, Self::Used) => styled(fg(color(DayKind::Vacation)), "██"),
+            (Marker::Bar, Self::Remaining) => styled(fg(AnsiColor::Green.into()), "██"),
+            (Marker::Letter, Self::Used) => "██".to_owned(),
+            (Marker::Letter, Self::Remaining) => "░░".to_owned(),
         }
     }
 }
@@ -44,17 +44,19 @@ fn fg(color: Color) -> Style {
     Style::new().fg_color(Some(color))
 }
 
-/// Las líneas de la cuadrícula de `progress`, con su leyenda a la derecha (RN-27). Hay un
-/// cuadro por día del cupo, o por día disfrutado si pasan del cupo.
-pub(super) fn vacation_grid(progress: VacationProgress, marker: Marker) -> Vec<String> {
-    let quota = usize::try_from(progress.quota).unwrap_or(MAX_DAYS);
-    let days = quota.max(progress.taken).min(MAX_DAYS);
+/// Las líneas de la cuadrícula de las vacaciones de `summary`, con su leyenda a la derecha
+/// (RN-27). Hay un cuadro por día del cupo, o por día usado si pasan del cupo. Usados son todos
+/// los días de vacaciones del año, también los que aún no han llegado: ya no están libres.
+pub(super) fn vacation_grid(summary: &Summary, marker: Marker) -> Vec<String> {
+    let used = summary.vacation_used;
+    let quota = usize::try_from(summary.vacation_quota).unwrap_or(MAX_DAYS);
+    let days = quota.max(used).min(MAX_DAYS);
     let squares: Vec<String> = (0..days)
         .map(|day| {
-            if day < progress.taken {
-                Share::Taken
+            if day < used {
+                Share::Used
             } else {
-                Share::Pending
+                Share::Remaining
             }
         })
         .map(|share| share.square(marker))
@@ -72,15 +74,11 @@ pub(super) fn vacation_grid(progress: VacationProgress, marker: Marker) -> Vec<S
         .collect();
     let legend = [
         styled(Style::new().bold(), GRID_TITLE),
+        format!("{} Usadas {:>6}", Share::Used.square(marker), used),
         format!(
-            "{} Disfrutadas {:>3}",
-            Share::Taken.square(marker),
-            progress.taken
-        ),
-        format!(
-            "{} Pendientes {:>4}",
-            Share::Pending.square(marker),
-            progress.pending()
+            "{} Restantes {:>3}",
+            Share::Remaining.square(marker),
+            summary.vacation_remaining()
         ),
     ];
     let height = rows.len().max(legend.len());
@@ -104,8 +102,17 @@ pub(super) fn vacation_grid(progress: VacationProgress, marker: Marker) -> Vec<S
 mod tests {
     use super::*;
 
-    fn progress(taken: usize, quota: u32) -> VacationProgress {
-        VacationProgress { taken, quota }
+    /// Un resumen con `used` días de vacaciones y un cupo de `quota`; el resto no cuenta aquí.
+    fn summary(used: usize, quota: u32) -> Summary {
+        Summary {
+            year: 2026,
+            counts: DayKind::ALL.map(|kind| (kind, 0)),
+            working_days: 0,
+            working_hours: 0.0,
+            vacation_used: used,
+            vacation_quota: quota,
+            months: Vec::new(),
+        }
     }
 
     fn plain(lines: &[String]) -> String {
@@ -126,14 +133,14 @@ mod tests {
     }
 
     #[test]
-    fn rn_27_without_color_taken_days_come_first_five_per_row() {
+    fn rn_27_without_color_used_days_come_first_five_per_row() {
         assert_eq!(
-            plain(&vacation_grid(progress(12, 25), Marker::Letter)),
+            plain(&vacation_grid(&summary(12, 25), Marker::Letter)),
             [
                 "██ ██ ██ ██ ██",
                 "██ ██ ██ ██ ██   Vacaciones",
-                "██ ██ ░░ ░░ ░░   ██ Disfrutadas  12",
-                "░░ ░░ ░░ ░░ ░░   ░░ Pendientes   13",
+                "██ ██ ░░ ░░ ░░   ██ Usadas     12",
+                "░░ ░░ ░░ ░░ ░░   ░░ Restantes  13",
                 "░░ ░░ ░░ ░░ ░░",
                 "",
             ]
@@ -142,31 +149,31 @@ mod tests {
     }
 
     #[test]
-    fn rn_27_one_square_per_day_of_the_quota_or_of_the_taken_days_above_it() {
+    fn rn_27_one_square_per_day_of_the_quota_or_of_the_used_days_above_it() {
         [
-            ("cupo de 25", progress(0, 25), 5, 25, 0),
-            ("cupo de 23", progress(3, 23), 5, 20, 3),
-            ("por encima del cupo", progress(27, 25), 6, 0, 27),
-            ("sin cupo", progress(0, 0), 3, 0, 0),
-            ("cupo enorme", progress(0, u32::MAX), 74, 366, 0),
+            ("cupo de 25", summary(0, 25), 5, 25, 0),
+            ("cupo de 23", summary(3, 23), 5, 20, 3),
+            ("por encima del cupo", summary(27, 25), 6, 0, 27),
+            ("sin cupo", summary(0, 0), 3, 0, 0),
+            ("cupo enorme", summary(0, u32::MAX), 74, 366, 0),
         ]
         .into_iter()
-        .for_each(|(case, progress, height, pending, taken)| {
-            let text = plain(&vacation_grid(progress, Marker::Letter));
+        .for_each(|(case, summary, height, remaining, used)| {
+            let text = plain(&vacation_grid(&summary, Marker::Letter));
             assert_eq!(text.lines().count(), height, "{case}\n{text}");
-            assert_eq!(text.matches("░░").count() - 1, pending, "{case}\n{text}");
-            assert_eq!(text.matches("██").count() - 1, taken, "{case}\n{text}");
+            assert_eq!(text.matches("░░").count() - 1, remaining, "{case}\n{text}");
+            assert_eq!(text.matches("██").count() - 1, used, "{case}\n{text}");
         });
     }
 
     #[test]
     fn rn_27_the_legend_stays_beside_a_short_grid() {
         assert_eq!(
-            plain(&vacation_grid(progress(1, 3), Marker::Letter)),
+            plain(&vacation_grid(&summary(1, 3), Marker::Letter)),
             [
                 "██ ░░ ░░         Vacaciones",
-                "                 ██ Disfrutadas   1",
-                "                 ░░ Pendientes    2",
+                "                 ██ Usadas      1",
+                "                 ░░ Restantes   2",
                 "",
             ]
             .join("\n")
@@ -174,11 +181,11 @@ mod tests {
     }
 
     #[test]
-    fn rn_27_with_color_taken_days_are_orange_and_pending_ones_green() {
-        let text = vacation_grid(progress(10, 25), Marker::Bar).concat();
+    fn rn_27_with_color_used_days_are_orange_and_remaining_ones_green() {
+        let text = vacation_grid(&summary(10, 25), Marker::Bar).concat();
         [
-            ("\u{1b}[38;5;208m██\u{1b}[0m", "disfrutados: naranja"),
-            ("\u{1b}[32m██\u{1b}[0m", "pendientes: verde"),
+            ("\u{1b}[38;5;208m██\u{1b}[0m", "usados: naranja"),
+            ("\u{1b}[32m██\u{1b}[0m", "restantes: verde"),
             ("\u{1b}[1mVacaciones\u{1b}[0m", "título en negrita"),
         ]
         .into_iter()

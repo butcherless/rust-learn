@@ -293,12 +293,8 @@ impl CommandArg {
             Self::Month { year, month } => Command::Month {
                 year: year.unwrap_or(today.year()),
                 month: month.unwrap_or_else(|| Month::of(today)),
-                today,
             },
-            Self::Year { year } => Command::Year {
-                year: year.unwrap_or(today.year()),
-                today,
-            },
+            Self::Year { year } => Command::Year(year.unwrap_or(today.year())),
             Self::Summary { year } => Command::Summary(year.unwrap_or(today.year())),
             Self::Config => Command::Config,
             Self::Weekend { days } => Command::Weekend(days.days),
@@ -312,12 +308,12 @@ impl CommandArg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::fixtures::{date, today};
+    use crate::domain::fixtures::date;
     use clap::error::ErrorKind;
 
     fn parse(args: &[&str]) -> Result<(PathBuf, Command), ErrorKind> {
         Args::try_parse_from(std::iter::once("calendario").chain(args.iter().copied()))
-            .map(|args| (args.file, args.command.into_command(today())))
+            .map(|args| (args.file, args.command.into_command(date(2026, 11, 8))))
             .map_err(|error| error.kind())
     }
 
@@ -480,16 +476,9 @@ mod tests {
                 Command::Month {
                     year: 2026,
                     month: Month::June,
-                    today: today(),
                 },
             ),
-            (
-                &["year", "2027"][..],
-                Command::Year {
-                    year: 2027,
-                    today: today(),
-                },
-            ),
+            (&["year", "2027"][..], Command::Year(2027)),
             (&["summary", "2025"][..], Command::Summary(2025)),
             (
                 &["hours", "2026", "laborable-verano", "8.5"][..],
@@ -551,11 +540,7 @@ mod tests {
         .for_each(|(text, month)| {
             assert_eq!(
                 command(&["month", "2026", text]),
-                Ok(Command::Month {
-                    year: 2026,
-                    month,
-                    today: today(),
-                }),
+                Ok(Command::Month { year: 2026, month }),
                 "{text}"
             );
         });
@@ -569,7 +554,6 @@ mod tests {
                 Command::Month {
                     year: 2026,
                     month: Month::November,
-                    today: today(),
                 },
             ),
             (
@@ -577,7 +561,6 @@ mod tests {
                 Command::Month {
                     year: 2026,
                     month: Month::June,
-                    today: today(),
                 },
             ),
             (
@@ -585,18 +568,11 @@ mod tests {
                 Command::Month {
                     year: 2026,
                     month: Month::December,
-                    today: today(),
                 },
             ),
-            (
-                &["year"][..],
-                Command::Year {
-                    year: 2026,
-                    today: today(),
-                },
-            ),
+            (&["year"][..], Command::Year(2026)),
             (&["summary"][..], Command::Summary(2026)),
-            (&["day"][..], Command::Day(today())),
+            (&["day"][..], Command::Day(date(2026, 11, 8))),
         ]
         .into_iter()
         .for_each(|(args, expected)| assert_eq!(command(args), Ok(expected), "{args:?}"));

@@ -158,12 +158,7 @@ fn beside_vacations(
         })
 }
 
-pub(super) fn month(
-    view: &MonthView,
-    summary: &Summary,
-    progress: VacationProgress,
-    marker: Marker,
-) -> String {
+pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
     let marks = (!view.marks.is_empty())
         .then(|| {
             iter::once(String::new())
@@ -178,7 +173,7 @@ pub(super) fn month(
         .flatten();
     // RN-27: el mes se alarga con semanas en blanco si la cuadrícula de vacaciones es más alta
     // (un cupo de más de 30 días), para que no quede junto a las marcas.
-    let vacations = vacation_grid(progress, marker);
+    let vacations = vacation_grid(summary, marker);
     let weeks = vacations.len().saturating_sub(2);
     let grid = beside_vacations(
         month_grid(
@@ -202,12 +197,7 @@ pub(super) fn month(
 
 /// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21), con la
 /// cuadrícula de vacaciones a la derecha de la primera fila (RN-27).
-pub(super) fn year(
-    months: &[MonthView],
-    summary: &Summary,
-    progress: VacationProgress,
-    marker: Marker,
-) -> String {
+pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
     let columns = months.len().min(MONTHS_PER_ROW);
     // RN-23: la franja con el año, dentro del marco y sobre la primera fila de meses.
@@ -256,7 +246,7 @@ pub(super) fn year(
         beside_vacations(
             top.into_iter().chain(rows),
             from,
-            vacation_grid(progress, marker),
+            vacation_grid(summary, marker),
         )
         .chain(iter::once(String::new()))
         .chain(default_vacation_note(

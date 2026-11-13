@@ -18,7 +18,7 @@ use chrono::{Datelike, Weekday};
 use crate::application::{Event, MonthView, Report};
 use crate::domain::{
     Calendar, DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Shift,
-    Summary, VacationProgress,
+    Summary,
 };
 
 use calendar::{month, year};
@@ -156,8 +156,8 @@ pub fn report(report: &Report, marker: Marker) -> String {
         Report::Marks(marks) if marks.is_empty() => lines(iter::once("No hay marcas.".to_owned())),
         Report::Marks(marks) => lines(marks.iter().map(mark_line)),
         Report::Day(resolved) => day(resolved, marker),
-        Report::Month(view, totals, progress) => month(view, totals, *progress, marker),
-        Report::Year(months, totals, progress) => year(months, totals, *progress, marker),
+        Report::Month(view, totals) => month(view, totals, marker),
+        Report::Year(months, totals) => year(months, totals, marker),
         Report::Summary(totals) => summary(totals, marker),
         Report::Config(calendar) => config(calendar),
     }
@@ -169,7 +169,7 @@ mod tests {
     use super::text::HOLIDAYS_TO_CHECK;
     use super::*;
     use crate::application::{Command, Outcome, execute};
-    use crate::domain::fixtures::{calendar, date, marked, today};
+    use crate::domain::fixtures::{calendar, date, marked};
     use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, MonthExt, Shift};
 
     /// La parte de la cuadrícula de una línea de la vista de mes, sin las vacaciones de su derecha
@@ -226,8 +226,8 @@ mod tests {
         let expected = [
             "               Junio 2026                   ██ ██ ██ ██ ██",
             "Lu    Ma    Mi    Ju    Vi    Sá    Do      ██ ░░ ░░ ░░ ░░   Vacaciones",
-            " 1 L   2 L   3 L   4 L   5 V   6 S   7 S    ░░ ░░ ░░ ░░ ░░   ██ Disfrutadas   6",
-            " 8 V   9 V  10 V  11 V  12 V  13 S  14 S    ░░ ░░ ░░ ░░ ░░   ░░ Pendientes   19",
+            " 1 L   2 L   3 L   4 L   5 V   6 S   7 S    ░░ ░░ ░░ ░░ ░░   ██ Usadas      6",
+            " 8 V   9 V  10 V  11 V  12 V  13 S  14 S    ░░ ░░ ░░ ░░ ░░   ░░ Restantes  19",
             "15 L  16 L  17 L  18 L  19 R  20 S  21 S    ░░ ░░ ░░ ░░ ░░",
             "22 L  23 L  24 L  25 L  26 R  27 S  28 S",
             "29 L  30 L",
@@ -247,7 +247,6 @@ mod tests {
                 Command::Month {
                     year: 2026,
                     month: Month::June,
-                    today: today(),
                 }
             ),
             expected
@@ -261,7 +260,6 @@ mod tests {
             Command::Month {
                 year: 2026,
                 month: Month::November,
-                today: today(),
             },
         );
         let lines: Vec<String> = text.lines().map(grid).collect();
@@ -285,13 +283,7 @@ mod tests {
             (MarkKind::Holiday, "2026-06-02", "2026-06-02"),
             (MarkKind::Vacation, "2026-06-03", "2026-06-03"),
         ]);
-        let colored = colored(
-            calendar,
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let colored = colored(calendar, Command::Year(2026));
         [
             (" 4 \u{1b}[34m▌\u{1b}[0m", "laborable: azul"),
             (" 1 \u{1b}[36m▌\u{1b}[0m", "reducido: cian"),
@@ -319,7 +311,6 @@ mod tests {
             Command::Month {
                 year: 2026,
                 month: Month::June,
-                today: today(),
             },
         ) {
             Ok(Outcome::Report(result)) => plain(&report(&result, marker)),
@@ -363,10 +354,7 @@ mod tests {
     fn rf_07_rf_14_year_shows_three_months_per_row_with_their_hours() {
         let text = shown(
             marked(&[(MarkKind::Vacation, "2026-12-24", "2026-12-24")]),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
+            Command::Year(2026),
         );
         let lines: Vec<&str> = text.lines().collect();
         let frame = |index: usize| lines.get(index).map(|line| columns(line, YEAR_WIDTH));
@@ -412,27 +400,20 @@ mod tests {
     #[test]
     fn rn_27_the_vacation_grid_is_beside_the_first_row_of_the_year_and_of_the_month() {
         let calendar = marked(&[(MarkKind::Vacation, "2026-06-01", "2026-06-12")]);
-        let year = shown(
-            calendar.clone(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let year = shown(calendar.clone(), Command::Year(2026));
         let month = shown(
             calendar,
             Command::Month {
                 year: 2026,
                 month: Month::June,
-                today: today(),
             },
         );
-        // Las 5 líneas de la cuadrícula: 10 días disfrutados de 25.
+        // Las 5 líneas de la cuadrícula: 10 días usados de 25.
         let vacations = [
             "██ ██ ██ ██ ██",
             "██ ██ ██ ██ ██   Vacaciones",
-            "░░ ░░ ░░ ░░ ░░   ██ Disfrutadas  10",
-            "░░ ░░ ░░ ░░ ░░   ░░ Pendientes   15",
+            "░░ ░░ ░░ ░░ ░░   ██ Usadas     10",
+            "░░ ░░ ░░ ░░ ░░   ░░ Restantes  15",
             "░░ ░░ ░░ ░░ ░░",
         ];
         [
@@ -469,13 +450,7 @@ mod tests {
 
     #[test]
     fn rn_21_year_frames_the_months_in_a_grey_dotted_grid() {
-        let colored = colored(
-            calendar(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let colored = colored(calendar(), Command::Year(2026));
         let text = plain(&colored);
         let lines: Vec<&str> = text.lines().collect();
         let segment = "┈".repeat(40);
@@ -521,13 +496,7 @@ mod tests {
 
     #[test]
     fn rn_24_year_ends_with_the_year_hours_and_the_monthly_average() {
-        let text = shown(
-            calendar(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let text = shown(calendar(), Command::Year(2026));
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
             lines.get(lines.len().saturating_sub(3)..),
@@ -544,13 +513,7 @@ mod tests {
 
     #[test]
     fn rn_23_year_shows_the_year_once_in_a_band_above_the_months() {
-        let colored = colored(
-            calendar(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let colored = colored(calendar(), Command::Year(2026));
         let text = plain(&colored);
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(
@@ -575,7 +538,6 @@ mod tests {
             Command::Month {
                 year: 2026,
                 month: Month::July,
-                today: today(),
             },
         );
         assert!(text.contains(" 1 V   2 V   3 V   4 S   5 S"), "{text}");
@@ -586,13 +548,7 @@ mod tests {
             "{text}"
         );
         assert!(text.ends_with("Vacaciones restantes: 0 / 25\n"), "{text}");
-        let year = shown(
-            calendar(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let year = shown(calendar(), Command::Year(2026));
         assert!(
             year.contains("Vacaciones por defecto desde el 1 de julio"),
             "{year}"
@@ -602,7 +558,6 @@ mod tests {
             Command::Month {
                 year: 2026,
                 month: Month::June,
-                today: today(),
             },
         );
         assert!(!june.contains("por defecto"), "{june}");

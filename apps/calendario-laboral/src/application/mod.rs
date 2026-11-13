@@ -12,8 +12,8 @@ use chrono::{Datelike, NaiveDate, Weekday};
 
 use crate::domain::{
     Calendar, DEFAULT_VACATION_QUOTA, DateRange, DomainError, Mark, MarkId, MarkKind, Marking,
-    Month, MonthExt, ResolvedDay, Shift, Summary, VacationProgress, Year, resolve_day,
-    resolve_year, summarize, summary_of,
+    Month, MonthExt, ResolvedDay, Shift, Summary, Year, resolve_day, resolve_year, summarize,
+    summary_of,
 };
 
 /// Una operación pedida por el usuario.
@@ -58,16 +58,9 @@ pub enum Command {
         year: i32,
         /// El mes.
         month: Month,
-        /// Hoy, para las vacaciones disfrutadas (RN-27).
-        today: NaiveDate,
     },
     /// RF-07: mostrar un año completo.
-    Year {
-        /// El año.
-        year: i32,
-        /// Hoy, para las vacaciones disfrutadas (RN-27).
-        today: NaiveDate,
-    },
+    Year(i32),
     /// RF-08: resumir un año.
     Summary(i32),
     /// RF-15: consultar la configuración.
@@ -154,11 +147,10 @@ pub enum Report {
     Marks(Vec<Mark>),
     /// Un día.
     Day(ResolvedDay),
-    /// Un mes, el resumen del año, para las vacaciones restantes, y las vacaciones disfrutadas
-    /// (RN-27).
-    Month(MonthView, Summary, VacationProgress),
-    /// Todos los meses de un año, su resumen y las vacaciones disfrutadas (RN-27).
-    Year(Vec<MonthView>, Summary, VacationProgress),
+    /// Un mes y el resumen del año, para las vacaciones restantes.
+    Month(MonthView, Summary),
+    /// Todos los meses de un año y su resumen.
+    Year(Vec<MonthView>, Summary),
     /// El resumen de un año.
     Summary(Summary),
     /// La configuración: el `Calendar`, del que se muestran sus días y cada `Year` (RF-15).
@@ -211,8 +203,8 @@ pub fn execute(calendar: Calendar, command: Command) -> Result<Outcome, DomainEr
         Command::Day(date) => {
             resolve_day(&calendar, date).map(|day| Outcome::Report(Report::Day(day)))
         }
-        Command::Month { year, month, today } => views::month(&calendar, year, month, today),
-        Command::Year { year, today } => views::year(&calendar, year, today),
+        Command::Month { year, month } => views::month(&calendar, year, month),
+        Command::Year(year) => views::year(&calendar, year),
         Command::Summary(year) => {
             summarize(&calendar, year).map(|summary| Outcome::Report(Report::Summary(summary)))
         }
@@ -233,7 +225,7 @@ fn sorted(marks: impl Iterator<Item = Mark>) -> Vec<Mark> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::fixtures::{calendar, date, marked, range, today};
+    use crate::domain::fixtures::{calendar, date, marked, range};
     use crate::domain::{DayKind, Origin, parse_date};
 
     fn mark_command(kind: MarkKind, from: NaiveDate, to: Option<NaiveDate>) -> Command {
@@ -677,17 +669,10 @@ mod tests {
                 Command::Month {
                     year: 2027,
                     month: Month::January,
-                    today: today(),
                 },
                 DomainError::UnknownYear(2027),
             ),
-            (
-                Command::Year {
-                    year: 2027,
-                    today: today(),
-                },
-                DomainError::UnknownYear(2027),
-            ),
+            (Command::Year(2027), DomainError::UnknownYear(2027)),
             (Command::Summary(2027), DomainError::UnknownYear(2027)),
             (
                 Command::Hours {
@@ -838,11 +823,10 @@ mod tests {
             Command::Month {
                 year: 2026,
                 month: Month::June,
-                today: today(),
             },
         );
         let summary = match month {
-            Some(Report::Month(view, summary, _)) => {
+            Some(Report::Month(view, summary)) => {
                 assert_eq!(
                     (view.year, view.month, view.days.len()),
                     (2026, Month::June, 30)
@@ -871,15 +855,9 @@ mod tests {
 
     #[test]
     fn rf_07_year_has_twelve_months() {
-        let year = report(
-            calendar(),
-            Command::Year {
-                year: 2026,
-                today: today(),
-            },
-        );
+        let year = report(calendar(), Command::Year(2026));
         let months = match year {
-            Some(Report::Year(months, ..)) => Some(
+            Some(Report::Year(months, _)) => Some(
                 months
                     .iter()
                     .map(|month| (month.month, month.days.len()))
