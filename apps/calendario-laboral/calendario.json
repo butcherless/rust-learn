@@ -1,0 +1,132 @@
+{
+  "version": 2,
+  "weekend": [
+    "saturday",
+    "sunday"
+  ],
+  "reduced_days": [
+    "friday"
+  ],
+  "years": [
+    {
+      "year": 2026,
+      "vacation_quota": 25,
+      "hours": {
+        "laborable": 8.5,
+        "reducido": 6.0,
+        "laborable_verano": 7.5,
+        "reducido_verano": 7.0
+      },
+      "marks": [
+        {
+          "id": 1,
+          "kind": "festivo",
+          "from": "2026-01-01",
+          "to": "2026-01-01",
+          "description": "Año Nuevo"
+        },
+        {
+          "id": 2,
+          "kind": "festivo",
+          "from": "2026-01-06",
+          "to": "2026-01-06",
+          "description": "Reyes"
+        },
+        {
+          "id": 3,
+          "kind": "festivo",
+          "from": "2026-04-02",
+          "to": "2026-04-02",
+          "description": "Jueves Santo"
+        },
+        {
+          "id": 4,
+          "kind": "festivo",
+          "from": "2026-04-03",
+          "to": "2026-04-03",
+          "description": "Viernes Santo"
+        },
+        {
+          "id": 5,
+          "kind": "festivo",
+          "from": "2026-05-01",
+          "to": "2026-05-01",
+          "description": "Fiesta del Trabajo"
+        },
+        {
+          "id": 6,
+          "kind": "festivo",
+          "from": "2026-05-15",
+          "to": "2026-05-15",
+          "description": "San Isidro"
+        },
+        {
+          "id": 7,
+          "kind": "festivo",
+          "from": "2026-10-12",
+          "to": "2026-10-12",
+          "description": "Fiesta Nacional de España"
+        },
+        {
+          "id": 8,
+          "kind": "festivo",
+          "from": "2026-11-02",
+          "to": "2026-11-02",
+          "description": "Lunes siguiente a Todos los Santos"
+        },
+        {
+          "id": 9,
+          "kind": "festivo",
+          "from": "2026-11-09",
+          "to": "2026-11-09",
+          "description": "Nuestra Señora de la Almudena"
+        },
+        {
+          "id": 10,
+          "kind": "festivo",
+          "from": "2026-12-07",
+          "to": "2026-12-07",
+          "description": "Lunes siguiente al Día de la Constitución"
+        },
+        {
+          "id": 11,
+          "kind": "festivo",
+          "from": "2026-12-08",
+          "to": "2026-12-08",
+          "description": "Inmaculada Concepción"
+        },
+        {
+          "id": 12,
+          "kind": "festivo",
+          "from": "2026-12-25",
+          "to": "2026-12-25",
+          "description": "Natividad del Señor"
+        },
+        {
+          "id": 14,
+          "kind": "vacaciones",
+          "from": "2026-03-16",
+          "to": "2026-03-20"
+        },
+        {
+          "id": 15,
+          "kind": "vacaciones",
+          "from": "2026-05-11",
+          "to": "2026-05-14"
+        },
+        {
+          "id": 16,
+          "kind": "vacaciones",
+          "from": "2026-08-17",
+          "to": "2026-08-28"
+        },
+        {
+          "id": 17,
+          "kind": "vacaciones",
+          "from": "2026-10-19",
+          "to": "2026-10-19"
+        }
+      ]
+    }
+  ]
+}

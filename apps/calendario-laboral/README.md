@@ -7,7 +7,7 @@ resumen anual con días y horas laborables y el cupo de vacaciones.
 ## Inicio rápido
 
 Desde la raíz del workspace (lo que hay que instalar está en su [README](../../README.md#requirements)), el alias
-`cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, que git ignora:
+`cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, el calendario de uso real, que está versionado:
 
 ```bash
 cargo cal add-year 2026                            # crea el fichero con el primer cambio

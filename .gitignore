@@ -1,5 +1,4 @@
 /target
 .idea
-# calendario-laboral: the real calendar (`cargo cal` uses it) and the temporary file of `save`
-/apps/calendario-laboral/calendario.json
+# calendario-laboral: the temporary file of `save`
 *.json.tmp

@@ -28,7 +28,7 @@ cargo doc -p calendario-laboral --no-deps --open   # rustdoc del crate
 
 El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si tampoco, `./calendario.json`, relativo al directorio actual. Si el fichero no existe, se parte de un `Calendar` vacío y el primer cambio lo crea.
 
-El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (ignorado por git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
+El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (versionado en git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
 
 Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
 
@@ -170,4 +170,4 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 
 - Las reglas de Git son las del `CLAUDE.md` raíz: se trabaja y se sube directamente en `main`.
 - Un commit por cambio de requisito, con el documento, los tests y el código juntos, y solo con fmt, clippy y la cobertura en verde.
-- No se versiona `apps/calendario-laboral/calendario.json`, el calendario de uso real; lo ignora el `.gitignore` raíz.
+- `apps/calendario-laboral/calendario.json`, el calendario de uso real, está versionado: cada cambio con `cargo cal` se sube con un commit. Los tests nunca lo usan (trabajan sobre ficheros temporales).
