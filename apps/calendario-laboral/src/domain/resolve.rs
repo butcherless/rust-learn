@@ -284,6 +284,36 @@ fn month_totals(days: &[ResolvedDay]) -> Vec<MonthTotal> {
         .collect()
 }
 
+/// Las vacaciones de un año en una fecha (RN-27): las disfrutadas hasta ese día, incluido, y el
+/// cupo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VacationProgress {
+    /// Días de `DayKind` `Vacation` hasta la fecha, incluidos los de `DefaultVacation`.
+    pub taken: usize,
+    /// El cupo de vacaciones del año.
+    pub quota: u32,
+}
+
+impl VacationProgress {
+    /// El progreso de `year` en `today`, a partir de sus días ya resueltos con [`resolve_year`].
+    pub fn at(year: &Year, days: &[ResolvedDay], today: NaiveDate) -> Self {
+        Self {
+            taken: days
+                .iter()
+                .filter(|day| day.kind == DayKind::Vacation && day.date <= today)
+                .count(),
+            quota: year.vacation_quota(),
+        }
+    }
+
+    /// Días del cupo aún sin disfrutar, nunca por debajo de cero.
+    pub fn pending(&self) -> usize {
+        usize::try_from(self.quota)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(self.taken)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -777,5 +807,52 @@ mod tests {
             )),
             Ok((45, 0, 20))
         );
+    }
+
+    #[test]
+    fn rn_27_taken_vacation_counts_vacation_days_up_to_today_included() {
+        let marks = marked(&[(MarkKind::Vacation, "2026-06-05", "2026-06-12")]);
+        let progress = |calendar: &Calendar, today: NaiveDate| {
+            calendar.year(2026).and_then(|year| {
+                resolve_year(calendar, 2026)
+                    .map(|days| VacationProgress::at(year, &days, today))
+                    .map(|progress| (progress.taken, progress.pending()))
+            })
+        };
+        [
+            ("antes de empezar", &marks, date(2026, 6, 4), (0, 25)),
+            ("el primer día cuenta", &marks, date(2026, 6, 5), (1, 24)),
+            ("sin el fin de semana", &marks, date(2026, 6, 8), (2, 23)),
+            ("después de terminar", &marks, date(2026, 12, 31), (6, 19)),
+            (
+                "por defecto, a mitad",
+                &calendar(),
+                date(2026, 7, 3),
+                (3, 22),
+            ),
+            (
+                "por defecto, completas",
+                &calendar(),
+                date(2026, 11, 13),
+                (25, 0),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(case, calendar, today, expected)| {
+            assert_eq!(progress(calendar, today), Ok(expected), "caso {case}");
+        });
+    }
+
+    #[test]
+    fn rn_27_pending_vacation_never_goes_below_zero() {
+        [(10, 25, 15), (25, 25, 0), (30, 25, 0), (0, 0, 0)]
+            .into_iter()
+            .for_each(|(taken, quota, pending)| {
+                assert_eq!(
+                    VacationProgress { taken, quota }.pending(),
+                    pending,
+                    "{taken} de {quota}"
+                );
+            });
     }
 }

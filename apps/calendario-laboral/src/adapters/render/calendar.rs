@@ -4,6 +4,7 @@
 use std::iter;
 
 use super::style::{paint_grid, styled};
+use super::vacation_grid::vacation_grid;
 use super::*;
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
@@ -137,7 +138,32 @@ fn year_hours_lines(summary: &Summary) -> [String; 2] {
     ]
 }
 
-pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
+/// Separación entre el calendario, del mes o del año, y la cuadrícula de vacaciones (RN-27).
+const VACATION_GAP: &str = "    ";
+
+/// `lines` con las líneas de `vacations` a la derecha, desde la línea `from` (RN-27).
+fn beside_vacations(
+    lines: impl Iterator<Item = String>,
+    from: usize,
+    vacations: Vec<String>,
+) -> impl Iterator<Item = String> {
+    let vacation_lines = iter::repeat_n(None, from)
+        .chain(vacations.into_iter().map(Some))
+        .chain(iter::repeat(None));
+    lines
+        .zip(vacation_lines)
+        .map(|(line, vacations)| match vacations {
+            Some(vacations) => format!("{line}{VACATION_GAP}{vacations}"),
+            None => line,
+        })
+}
+
+pub(super) fn month(
+    view: &MonthView,
+    summary: &Summary,
+    progress: VacationProgress,
+    marker: Marker,
+) -> String {
     let marks = (!view.marks.is_empty())
         .then(|| {
             iter::once(String::new())
@@ -150,24 +176,38 @@ pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> Stri
         })
         .into_iter()
         .flatten();
-    lines(
+    // RN-27: el mes se alarga con semanas en blanco si la cuadrícula de vacaciones es más alta
+    // (un cupo de más de 30 días), para que no quede junto a las marcas.
+    let vacations = vacation_grid(progress, marker);
+    let weeks = vacations.len().saturating_sub(2);
+    let grid = beside_vacations(
         month_grid(
             view,
             &format!("{} {}", month_name(view.month), view.year),
-            0,
+            weeks,
             marker,
         )
-        .into_iter()
-        .chain(marks)
-        .chain(iter::once(String::new()))
-        .chain(default_vacation_note(&view.days))
-        .chain(summary.month(view.month).map(month_hours_line))
-        .chain([legend(marker), vacation_line(summary)]),
+        .into_iter(),
+        0,
+        vacations,
+    );
+    lines(
+        grid.chain(marks)
+            .chain(iter::once(String::new()))
+            .chain(default_vacation_note(&view.days))
+            .chain(summary.month(view.month).map(month_hours_line))
+            .chain([legend(marker), vacation_line(summary)]),
     )
 }
 
-/// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21).
-pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
+/// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21), con la
+/// cuadrícula de vacaciones a la derecha de la primera fila (RN-27).
+pub(super) fn year(
+    months: &[MonthView],
+    summary: &Summary,
+    progress: VacationProgress,
+    marker: Marker,
+) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
     let columns = months.len().min(MONTHS_PER_ROW);
     // RN-23: la franja con el año, dentro del marco y sobre la primera fila de meses.
@@ -210,14 +250,19 @@ pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> S
                 })
                 .chain(iter::once(grid_rule(row.len(), corners)))
         });
+    // RN-27: la cuadrícula de vacaciones empieza en la línea del título de la primera fila.
+    let from = top.len();
     lines(
-        top.into_iter()
-            .chain(rows)
-            .chain(iter::once(String::new()))
-            .chain(default_vacation_note(
-                months.iter().flat_map(|view| &view.days),
-            ))
-            .chain([legend(marker), vacation_line(summary)])
-            .chain(year_hours_lines(summary)),
+        beside_vacations(
+            top.into_iter().chain(rows),
+            from,
+            vacation_grid(progress, marker),
+        )
+        .chain(iter::once(String::new()))
+        .chain(default_vacation_note(
+            months.iter().flat_map(|view| &view.days),
+        ))
+        .chain([legend(marker), vacation_line(summary)])
+        .chain(year_hours_lines(summary)),
     )
 }

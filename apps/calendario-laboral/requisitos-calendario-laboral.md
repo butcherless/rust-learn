@@ -4,8 +4,8 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 
 | | |
 |---|---|
-| **Fecha** | 2026-11-12 |
-| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-26; pendientes RF-12 y RF-13 (§9) |
+| **Fecha** | 2026-11-13 |
+| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-27; pendientes RF-12 y RF-13 (§9) |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | [CLAUDE.md](CLAUDE.md): comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -44,6 +44,7 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `Origin` | Qué fijó el `DayKind`: `Mark(id)`, `Weekend`, `ReducedWeekday`, `Default` o `DefaultVacation` | «marca #1», «por defecto»… |
 | `Summary` | Totales de un `Year`, con sus 12 `MonthTotal` | `summary` |
 | `MonthTotal` | Días y horas laborables de un mes y horas acumuladas del año hasta ese mes (RF-14) | «Horas por mes» |
+| `VacationProgress` | Vacaciones de un `Year` en una fecha: las disfrutadas (`taken`) y el cupo; las pendientes son la diferencia (RN-27) | cuadrícula «Vacaciones» de `month` y `year` |
 
 ### 2.2 `DayKind`
 
@@ -100,12 +101,13 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-18 | Los días de la semana de la regla `ReducedWeekday` (por defecto, todos los viernes del año) son `Reduced`, o `SummerReduced` en `Summer`, con las horas de esos `Shift`: un valor para el `Summer` y otro para el resto del año. Tienen la prioridad de `Reduced` (§2.3). Se cambian con `reduced-days` (RF-16) para todo el calendario; sin días, no hay días reducidos por regla. |
 | RN-19 | Las horas por mes (RF-14) son horas teóricas, como las de RN-09: la suma de las horas de los días laborables del mes. La suma de los 12 meses es exactamente el total anual de RF-08, en días y en horas. El acumulado de un mes es la suma desde enero hasta ese mes, así que el de diciembre es el total anual. Un mes sin días laborables muestra 0. |
 | RN-20 | En las vistas, el número del día va sin color, seguido de un espacio y de un símbolo con el color del `DayKind`. Entre un día y el siguiente hay dos espacios, para que se vea a qué número pertenece cada símbolo. Si la salida tiene color, el símbolo es una barra gruesa `▌` (media celda, `15 ▌`), que deja leer mejor los números y muestra bastante color para distinguir los tonos. Sin color (al redirigir, con `NO_COLOR` o en un terminal sin color), la barra no distinguiría nada, así que en su lugar va la letra del `DayKind` (`15 F`). La leyenda, `day` y `summary` usan el mismo símbolo. |
-| RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La vista de año ocupa 130 columnas. Sin color se mantienen las mismas líneas, sin el gris. |
+| RN-21 | En la vista de año, los meses quedan dentro de una rejilla de líneas finas punteadas en gris, que no compite con los colores de los días: una línea vertical `┊` entre dos meses de la misma fila y a la izquierda y a la derecha, con un espacio a cada lado, y una línea horizontal `┈` entre dos filas de meses, arriba y abajo. Los cruces y las esquinas usan `┼`, `┬`, `┴`, `├`, `┤`, `┌`, `┐`, `└` y `┘`. La rejilla ocupa 130 columnas; con la cuadrícula de vacaciones a su derecha (RN-27), la vista de año ocupa 169. Sin color se mantienen las mismas líneas, sin el gris. |
 | RN-22 | Si la salida es un terminal, `month`, `year` y `summary` se muestran en una ventana a pantalla completa (la pantalla alternativa del terminal), con el mismo texto y colores que en la consola y una línea de ayuda abajo. `Esc`, `q` o `Ctrl+C` cierran la ventana y la consola vuelve tal como estaba, sin la vista. Si la vista no cabe, `↑` `↓` (o `k` `j`), `RePág` `AvPág` e `Inicio` `Fin` la desplazan; lo que no cabe a lo ancho se corta. Al redirigir la salida, o con `--no-tui`, la vista se imprime en la consola como hasta ahora. `day`, `list` y los comandos que cambian el fichero siempre imprimen en la consola. |
 | RN-23 | La vista de año empieza con una franja, dentro del marco de la rejilla (RN-21), con el título `Calendario laboral AAAA` centrado y en negrita; una línea `┈` la separa de la primera fila de meses. Como el año ya está en la franja, cada mes se titula solo con su nombre (`Enero`). La vista de mes mantiene el año en su título (`Junio 2026`). |
 | RN-24 | La vista de año termina, bajo las vacaciones restantes, con las horas laborables del año (las de RF-08) y la media mensual: esas horas divididas entre 12, aunque algún mes no tenga horas, como medida del esfuerzo mensual medio. Entre paréntesis, esa media en días de 8 h (media / 8), una jornada de referencia fija que no depende de las horas configuradas (RF-09): `Horas laborables del año: 1888,5 h` y `Media mensual: 157,38 h (19,67 días de 8 h)`. |
 | RN-25 | Las `Hours` son de cada `Year`: cambiarlas en un año no altera las horas ni los totales de los demás. Un `Year` nuevo hereda las `Hours` del año anterior más cercano del fichero; si no hay ninguno anterior, las del siguiente; y si el fichero no tiene años, las de por defecto (8,5 h las jornadas completas y 6 h las reducidas). |
 | RN-26 | Un `Mark` `Working` (`laborable`) fuerza la jornada completa, `Working` o `SummerWorking` en `Summer`, en días que serían `Reduced` por la regla `ReducedWeekday` o por un `Mark` `Reduced`. Su prioridad está entre `Vacation` y `Reduced` (§2.3), así que no cambia fines de semana, festivos ni vacaciones. |
+| RN-27 | Las vistas de mes y de año muestran, a la derecha del calendario, una cuadrícula con las vacaciones del año: un cuadro por día del cupo, cinco por fila (5×5 con 25 días), primero los **disfrutados** en naranja (el color de `Vacation`) y después los **pendientes** en verde. Disfrutados son los días de `DayKind` `Vacation` hasta hoy, incluido, también los de `DefaultVacation` (RN-14); pendientes, el cupo menos los disfrutados, nunca por debajo de cero. Si los disfrutados superan el cupo, hay un cuadro por cada uno, todos naranjas; como mucho hay 366 cuadros. Cada cuadro son dos columnas (`██`), separados por un espacio. A la derecha, centrados en vertical, el título `Vacaciones` y los días de cada estado (`██ Disfrutadas  20`, `░░ Pendientes    5`). Sin color, los pendientes se dibujan con `░░`. En la vista de mes, la cuadrícula empieza en la línea del título, y la vista cabe en 80 columnas; si la cuadrícula es más alta que el mes (cupo de más de 30 días), el mes se alarga con líneas en blanco. En la de año empieza en el título de la primera fila de meses, a 4 espacios del marco, y la vista ocupa 169 columnas. |
 
 ## 4. Requisitos funcionales
 
@@ -166,14 +168,14 @@ El binario `calendario` funciona por subcomandos. Para construirlo y ejecutarlo,
   - Códigos de salida: 0 si todo va bien, 1 si la operación falla y 2 si los argumentos no son válidos.
 - **Ayuda:** `calendario --help` y `calendario <comando> --help`.
 
-Cada día se muestra con su número, un espacio y una barra `▌` del color de su tipo (`15 ▌`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21) y bajo la franja con el año (RN-23), necesita 130. El ejemplo muestra la salida sin color:
+Cada día se muestra con su número, un espacio y una barra `▌` del color de su tipo (`15 ▌`). Sin color (al redirigir la salida o con `NO_COLOR`), la barra se sustituye por la letra del tipo (`15 F`, RN-20). Cada mes ocupa 40 columnas, y a la derecha del calendario va la cuadrícula de vacaciones (RN-27); la vista de año, con 3 meses por fila dentro de una rejilla gris punteada con marco (RN-21) y bajo la franja con el año (RN-23), necesita 130, y 169 con la cuadrícula de vacaciones. El ejemplo muestra la salida sin color:
 
 ```
-               Junio 2026
-Lu    Ma    Mi    Ju    Vi    Sá    Do
- 1 L   2 L   3 L   4 L   5 V   6 S   7 S
- 8 V   9 V  10 V  11 V  12 V  13 S  14 S
-15 L  16 L  17 L  18 L  19 R  20 S  21 S
+               Junio 2026                   ██ ██ ██ ██ ██
+Lu    Ma    Mi    Ju    Vi    Sá    Do      ██ ░░ ░░ ░░ ░░   Vacaciones
+ 1 L   2 L   3 L   4 L   5 V   6 S   7 S    ░░ ░░ ░░ ░░ ░░   ██ Disfrutadas   6
+ 8 V   9 V  10 V  11 V  12 V  13 S  14 S    ░░ ░░ ░░ ░░ ░░   ░░ Pendientes   19
+15 L  16 L  17 L  18 L  19 R  20 S  21 S    ░░ ░░ ░░ ░░ ░░
 22 L  23 L  24 L  25 L  26 R  27 S  28 S
 29 L  30 L
 
@@ -295,6 +297,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-12 | RF-20: `remove-year` elimina un año. Con `Mark` exige `--confirmar`, porque no se puede deshacer y un error al escribir el año borraría sus marcas; un año sin `Mark` se elimina sin más. |
 | 2026-11-12 | RNF-07: los errores de argumentos de clap se muestran en español. clap no se puede traducir, así que `cli::error_text` monta el mensaje a partir del tipo de error y su contexto (argumento, valor, valores posibles, sugerencias y uso). Los tipos de error poco habituales se muestran con el texto de clap. |
 | 2026-11-12 | RNF-07: la ayuda también se traduce sobre el texto que genera clap: `[possible values: …]`, `[default: …]`, `[env: …]` y `[OPTIONS]` pasan a `[valores posibles: …]`, `[por defecto: …]`, `[variable: …]` y `[OPCIONES]`. |
+| 2026-11-13 | RN-27: vacaciones disfrutadas (hasta hoy) en naranja y pendientes en verde, a la derecha del calendario en las vistas de mes y de año. «Disfrutadas» depende de la fecha, así que `month` y `year` reciben el día de hoy, como ya hacían para el mes y el año por defecto. No se separan las planificadas de las sin asignar: eso ya lo dice «Vacaciones restantes», que cuenta todas las marcadas. Primero fue una tarta de 15×8 celdas con medios bloques (`▀` `▄`, dos píxeles por celda, 14,4° por día con 25 días), pero con el interlineado del terminal salían franjas y no se leía bien; se cambió por una cuadrícula de un cuadro por día, 5×5 con el cupo por defecto, que además se cuenta de un vistazo. La vista de año pasa de 130 a 169 columnas: en la ventana de RN-22, lo que no cabe se corta, y la cuadrícula es lo primero que se pierde. |
 
 ### Pendiente o posibles ampliaciones
 

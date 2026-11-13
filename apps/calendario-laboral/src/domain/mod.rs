@@ -15,8 +15,8 @@ pub use hours::Hours;
 pub use kind::{Category, DayKind, MarkKind, Shift};
 pub use month::{Month, MonthExt};
 pub use resolve::{
-    MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary, resolve_day, resolve_year,
-    summarize, summary_of,
+    MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary, VacationProgress, resolve_day,
+    resolve_year, summarize, summary_of,
 };
 
 /// Constructores compartidos por los tests.
@@ -29,6 +29,12 @@ pub mod fixtures {
     /// Una fecha que existe.
     pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(year, month, day).expect("valid date")
+    }
+
+    /// El día de hoy en los tests de vistas: las vacaciones por defecto de 2026 ya están
+    /// disfrutadas, y las de diciembre aún no (RN-27).
+    pub fn today() -> NaiveDate {
+        date(2026, 11, 13)
     }
 
     /// Un rango válido.

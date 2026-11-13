@@ -18,7 +18,7 @@ const fn style(kind: DayKind) -> Style {
     }
 }
 
-const fn color(kind: DayKind) -> Color {
+pub(super) const fn color(kind: DayKind) -> Color {
     match kind {
         DayKind::Working => Color::Ansi(AnsiColor::Blue),
         DayKind::Reduced => Color::Ansi(AnsiColor::Cyan),

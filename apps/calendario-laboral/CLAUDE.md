@@ -36,7 +36,7 @@ Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`
 cargo cal list                                     # RF-04; `list 2026` para un año
 cargo cal day 2026-06-08                           # RF-05; sin fecha, hoy
 cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026 6`; `month junio`, del año actual; sin argumentos, el mes actual
-cargo cal year 2026                                # RF-07; necesita 130 columnas (en la ventana, lo que no cabe se corta)
+cargo cal year 2026                                # RF-07; necesita 169 columnas con la cuadrícula de vacaciones (en la ventana, lo que no cabe se corta)
 cargo cal year 2026 --no-tui                       # en la consola, como antes de RN-22
 cargo cal summary 2026                             # RF-08, RF-14: incluye las horas por mes y el acumulado
 cargo cal config                                   # RF-15: fin de semana, jornada reducida, y cupo y horas de cada año
@@ -108,12 +108,14 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - La regla `ReducedWeekday` da `Rule::Reduced` con `Origin::ReducedWeekday`. Reutiliza los `Shift` `Reduced` y `SummerReduced`; no hay jornadas propias de los viernes.
     - `resolve_year` añade `DefaultVacation` (RN-14) si el `Year` no tiene `Mark` `Vacation`: los primeros `quota` días de `Category` `Working` desde el 1 de julio, con `Origin::DefaultVacation`. Nunca se guarda.
     - `summarize` devuelve el `Summary`, con los 12 `MonthTotal` (RF-14): días, horas y acumulado, calculados con `scan`. `summary_of` lo calcula a partir de días ya resueltos, para que las vistas de mes y de año resuelvan el año una sola vez.
+    - `VacationProgress::at(year, days, today)` cuenta las vacaciones disfrutadas: los días `Vacation` hasta `today`, incluido (RN-27). `pending()` es el cupo menos ellas, sin bajar de cero.
     - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría «-0,0».
-  - `fixtures` (`#[cfg(test)]`): `date`, `range`, `calendar` (solo 2026) y `marked`.
+  - `fixtures` (`#[cfg(test)]`): `date`, `range`, `today` (2026-11-13, el hoy de las vistas), `calendar` (solo 2026) y `marked`.
 - **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`. `mod.rs` tiene los tipos, `execute` (solo reparte cada `Command`) y los tests; los casos de uso están en `marks.rs`, `years.rs`, `settings.rs` y `views.rs`.
   - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el resultado de una consulta (`Report::Config` lleva el `Calendar`).
   - Los comandos de varios pasos (`unmark` con varios ids, `add-year --festivos-de`, `edit`) encadenan los cambios con `try_fold`: si uno falla, falla todo y no hay nada que guardar (RN-13).
   - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.
+  - `Command::Month` y `Command::Year` llevan `today`, que `main` toma del reloj, para la cuadrícula de vacaciones de RN-27; `Report::Month` y `Report::Year` llevan su `VacationProgress`.
   - `remove-year` con `Mark` necesita `confirmed`; si no, devuelve `DomainError::YearHasMarks`.
 - **`adapters`**:
   - `cli`: clap derive. `mod.rs` define los argumentos y los convierte en `Command`; `values.rs`, los parsers de valores; y `errors.rs`, los errores y la ayuda en español.
@@ -121,12 +123,13 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes.
     - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
     - `error_text` da en español los errores de argumentos de clap, montados a partir de su `ErrorKind` y su contexto, y la ayuda, con `spanish_clap` sobre el texto de clap (`[valores posibles: …]`, `[OPCIONES]`…). La versión y los errores poco habituales los muestra clap.
-  - `render`: todo el texto de consola, en español. `mod.rs` tiene la API (`report`, `event`, `Marker`) y los textos compartidos, y sus tests; `style.rs`, los colores; `calendar.rs`, las vistas de mes y año; y `text.rs`, `summary`, `day`, `config` y los mensajes de eventos. Los submódulos usan `use super::*`.
+  - `render`: todo el texto de consola, en español. `mod.rs` tiene la API (`report`, `event`, `Marker`) y los textos compartidos, y sus tests; `style.rs`, los colores; `calendar.rs`, las vistas de mes y año; `vacation_grid.rs`, la cuadrícula de vacaciones de las vistas de mes y de año; y `text.rs`, `summary`, `day`, `config` y los mensajes de eventos. Los submódulos usan `use super::*`.
     - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
     - `Marker` (RN-20): `Bar` pinta una `▌` del color del tipo y `Letter` usa la letra. En los dos casos la celda es `NN S` (`CELL_WIDTH` 4), con el número sin color, y las celdas se separan con `CELL_GAP` (dos espacios). `main::color` mira `anstream::AutoStream::choice(&stdout())` y `Marker::for_color` elige `Letter` si no habrá color.
     - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
     - Cada mes ocupa `MONTH_WIDTH` = 40 columnas; la vista de año pone 3 por fila (130 columnas), dentro de una rejilla gris punteada con marco (RN-21): `┊` a los lados y entre meses, y líneas `┈` arriba, abajo y entre filas, con esquinas y cruces `┌┬┐├┼┤└┴┘`. Arriba, dentro del marco, la franja `Calendario laboral AAAA` en negrita (RN-23); por eso `month_grid` recibe el título: solo el nombre en la vista de año y `Junio 2026` en la de mes.
     - La vista de año termina con las horas del año y la media mensual, `Summary::monthly_average_hours` (total / 12) y, entre paréntesis, `monthly_average_days` (media / `REFERENCE_DAY_HOURS`, 8 h fijas) (RN-24).
+    - `vacation_grid` (RN-27): un cuadro `██` por día del cupo (o por día disfrutado, si pasan del cupo; como mucho 366), cinco por fila y primero los disfrutados, con la leyenda a la derecha centrada en vertical. Sin color, los pendientes son `░░`. `beside_vacations` la pone a la derecha del calendario: en `month`, desde el título, alargando el mes con semanas en blanco si hace falta; en `year`, desde el título de la primera fila de meses (169 columnas en total).
     - Las horas llevan coma decimal (`decimal`).
   - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
     - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con `Output::Window`. `Args::output(terminal)` elige una vez entre `Window` y `Console`: la ventana solo en un terminal y sin `--no-tui`.

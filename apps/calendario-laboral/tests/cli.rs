@@ -64,12 +64,17 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
     );
     let month = stdout(&run(&file, &["month", "2026", "6"]));
     assert!(!month.contains('\u{1b}'), "{month}");
-    assert!(
-        month.starts_with(
-            "               Junio 2026\nLu    Ma    Mi    Ju    Vi    Sá    Do\n 1 L   2 L   3 L   4 L   5 V   6 S   7 S\n 8 V   9 V  10 V  11 V  12 V  13 S  14 S\n"
-        ),
-        "{month}"
-    );
+    // RN-27: a la derecha va la tarta de vacaciones, que depende del día de hoy.
+    [
+        "               Junio 2026",
+        "Lu    Ma    Mi    Ju    Vi    Sá    Do",
+        " 1 L   2 L   3 L   4 L   5 V   6 S   7 S",
+        " 8 V   9 V  10 V  11 V  12 V  13 S  14 S",
+    ]
+    .into_iter()
+    .zip(month.lines())
+    .for_each(|(grid, line)| assert!(line.starts_with(grid), "{grid}\n{month}"));
+    assert!(month.contains("█ Disfrutadas"), "{month}");
     assert!(
         month.ends_with("Vacaciones restantes: 19 / 25\n"),
         "{month}"
