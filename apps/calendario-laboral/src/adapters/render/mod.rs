@@ -149,6 +149,16 @@ fn vacation_line(summary: &Summary) -> String {
     }
 }
 
+/// Los días laborables entre los días del año, bajo las vacaciones restantes (RN-29).
+fn working_days_line(summary: &Summary) -> String {
+    format!(
+        "Días trabajados: {} / {} ({}%)",
+        summary.working_days,
+        summary.year_days(),
+        format!("{:.1}", summary.working_percent()).replace('.', ",")
+    )
+}
+
 /// El texto del resultado de una consulta, terminado en salto de línea. `marker` decide cómo se
 /// identifica el tipo de cada día (RN-20).
 pub fn report(report: &Report, marker: Marker) -> String {
@@ -238,6 +248,7 @@ mod tests {
             "Horas laborables de junio: 131,0 h en 16 días · acumulado del año: 985,5 h",
             LEGEND,
             "Vacaciones restantes: 19 / 25",
+            "Días trabajados: 255 / 365 (69,9%)",
             "",
         ]
         .join("\n");
@@ -379,7 +390,7 @@ mod tests {
         // El marco superior (RN-21) y la franja del año con su línea (RN-23); cuatro filas de tres
         // meses, de 8 líneas, la de horas (RF-14) y la línea de la rejilla debajo; una en blanco
         // y, después, leyenda, cupo, horas del año y media mensual (RN-24).
-        assert_eq!(lines.len(), 3 + 4 * 10 + 5, "{text}");
+        assert_eq!(lines.len(), 3 + 4 * 10 + 6, "{text}");
         let hours = format!(
             "┊ {a:^40} ┊ {b:^40} ┊ {c:^40} ┊",
             a = "174,5 h · 22 días",
@@ -502,7 +513,7 @@ mod tests {
             lines.get(lines.len().saturating_sub(3)..),
             Some(
                 &[
-                    "Vacaciones restantes: 0 / 25",
+                    "Días trabajados: 236 / 365 (64,7%)",
                     "Horas laborables del año: 1888,5 h",
                     "Media mensual: 157,38 h (19,67 días de 8 h)",
                 ][..]
@@ -547,7 +558,7 @@ mod tests {
             ),
             "{text}"
         );
-        assert!(text.ends_with("Vacaciones restantes: 0 / 25\n"), "{text}");
+        assert!(text.contains("\nVacaciones restantes: 0 / 25\n"), "{text}");
         let year = shown(calendar(), Command::Year(2026));
         assert!(
             year.contains("Vacaciones por defecto desde el 1 de julio"),
@@ -579,6 +590,7 @@ mod tests {
             "Horas laborables: 2042,5 h",
             "Vacaciones: 6 usadas de 25",
             "Vacaciones restantes: 19 / 25",
+            "Días trabajados: 255 / 365 (69,9%)",
             "",
             "Horas por mes    Días     Horas  Acumulado",
             "  Enero            22     174,5      174,5",

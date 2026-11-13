@@ -191,7 +191,11 @@ pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> Stri
             .chain(iter::once(String::new()))
             .chain(default_vacation_note(&view.days))
             .chain(summary.month(view.month).map(month_hours_line))
-            .chain([legend(marker), vacation_line(summary)]),
+            .chain([
+                legend(marker),
+                vacation_line(summary),
+                working_days_line(summary),
+            ]),
     )
 }
 
@@ -252,7 +256,11 @@ pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> S
         .chain(default_vacation_note(
             months.iter().flat_map(|view| &view.days),
         ))
-        .chain([legend(marker), vacation_line(summary)])
+        .chain([
+            legend(marker),
+            vacation_line(summary),
+            working_days_line(summary),
+        ])
         .chain(year_hours_lines(summary)),
     )
 }

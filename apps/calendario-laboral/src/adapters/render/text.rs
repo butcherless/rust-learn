@@ -70,6 +70,7 @@ pub(super) fn summary(summary: &Summary, marker: Marker) -> String {
                     summary.vacation_used, summary.vacation_quota
                 ),
                 vacation_line(summary),
+                working_days_line(summary),
                 String::new(),
             ])
             .chain(month_hours_table(summary)),

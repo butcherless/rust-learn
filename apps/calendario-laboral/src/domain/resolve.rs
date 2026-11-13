@@ -208,6 +208,21 @@ impl Summary {
         self.vacation_used.saturating_sub(self.quota())
     }
 
+    /// Días del año: 365, o 366 si es bisiesto.
+    pub fn year_days(&self) -> usize {
+        self.counts.iter().map(|(_, count)| count).sum()
+    }
+
+    /// Los días laborables en tanto por ciento de los días del año, o 0 en un año sin días
+    /// (RN-29).
+    pub fn working_percent(&self) -> f64 {
+        let as_f64 = |days: usize| u32::try_from(days).map_or(f64::MAX, f64::from);
+        match self.year_days() {
+            0 => 0.0,
+            year_days => as_f64(self.working_days) * 100.0 / as_f64(year_days),
+        }
+    }
+
     /// Las horas laborables del año repartidas entre los 12 meses (RN-24).
     pub fn monthly_average_hours(&self) -> f64 {
         self.working_hours / Month::ALL.len() as f64
@@ -496,6 +511,35 @@ mod tests {
                 .map(|summary| summary.vacation_used),
             Ok(132)
         );
+    }
+
+    #[test]
+    fn rn_29_working_days_as_a_share_of_the_days_of_the_year() {
+        let leap = Calendar::default()
+            .with_year(2028)
+            .and_then(|calendar| summarize(&calendar, 2028));
+        let summary = summarize(&calendar(), 2026).expect("summary");
+        let empty = Summary {
+            counts: DayKind::ALL.map(|kind| (kind, 0)),
+            working_days: 0,
+            ..summary.clone()
+        };
+        let share = |summary: &Summary| {
+            (
+                summary.working_days,
+                summary.year_days(),
+                (summary.working_percent() * 10.0).round() / 10.0,
+            )
+        };
+        [
+            ("2026", Ok(summary), (236, 365, 64.7)),
+            ("bisiesto", leap, (235, 366, 64.2)),
+            ("sin días", Ok(empty), (0, 0, 0.0)),
+        ]
+        .into_iter()
+        .for_each(|(case, summary, expected)| {
+            assert_eq!(summary.as_ref().map(share), Ok(expected), "{case}");
+        });
     }
 
     #[test]

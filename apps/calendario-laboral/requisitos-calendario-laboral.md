@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-13 |
-| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-28; pendientes RF-12 y RF-13 (§9) |
+| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-29; pendientes RF-12 y RF-13 (§9) |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | [CLAUDE.md](CLAUDE.md): comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -108,6 +108,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-26 | Un `Mark` `Working` (`laborable`) fuerza la jornada completa, `Working` o `SummerWorking` en `Summer`, en días que serían `Reduced` por la regla `ReducedWeekday` o por un `Mark` `Reduced`. Su prioridad está entre `Vacation` y `Reduced` (§2.3), así que no cambia fines de semana, festivos ni vacaciones. |
 | RN-27 | Las vistas de mes y de año muestran, a la derecha del calendario, una cuadrícula con las vacaciones del año: un cuadro por día del cupo, cinco por fila (5×5 con 25 días), primero los **usados** en naranja (el color de `Vacation`) y después los **restantes** en verde. Usados son todos los días de `DayKind` `Vacation` del año, ya disfrutados o reservados con una marca para más adelante, también los de `DefaultVacation` (RN-14): es la misma cuenta que «Vacaciones restantes» (RN-10), así que un día solo vuelve a verde si se libera, quitando o cambiando su marca. Restantes, el cupo menos los usados, nunca por debajo de cero. Si los usados superan el cupo, hay un cuadro por cada uno, todos naranjas; como mucho hay 366 cuadros. Cada cuadro son dos columnas (`██`), separados por un espacio. A la derecha, centrados en vertical, el título `Vacaciones` y los días de cada estado (`██ Usadas     20`, `░░ Restantes   5`). Sin color, los restantes se dibujan con `░░`. En la vista de mes, la cuadrícula empieza en la línea del título, y la vista cabe en 80 columnas; si la cuadrícula es más alta que el mes (cupo de más de 30 días), el mes se alarga con líneas en blanco. En la de año empieza en el título de la primera fila de meses, a 4 espacios del marco, y la vista ocupa 169 columnas. |
 | RN-28 | En la ventana de RN-22, `r` o `R` recargan la vista: vuelven a leer el fichero y a lanzar la misma consulta, y la vista se redibuja desde la misma línea (o desde la última que deje la pantalla llena, si el texto nuevo es más corto). Así se ven los cambios hechos desde otra consola sin cerrar la ventana. Si el fichero no se puede leer, la vista sigue como estaba y la línea de ayuda muestra `No se ha podido recargar: <error>` hasta la siguiente recarga. La línea de ayuda incluye `r: recargar`. |
+| RN-29 | Bajo «Vacaciones restantes», las vistas de mes, de año y `summary` muestran los días trabajados del año entre los días del año, y su porcentaje con un decimal: `Días trabajados: 224 / 365 (61,4%)`. Días trabajados son los laborables del año (RN-09: `Working`, `Reduced`, `SummerWorking` y `SummerReduced`), los mismos de «Días laborables»; días del año, 365, o 366 si es bisiesto. Es el año entero, también los días que aún no han llegado. Un año sin días da 0. |
 
 ## 4. Requisitos funcionales
 
@@ -185,6 +186,7 @@ Marcas:
 Horas laborables de junio: 131,0 h en 16 días · acumulado del año: 985,5 h
 Leyenda: L Laborable · R Reducido · l Laborable verano · r Reducido verano · S Fin de semana · F Festivo · V Vacaciones
 Vacaciones restantes: 19 / 25
+Días trabajados: 255 / 365 (69,9%)
 ```
 
 Tabla de `summary` (RF-14):
@@ -300,6 +302,7 @@ Cada requisito tiene al menos un test que actúa como regresión ante cambios fu
 | 2026-11-13 | RN-27: vacaciones disfrutadas (hasta hoy) en naranja y pendientes en verde, a la derecha del calendario en las vistas de mes y de año. «Disfrutadas» depende de la fecha, así que `month` y `year` reciben el día de hoy, como ya hacían para el mes y el año por defecto. No se separan las planificadas de las sin asignar: eso ya lo dice «Vacaciones restantes», que cuenta todas las marcadas. Primero fue una tarta de 15×8 celdas con medios bloques (`▀` `▄`, dos píxeles por celda, 14,4° por día con 25 días), pero con el interlineado del terminal salían franjas y no se leía bien; se cambió por una cuadrícula de un cuadro por día, 5×5 con el cupo por defecto, que además se cuenta de un vistazo. La vista de año pasa de 130 a 169 columnas: en la ventana de RN-22, lo que no cabe se corta, y la cuadrícula es lo primero que se pierde. |
 | 2026-11-13 | RN-28: `r` recarga la ventana, como en `pr-checker`, para ver las marcas añadidas desde otra consola. Repite la misma consulta. `viewer` no sabe de ficheros: `run` recibe una función que devuelve el texto nuevo, y `main` la construye con la ruta y el `Command`. Un error al recargar no cierra la ventana. |
 | 2026-11-13 | RN-27: la cuadrícula deja de separar lo disfrutado hasta hoy de lo pendiente y cuenta como usados también los días reservados para más adelante, con el mismo criterio que «Vacaciones restantes»: un día reservado ya no está disponible, y solo vuelve a verde si se libera. Con eso deja de depender de la fecha, y `month` y `year` ya no reciben el día de hoy ni `VacationProgress`; la cuadrícula sale del `Summary`. Las etiquetas pasan de «Disfrutadas» y «Pendientes» a «Usadas» y «Restantes», como el resumen y la línea de vacaciones restantes. |
+| 2026-11-13 | RN-29: primera versión del cociente entre días trabajados y días del año, bajo «Vacaciones restantes». Cuenta los laborables de todo el año, planificados, no solo los pasados, como el resto de totales; los días del año salen de la suma de los días de cada tipo del `Summary`. El porcentaje se escribe sin espacio (`61,4%`), como se pidió. |
 
 ### Pendiente o posibles ampliaciones
 
