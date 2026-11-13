@@ -161,11 +161,12 @@ pub fn group_digits(number: &str) -> String {
         .strip_prefix('-')
         .map_or(("", number), |rest| ("-", rest));
     let (integer, fraction) = unsigned.split_at(unsigned.find('.').unwrap_or(unsigned.len()));
-    let digits: Vec<char> = integer.chars().collect();
-    let grouped = digits
+    // Only ASCII digits, so each byte is a character and every chunk is valid UTF-8.
+    let grouped = integer
+        .as_bytes()
         .rchunks(3)
         .rev()
-        .map(String::from_iter)
+        .map(String::from_utf8_lossy)
         .collect::<Vec<_>>()
         .join(",");
     format!("{sign}{grouped}{fraction}")

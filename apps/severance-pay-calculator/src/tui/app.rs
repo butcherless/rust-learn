@@ -287,9 +287,10 @@ impl App {
 }
 
 fn without_last_char(text: &str) -> String {
-    let mut chars = text.chars();
-    chars.next_back();
-    chars.as_str().to_owned()
+    text.char_indices()
+        .next_back()
+        .map_or(text, |(last, _)| &text[..last])
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -321,6 +322,20 @@ mod tests {
     use Message::{
         Backspace, Clear, NextField, NextOption, PreviousField, PreviousOption, Quit, Type,
     };
+
+    #[test]
+    fn backspace_removes_one_character() {
+        [
+            ("", ""),
+            ("5", ""),
+            ("53000", "5300"),
+            ("2021-10-1ñ", "2021-10-1"),
+        ]
+        .into_iter()
+        .for_each(|(text, expected)| {
+            assert_eq!(without_last_char(text), expected, "{text:?}");
+        });
+    }
 
     #[test]
     fn maps_keys() {
