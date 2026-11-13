@@ -372,7 +372,7 @@ pub mod fixtures {
     }
 
     pub fn url(text: &str) -> PrUrl {
-        PrUrl(text.to_owned())
+        PrUrl::from(text.to_owned())
     }
 
     /// Rows: 0 = a/b PR #1, 1 = a/b PR #2 (http), 2 = c/d without PRs, 3 = e/f failed.

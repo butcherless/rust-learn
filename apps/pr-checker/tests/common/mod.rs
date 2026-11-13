@@ -13,10 +13,10 @@ pub fn project(name: &str) -> Project {
 /// The pull request #`number`, titled `title {number}`, at `https://github.com/o/r/pull/{number}`.
 pub fn pull_request(number: u64, state: PrState, mergeable: Mergeable) -> PullRequest {
     PullRequest {
-        number: PrNumber(number),
-        title: PrTitle(format!("title {number}")),
+        number: PrNumber::from(number),
+        title: PrTitle::from(format!("title {number}")),
         state,
         mergeable,
-        url: PrUrl(format!("https://github.com/o/r/pull/{number}")),
+        url: PrUrl::from(format!("https://github.com/o/r/pull/{number}")),
     }
 }

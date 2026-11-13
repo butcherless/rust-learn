@@ -6,15 +6,15 @@ use crate::domain::model::{Mergeable, PrNumber, PrState, PrTitle, PrUrl, PullReq
 /// Converts a pull request DTO into its domain form.
 pub fn to_domain(dto: PullRequestDto) -> PullRequest {
     PullRequest {
-        number: PrNumber(dto.number),
-        title: PrTitle(dto.title),
+        number: PrNumber::from(dto.number),
+        title: PrTitle::from(dto.title),
         state: if dto.draft {
             PrState::Draft
         } else {
             PrState::Open
         },
         mergeable: Mergeable::from(dto.mergeable),
-        url: PrUrl(dto.html_url),
+        url: PrUrl::from(dto.html_url),
     }
 }
 
@@ -47,11 +47,11 @@ mod tests {
             assert_eq!(
                 to_domain(decode(fields)),
                 PullRequest {
-                    number: PrNumber(2),
-                    title: PrTitle("t".to_owned()),
+                    number: PrNumber::from(2),
+                    title: PrTitle::from("t".to_owned()),
                     state,
                     mergeable,
-                    url: PrUrl(URL.to_owned()),
+                    url: PrUrl::from(URL.to_owned()),
                 },
                 "fields: {fields:?}"
             );

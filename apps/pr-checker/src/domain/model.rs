@@ -70,7 +70,13 @@ impl fmt::Display for Project {
 
 /// A pull request number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PrNumber(pub u64);
+pub struct PrNumber(u64);
+
+impl From<u64> for PrNumber {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
 
 impl fmt::Display for PrNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -80,7 +86,13 @@ impl fmt::Display for PrNumber {
 
 /// A pull request title.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrTitle(pub String);
+pub struct PrTitle(String);
+
+impl From<String> for PrTitle {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
 
 impl fmt::Display for PrTitle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -90,7 +102,13 @@ impl fmt::Display for PrTitle {
 
 /// The web address of a pull request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrUrl(pub String);
+pub struct PrUrl(String);
+
+impl From<String> for PrUrl {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
 
 impl PrUrl {
     /// The address as text.

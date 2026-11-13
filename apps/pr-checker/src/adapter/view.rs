@@ -122,11 +122,11 @@ pub(crate) mod fixtures {
     /// A mergeable pull request titled `title {number}` at `url`.
     pub fn pull_request(number: u64, state: PrState, url: &str) -> PullRequest {
         PullRequest {
-            number: PrNumber(number),
-            title: PrTitle(format!("title {number}")),
+            number: PrNumber::from(number),
+            title: PrTitle::from(format!("title {number}")),
             state,
             mergeable: Mergeable::Yes,
-            url: PrUrl(url.to_owned()),
+            url: PrUrl::from(url.to_owned()),
         }
     }
 }
@@ -142,7 +142,7 @@ mod tests {
         DisplayRow {
             kind,
             cells: cells.map(String::from),
-            url: url.map(|url| PrUrl(url.to_owned())),
+            url: url.map(|url| PrUrl::from(url.to_owned())),
         }
     }
 
