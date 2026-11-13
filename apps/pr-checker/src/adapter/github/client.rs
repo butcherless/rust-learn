@@ -3,8 +3,10 @@
 use std::fmt;
 use std::time::Duration;
 
+use futures::stream::{self, StreamExt, TryStreamExt};
 use reqwest::header::{ACCEPT, HeaderMap, USER_AGENT};
 use reqwest::{Client, StatusCode, Url};
+use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use crate::adapter::github::dto::PullRequestDto;
@@ -16,6 +18,8 @@ use crate::domain::port::PullRequestSource;
 /// The public GitHub API.
 pub const DEFAULT_BASE_URL: &str = "https://api.github.com";
 
+/// How many pull requests of one repository are fetched at the same time, for their mergeability.
+const DETAIL_CONCURRENCY: usize = 4;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const API_VERSION_HEADER: &str = "x-github-api-version";
 const API_VERSION: &str = "2022-11-28";
@@ -74,7 +78,8 @@ impl GithubClient {
         })
     }
 
-    fn pulls_url(&self, project: &Project) -> Result<Url, SourceError> {
+    /// The address of `/repos/{owner}/{repo}/pulls` followed by `tail`.
+    fn pulls_path(&self, project: &Project, tail: Option<&str>) -> Result<Url, SourceError> {
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .map_err(|()| SourceError::Unavailable("invalid base URL".to_owned()))?
@@ -84,17 +89,27 @@ impl GithubClient {
                 project.owner().as_str(),
                 project.repo().as_str(),
                 "pulls",
-            ]);
+            ])
+            .extend(tail);
+        Ok(url)
+    }
+
+    fn pulls_url(&self, project: &Project) -> Result<Url, SourceError> {
+        let mut url = self.pulls_path(project, None)?;
         url.query_pairs_mut()
             .append_pair("state", "open")
             .append_pair("per_page", "100");
         Ok(url)
     }
 
-    async fn fetch(&self, project: &Project) -> Result<Vec<PullRequest>, SourceError> {
+    fn pull_url(&self, project: &Project, number: u64) -> Result<Url, SourceError> {
+        self.pulls_path(project, Some(&number.to_string()))
+    }
+
+    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, SourceError> {
         let response = self
             .http
-            .get(self.pulls_url(project)?)
+            .get(url)
             .bearer_auth(&self.token.0)
             .header(ACCEPT, ACCEPT_VALUE)
             .header(API_VERSION_HEADER, API_VERSION)
@@ -107,11 +122,19 @@ impl GithubClient {
         if !status.is_success() {
             return Err(map_status(status, ratelimit_remaining(response.headers())));
         }
-        response
-            .json::<Vec<PullRequestDto>>()
+        response.json::<T>().await.map_err(body_error)
+    }
+
+    /// Lists the open pull requests, then gets each one, because only the single pull request
+    /// endpoint says whether it is mergeable.
+    async fn fetch(&self, project: &Project) -> Result<Vec<PullRequest>, SourceError> {
+        let listed: Vec<PullRequestDto> = self.get(self.pulls_url(project)?).await?;
+        stream::iter(listed)
+            .map(|dto| async move { self.get(self.pull_url(project, dto.number)?).await })
+            .buffered(DETAIL_CONCURRENCY)
+            .map_ok(to_domain)
+            .try_collect()
             .await
-            .map(|dtos| dtos.into_iter().map(to_domain).collect())
-            .map_err(body_error)
     }
 }
 

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working on the `pr-checker` project of this workspace.
 
-A Rust CLI that lists the open pull requests of the GitHub repositories in `projects.toml`, as a colored table or, with `--tui`, in an interactive terminal UI. `README.md` covers usage; `IMPLEMENTATION_PLAN.md` holds the requirements (FR1-FR11), module map, HTTP mapping and status.
+A Rust CLI that lists the open pull requests of the GitHub repositories in `projects.toml`, as a colored table or, with `--tui`, in an interactive terminal UI. `README.md` covers usage; `IMPLEMENTATION_PLAN.md` holds the requirements (FR1-FR12), module map, HTTP mapping and status.
 
 ## Commands
 

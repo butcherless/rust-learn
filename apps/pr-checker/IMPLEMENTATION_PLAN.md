@@ -3,9 +3,9 @@
 Requirements and design behind the tool. For setup and usage, see [README.md](README.md). For
 commands, code rules and library constraints, see [CLAUDE.md](CLAUDE.md).
 
-**Status (2026-11-06):** FR1-FR11 are implemented on `main` and CI passes. The table mode was run
-against the real GitHub API with the 8 repositories in `projects.toml` (exit `0`; none had open
-pull requests). The terminal UI has only been checked with a dummy token, not by hand against real
+**Status (2026-11-13):** FR1-FR12 are implemented on `main` and CI passes. The table mode was run
+against the real GitHub API with the 13 repositories in `projects.toml` (exit `0`; one open pull
+request, mergeable). The terminal UI has only been checked with a dummy token, not by hand against real
 data.
 
 ## Requirements
@@ -15,14 +15,15 @@ data.
 | FR1 | The project list comes from a TOML file: `./projects.toml` by default, or `--config <path>`. Each entry is `owner/repo` (trimmed, both parts non-empty, exactly one `/`). An invalid entry fails loading and is named in the message. An empty list is valid. |
 | FR2 | Authentication uses `GITHUB_TOKEN`. If it is missing or empty, the tool exits with a clear error before any HTTP call. |
 | FR3 | The target is github.com only, but the adapter's base URL is injectable for tests. |
-| FR4 | Each project gets one `GET /repos/{owner}/{repo}/pulls?state=open&per_page=100`. There is no pagination. |
+| FR4 | Each project gets one `GET /repos/{owner}/{repo}/pulls?state=open&per_page=100`, then one `GET /repos/{owner}/{repo}/pulls/{number}` per pull request, at most 4 at a time, because only that endpoint returns `mergeable`. A failing one fails the project. There is no pagination. |
 | FR5 | At most 2 repositories are fetched concurrently, and output follows config order. |
 | FR6 | A failing repository (404, 401/403, rate limit, network, decode) is reported in its own row, and the others continue. |
 | FR7 | Exit code `0`: every project succeeded. `1`: at least one failed, results still shown. `2`: startup error. |
-| FR8 | The table columns are Project, PR #, Title, State. |
+| FR8 | The table columns are Project, PR #, Title, State, Mergeable. |
 | FR9 | Green: no open PRs (one row, `no open pull requests`). Orange: one row per open PR. Red: fetch failed (one row, the error message). |
 | FR10 | State is `open`, or `draft` when the API's `draft` flag is true. |
 | FR11 | `--tui` shows the same rows and colors in an interactive terminal UI. Keys move the selection, open the selected PR's `html_url` in the browser (only `https://` addresses), fetch again, and quit (see the README for the bindings). Exit codes follow FR7 using the last fetch; a terminal that cannot be set up exits with `2`. |
+| FR12 | Mergeable is `yes` or `no` from the API's `mergeable` flag, or `unknown` while GitHub computes it (`null`). |
 
 **Out of scope:** pagination, GitHub Enterprise, closed or merged PRs, review or CI status, JSON
 output, caching, retries, release packaging.
@@ -34,7 +35,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 
 | Module | Responsibility |
 |---|---|
-| `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `PrUrl` |
+| `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `Mergeable`, `PrUrl` |
 | `domain::port` | `PullRequestSource`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
 | `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`) |
 | `service::list_open_prs` | `list_open_prs` uses `buffered`, not `buffer_unordered`, to keep order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
@@ -47,7 +48,8 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 
 ### HTTP
 
-- Endpoint: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests).
+- Endpoints: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests)
+  and [Get a pull request](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request).
 - One `reqwest::Client` is reused, with a 10-second timeout.
 - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
   `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: pr-checker/<crate version>`.

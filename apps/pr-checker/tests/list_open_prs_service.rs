@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use common::{project, pull_request};
 use pr_checker::domain::error::SourceError;
-use pr_checker::domain::model::{PrState, Project, PullRequest};
+use pr_checker::domain::model::{Mergeable, PrState, Project, PullRequest};
 use pr_checker::domain::port::PullRequestSource;
 use pr_checker::service::{ProjectReport, has_failures, list_open_prs};
 
@@ -26,7 +26,7 @@ impl PullRequestSource for ScriptedSource {
         match project.repo().as_str() {
             "success" => {
                 tokio::time::sleep(Duration::from_millis(30)).await;
-                Ok(vec![pull_request(1, PrState::Open)])
+                Ok(vec![pull_request(1, PrState::Open, Mergeable::Yes)])
             }
             "empty" => {
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -64,7 +64,10 @@ async fn mixed_outcomes_keep_input_order() {
     assert_eq!(
         list_open_prs(&ScriptedSource, projects, 2).await,
         [
-            report("a/success", Ok(vec![pull_request(1, PrState::Open)])),
+            report(
+                "a/success",
+                Ok(vec![pull_request(1, PrState::Open, Mergeable::Yes)])
+            ),
             report("a/empty", Ok(vec![])),
             report("a/failure", Err(SourceError::NotFound)),
         ]

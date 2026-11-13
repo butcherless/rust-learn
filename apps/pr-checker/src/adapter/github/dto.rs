@@ -2,7 +2,8 @@
 
 use serde::Deserialize;
 
-/// A pull request as returned by `GET /repos/{owner}/{repo}/pulls`.
+/// A pull request as returned by `GET /repos/{owner}/{repo}/pulls` and
+/// `GET /repos/{owner}/{repo}/pulls/{number}`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct PullRequestDto {
     /// The pull request number.
@@ -16,4 +17,8 @@ pub struct PullRequestDto {
     /// Whether the pull request is a draft.
     #[serde(default)]
     pub draft: bool,
+    /// Whether it merges without conflicts. Only the single pull request endpoint returns it, and
+    /// it is `null` while GitHub computes it.
+    #[serde(default)]
+    pub mergeable: Option<bool>,
 }

@@ -15,6 +15,7 @@ const HELP: &str = "↑/↓ move · Enter open in browser · r refresh · q quit
 const HIGHLIGHT_SYMBOL: &str = "▶ ";
 const NUMBER_WIDTH: u16 = 6;
 const STATE_WIDTH: u16 = 6;
+const MERGEABLE_WIDTH: u16 = 9;
 
 /// Draws the whole screen for `app`.
 pub fn draw(app: &App, frame: &mut Frame) {
@@ -48,7 +49,7 @@ fn table(display_rows: &[DisplayRow]) -> Table<'static> {
 }
 
 /// The project column fits its longest entry; the title takes the remaining space.
-fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 4] {
+fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 5] {
     let project_width = display_rows
         .iter()
         .map(|row| row.cells[0].chars().count())
@@ -61,6 +62,7 @@ fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 4] {
         Constraint::Length(NUMBER_WIDTH),
         Constraint::Fill(1),
         Constraint::Length(STATE_WIDTH),
+        Constraint::Length(MERGEABLE_WIDTH),
     ]
 }
 
@@ -102,6 +104,7 @@ mod tests {
         [
             "Open pull requests",
             "Project",
+            "Mergeable",
             "title 1",
             NO_PULL_REQUESTS,
             "error: repository not found",

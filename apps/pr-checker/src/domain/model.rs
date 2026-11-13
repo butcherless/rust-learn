@@ -123,6 +123,37 @@ impl fmt::Display for PrState {
     }
 }
 
+/// Whether an open pull request can be merged without conflicts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mergeable {
+    /// It merges cleanly into its base branch.
+    Yes,
+    /// It has conflicts with its base branch.
+    No,
+    /// GitHub has not finished computing it yet.
+    Unknown,
+}
+
+impl From<Option<bool>> for Mergeable {
+    fn from(mergeable: Option<bool>) -> Self {
+        match mergeable {
+            Some(true) => Mergeable::Yes,
+            Some(false) => Mergeable::No,
+            None => Mergeable::Unknown,
+        }
+    }
+}
+
+impl fmt::Display for Mergeable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Mergeable::Yes => "yes",
+            Mergeable::No => "no",
+            Mergeable::Unknown => "unknown",
+        })
+    }
+}
+
 /// An open pull request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequest {
@@ -132,6 +163,8 @@ pub struct PullRequest {
     pub title: PrTitle,
     /// The pull request state.
     pub state: PrState,
+    /// Whether it can be merged without conflicts.
+    pub mergeable: Mergeable,
     /// The pull request's page on the web.
     pub url: PrUrl,
 }
@@ -176,5 +209,19 @@ mod tests {
     fn state_displays_lowercase() {
         assert_eq!(PrState::Open.to_string(), "open");
         assert_eq!(PrState::Draft.to_string(), "draft");
+    }
+
+    #[test]
+    fn mergeable_comes_from_the_api_flag_and_displays_lowercase() {
+        [
+            (Some(true), Mergeable::Yes, "yes"),
+            (Some(false), Mergeable::No, "no"),
+            (None, Mergeable::Unknown, "unknown"),
+        ]
+        .into_iter()
+        .for_each(|(flag, mergeable, text)| {
+            assert_eq!(Mergeable::from(flag), mergeable, "flag {flag:?}");
+            assert_eq!(mergeable.to_string(), text, "flag {flag:?}");
+        });
     }
 }

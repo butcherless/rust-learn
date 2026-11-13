@@ -5,7 +5,7 @@ use crate::domain::model::{PrUrl, PullRequest};
 use crate::service::ProjectReport;
 
 /// The column titles.
-pub const HEADER: [&str; 4] = ["Project", "PR #", "Title", "State"];
+pub const HEADER: [&str; 5] = ["Project", "PR #", "Title", "State", "Mergeable"];
 /// The orange of open pull request rows, as RGB.
 pub const ORANGE: (u8, u8, u8) = (255, 165, 0);
 const NO_VALUE: &str = "—";
@@ -29,7 +29,7 @@ pub struct DisplayRow {
     /// What the row represents.
     pub kind: RowKind,
     /// The text of each column, in [`HEADER`] order.
-    pub cells: [String; 4],
+    pub cells: [String; 5],
     /// The pull request's web page. Only set for [`RowKind::OpenPullRequest`].
     pub url: Option<PrUrl>,
 }
@@ -62,7 +62,13 @@ fn report_rows(report: &ProjectReport) -> Vec<DisplayRow> {
 fn message_row(kind: RowKind, project: String, message: String) -> DisplayRow {
     DisplayRow {
         kind,
-        cells: [project, NO_VALUE.to_owned(), message, NO_VALUE.to_owned()],
+        cells: [
+            project,
+            NO_VALUE.to_owned(),
+            message,
+            NO_VALUE.to_owned(),
+            NO_VALUE.to_owned(),
+        ],
         url: None,
     }
 }
@@ -75,6 +81,7 @@ fn pull_request_row(project: String, pull_request: &PullRequest) -> DisplayRow {
             pull_request.number.to_string(),
             pull_request.title.to_string(),
             pull_request.state.to_string(),
+            pull_request.mergeable.to_string(),
         ],
         url: Some(pull_request.url.clone()),
     }
@@ -84,7 +91,7 @@ fn pull_request_row(project: String, pull_request: &PullRequest) -> DisplayRow {
 #[cfg(test)]
 pub(crate) mod fixtures {
     use crate::domain::error::SourceError;
-    use crate::domain::model::{PrNumber, PrState, PrTitle, PrUrl, PullRequest};
+    use crate::domain::model::{Mergeable, PrNumber, PrState, PrTitle, PrUrl, PullRequest};
     use crate::service::ProjectReport;
 
     /// The address of the first sample pull request, `a/b` #1.
@@ -98,12 +105,13 @@ pub(crate) mod fixtures {
         }
     }
 
-    /// A pull request titled `title {number}` at `url`.
+    /// A mergeable pull request titled `title {number}` at `url`.
     pub fn pull_request(number: u64, state: PrState, url: &str) -> PullRequest {
         PullRequest {
             number: PrNumber(number),
             title: PrTitle(format!("title {number}")),
             state,
+            mergeable: Mergeable::Yes,
             url: PrUrl(url.to_owned()),
         }
     }
@@ -114,9 +122,9 @@ mod tests {
     use super::fixtures::{FIRST_URL, pull_request, report};
     use super::*;
     use crate::domain::error::SourceError;
-    use crate::domain::model::PrState;
+    use crate::domain::model::{Mergeable, PrState, PullRequest};
 
-    fn row(kind: RowKind, cells: [&str; 4], url: Option<&str>) -> DisplayRow {
+    fn row(kind: RowKind, cells: [&str; 5], url: Option<&str>) -> DisplayRow {
         DisplayRow {
             kind,
             cells: cells.map(String::from),
@@ -127,7 +135,7 @@ mod tests {
     /// The only place that spells out the texts of FR8 and FR9; other tests use the constants.
     #[test]
     fn texts_are_the_ones_of_the_requirements() {
-        assert_eq!(HEADER, ["Project", "PR #", "Title", "State"]);
+        assert_eq!(HEADER, ["Project", "PR #", "Title", "State", "Mergeable"]);
         assert_eq!(NO_PULL_REQUESTS, "no open pull requests");
     }
 
@@ -137,7 +145,7 @@ mod tests {
             rows(&[report("a/b", Ok(vec![]))]),
             [row(
                 RowKind::NoPullRequests,
-                ["a/b", "—", NO_PULL_REQUESTS, "—"],
+                ["a/b", "—", NO_PULL_REQUESTS, "—", "—"],
                 None
             )]
         );
@@ -149,7 +157,14 @@ mod tests {
             "a/b",
             Ok(vec![
                 pull_request(1, PrState::Open, FIRST_URL),
-                pull_request(2, PrState::Draft, "https://github.com/a/b/pull/2"),
+                PullRequest {
+                    mergeable: Mergeable::No,
+                    ..pull_request(2, PrState::Draft, "https://github.com/a/b/pull/2")
+                },
+                PullRequest {
+                    mergeable: Mergeable::Unknown,
+                    ..pull_request(3, PrState::Open, "https://github.com/a/b/pull/3")
+                },
             ]),
         )];
         assert_eq!(
@@ -157,13 +172,18 @@ mod tests {
             [
                 row(
                     RowKind::OpenPullRequest,
-                    ["a/b", "1", "title 1", "open"],
+                    ["a/b", "1", "title 1", "open", "yes"],
                     Some(FIRST_URL)
                 ),
                 row(
                     RowKind::OpenPullRequest,
-                    ["a/b", "2", "title 2", "draft"],
+                    ["a/b", "2", "title 2", "draft", "no"],
                     Some("https://github.com/a/b/pull/2")
+                ),
+                row(
+                    RowKind::OpenPullRequest,
+                    ["a/b", "3", "title 3", "open", "unknown"],
+                    Some("https://github.com/a/b/pull/3")
                 ),
             ]
         );
@@ -175,7 +195,7 @@ mod tests {
             rows(&[report("a/b", Err(SourceError::NotFound))]),
             [row(
                 RowKind::Failed,
-                ["a/b", "—", "error: repository not found", "—"],
+                ["a/b", "—", "error: repository not found", "—", "—"],
                 None
             )]
         );

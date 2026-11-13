@@ -4,14 +4,14 @@ A command-line tool that lists the open pull requests of a set of GitHub reposit
 table or in an interactive terminal UI.
 
 ```
-╭────────────────┬───────┬──────────────────────────────┬───────╮
-│ Project        ┆ PR #  ┆ Title                        ┆ State │
-╞════════════════╪═══════╪══════════════════════════════╪═══════╡
-│ rust-lang/rust ┆ 12345 ┆ Fix borrowck ICE in closures ┆ open  │  orange
-│ rust-lang/rust ┆ 12350 ┆ Stabilize foo                ┆ draft │  orange
-│ tokio-rs/tokio ┆ —     ┆ no open pull requests        ┆ —     │  green
-│ acme/missing   ┆ —     ┆ error: repository not found  ┆ —     │  red
-╰────────────────┴───────┴──────────────────────────────┴───────╯
+╭────────────────┬───────┬──────────────────────────────┬───────┬───────────╮
+│ Project        ┆ PR #  ┆ Title                        ┆ State ┆ Mergeable │
+╞════════════════╪═══════╪══════════════════════════════╪═══════╪═══════════╡
+│ rust-lang/rust ┆ 12345 ┆ Fix borrowck ICE in closures ┆ open  ┆ yes       │  orange
+│ rust-lang/rust ┆ 12350 ┆ Stabilize foo                ┆ draft ┆ no        │  orange
+│ tokio-rs/tokio ┆ —     ┆ no open pull requests        ┆ —     ┆ —         │  green
+│ acme/missing   ┆ —     ┆ error: repository not found  ┆ —     ┆ —         │  red
+╰────────────────┴───────┴──────────────────────────────┴───────┴───────────╯
 ```
 
 ## Quick start
@@ -79,6 +79,10 @@ if it is fine-grained, or the `repo` scope if it is classic.
 
 - At most 2 repositories are fetched at the same time, and rows follow the order of the file.
 - A failing repository is reported in its own red row and doesn't stop the others.
+- Mergeable is `no` when the pull request has conflicts with its base branch. It is `unknown`
+  while GitHub is still computing it, usually on the first fetch after a change; fetch again
+  (`r` in the interactive UI) to see it.
+- Each pull request costs one more API request, to get its Mergeable value.
 
 | Exit code | Meaning |
 |---|---|
