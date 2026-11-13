@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working on the `pr-checker` project of this workspace.
 
-A Rust CLI that lists the open pull requests of the GitHub repositories in `projects.toml`, as a colored table or, with `--tui`, in an interactive terminal UI. `README.md` covers usage; `IMPLEMENTATION_PLAN.md` holds the requirements (FR1-FR12), module map, HTTP mapping and status.
+A Rust CLI that lists the open pull requests of the GitHub repositories in `projects.toml`, as a colored table or, with `--tui`, in an interactive terminal UI. `README.md` covers usage; `IMPLEMENTATION_PLAN.md` holds the requirements (FR1-FR14), module map, HTTP mapping and status.
 
 ## Commands
 
@@ -34,9 +34,9 @@ The layers and the module table are in `IMPLEMENTATION_PLAN.md`. Beyond them:
 - `main.rs` hardcodes `DEFAULT_BASE_URL`, so tests exercise `GithubClient::new(&server.uri(), ...)` directly.
 
 `tui` follows The Elm Architecture, as ratatui recommends, split like `severance-pay-calculator`:
-- `App` keeps the display rows, computed once when the reports load, so moving and drawing don't rebuild them.
+- `App` keeps one slot per project (pending or with its report) and the display rows, recomputed only when a slot changes, so moving and drawing don't rebuild them.
 - `view::draw` only draws, and builds a fresh `TableState` from the selection, which is plain data.
-- `run` is the only code with side effects: it performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and sends the result back as a `Message`, so tests never touch a terminal or a browser.
+- `run` is the only code with side effects: it performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and sends the results back as messages (`Fetched` per project, `Finished`, `Tick` every half second while fetching, `Opened`), so tests never touch a terminal, a clock or a browser.
 
 ## Conventions
 

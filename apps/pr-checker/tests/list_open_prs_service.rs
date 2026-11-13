@@ -6,10 +6,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use common::{project, pull_request};
+use futures::StreamExt;
 use pr_checker::domain::error::SourceError;
 use pr_checker::domain::model::{Mergeable, PrState, Project, PullRequest};
 use pr_checker::domain::port::PullRequestSource;
-use pr_checker::service::{ProjectReport, has_failures, list_open_prs};
+use pr_checker::service::{ProjectReport, has_failures, list_open_prs, stream_open_prs};
 
 fn report(name: &str, outcome: Result<Vec<PullRequest>, SourceError>) -> ProjectReport {
     ProjectReport {
@@ -70,6 +71,30 @@ async fn mixed_outcomes_keep_input_order() {
             ),
             report("a/empty", Ok(vec![])),
             report("a/failure", Err(SourceError::NotFound)),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn the_stream_yields_each_project_when_ready_with_its_position() {
+    let projects = ["a/success", "a/empty", "a/failure"].map(project).to_vec();
+
+    let yielded: Vec<(usize, ProjectReport)> = stream_open_prs(&ScriptedSource, projects, 3)
+        .collect()
+        .await;
+
+    assert_eq!(
+        yielded,
+        [
+            (2, report("a/failure", Err(SourceError::NotFound))),
+            (1, report("a/empty", Ok(vec![]))),
+            (
+                0,
+                report(
+                    "a/success",
+                    Ok(vec![pull_request(1, PrState::Open, Mergeable::Yes)])
+                )
+            ),
         ]
     );
 }

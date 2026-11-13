@@ -1,7 +1,7 @@
 //! Presentation model shared by the table and the terminal UI: which rows to show, their text,
 //! their kind and their pull request address. Pure, and free of any rendering library.
 
-use crate::domain::model::{PrUrl, PullRequest};
+use crate::domain::model::{PrUrl, Project, PullRequest};
 use crate::service::ProjectReport;
 
 /// The column titles.
@@ -11,6 +11,8 @@ pub const ORANGE: (u8, u8, u8) = (255, 165, 0);
 const NO_VALUE: &str = "—";
 /// The message of a project without open pull requests (FR9).
 pub const NO_PULL_REQUESTS: &str = "no open pull requests";
+/// The message of a project whose first fetch has not finished yet (FR14).
+pub const LOADING_PROJECT: &str = "loading…";
 
 /// What a row represents, which decides its color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +23,8 @@ pub enum RowKind {
     OpenPullRequest,
     /// A project whose fetch failed.
     Failed,
+    /// A project whose first fetch has not finished yet.
+    Loading,
 }
 
 /// One row: its text, what it represents and, for a pull request, its address.
@@ -39,7 +43,17 @@ pub fn rows(reports: &[ProjectReport]) -> Vec<DisplayRow> {
     reports.iter().flat_map(report_rows).collect()
 }
 
-fn report_rows(report: &ProjectReport) -> Vec<DisplayRow> {
+/// The row of a project that is still loading.
+pub fn loading_row(project: &Project) -> DisplayRow {
+    message_row(
+        RowKind::Loading,
+        project.to_string(),
+        LOADING_PROJECT.to_owned(),
+    )
+}
+
+/// The rows of one project's report.
+pub fn report_rows(report: &ProjectReport) -> Vec<DisplayRow> {
     let project = report.project.to_string();
     match &report.outcome {
         Ok(pull_requests) if pull_requests.is_empty() => vec![message_row(
@@ -137,6 +151,19 @@ mod tests {
     fn texts_are_the_ones_of_the_requirements() {
         assert_eq!(HEADER, ["Project", "PR #", "Title", "State", "Mergeable"]);
         assert_eq!(NO_PULL_REQUESTS, "no open pull requests");
+        assert_eq!(LOADING_PROJECT, "loading…");
+    }
+
+    #[test]
+    fn a_loading_project_gives_one_row() {
+        assert_eq!(
+            loading_row(&"a/b".parse().unwrap()),
+            row(
+                RowKind::Loading,
+                ["a/b", "—", LOADING_PROJECT, "—", "—"],
+                None
+            )
+        );
     }
 
     #[test]

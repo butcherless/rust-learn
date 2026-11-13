@@ -29,6 +29,7 @@ fn color(kind: RowKind) -> Color {
             Color::Rgb { r, g, b }
         }
         RowKind::Failed => Color::Red,
+        RowKind::Loading => Color::DarkGrey,
     }
 }
 
@@ -42,6 +43,25 @@ mod tests {
     fn empty_reports_render_only_the_header() {
         let output = render(&[]).to_string();
         assert!(HEADER.iter().all(|title| output.contains(title)));
+    }
+
+    #[test]
+    fn each_kind_has_its_color() {
+        [
+            (RowKind::NoPullRequests, Color::Green),
+            (
+                RowKind::OpenPullRequest,
+                Color::Rgb {
+                    r: 255,
+                    g: 165,
+                    b: 0,
+                },
+            ),
+            (RowKind::Failed, Color::Red),
+            (RowKind::Loading, Color::DarkGrey),
+        ]
+        .into_iter()
+        .for_each(|(kind, expected)| assert_eq!(color(kind), expected, "{kind:?}"));
     }
 
     #[test]

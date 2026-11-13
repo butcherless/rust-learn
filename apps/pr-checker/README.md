@@ -47,14 +47,19 @@ Flags can be combined. The alias already passes `--config`, so for another file 
 `cargo run -p pr-checker -- --tui --config path/to/projects.toml`; the `--` passes the flags after it
 to the program instead of to `cargo`.
 
-### Interactive UI keys
+### Interactive UI
+
+Each repository's rows appear as soon as it is fetched, in the order of the file; until then it
+shows a gray `loading…` row, or its previous rows when fetching again. The light at the start of
+the status line blinks orange while fetching, with the progress (`Loading… 5/13`), and then stays
+green, or red if a repository failed. The keys work while fetching.
 
 | Key | Action |
 |---|---|
 | `↑` `↓` / `j` `k` | Move the selection |
 | `g` `G` / `Home` `End` | Jump to the first or last row |
 | `Enter` / `o` | Open the selected pull request in your browser |
-| `r` | Fetch the pull requests again |
+| `r` | Fetch the pull requests again (ignored while fetching) |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
 ## Configuration
