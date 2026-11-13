@@ -43,7 +43,6 @@ The layers and the module table are in `IMPLEMENTATION_PLAN.md`. Beyond them:
 The shared rules are in the root `CLAUDE.md`. In this project:
 
 - Dependency injection uses generics with `S: PullRequestSource`.
-- `PullRequestDto.state` is deliberately `pub` and unread, which avoids a `dead_code` warning while keeping the API's shape.
 
 ### Tests
 
