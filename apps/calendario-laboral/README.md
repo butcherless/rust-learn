@@ -10,14 +10,30 @@ Desde la raíz del workspace (lo que hay que instalar está en su [README](../..
 `cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, el calendario de uso real, que está versionado:
 
 ```bash
+# Años
 cargo cal add-year 2026                            # crea el fichero con el primer cambio
-cargo cal mark vacaciones 2026-06-05 2026-06-12
+cargo cal add-year 2027 --festivos-de 2026         # copia los festivos de 2026, con la misma fecha
+cargo cal remove-year 2027 --confirmar             # `--confirmar` solo hace falta si tiene marcas
+
+# Marcas
+cargo cal mark vacaciones 2026-06-05 2026-06-12 --desc Viaje
+cargo cal mark festivo 2026-06-24 --desc "San Juan" # un solo día
+cargo cal list 2026                                # las marcas, con su id; sin año, todas
+cargo cal edit 2 --hasta 2026-06-14                # cambia una marca y conserva su id
+cargo cal unmark 2 3                               # borra una o varias marcas
+
+# Consultas
+cargo cal day 2026-06-08                           # tipo, horas y origen de un día; sin fecha, hoy
 cargo cal month 2026 junio                         # `month junio`: del año actual; sin argumentos, el mes actual
 cargo cal year 2026
 cargo cal summary 2026
-cargo cal list 2026                                # las marcas, con su id
-cargo cal edit 2 --hasta 2026-06-14                # cambia una marca; `unmark 2` la borra
+
+# Configuración
 cargo cal config                                   # fin de semana, jornada reducida, cupo y horas
+cargo cal weekend sábado domingo                   # fin de semana de todos los años
+cargo cal reduced-days viernes                     # jornada reducida de todos los años
+cargo cal hours 2026 laborable 8,5                 # horas de una jornada en un año
+cargo cal quota 2026 23                            # cupo de vacaciones de un año
 cargo cal --help                                   # y `cargo cal <comando> --help`
 ```
 
