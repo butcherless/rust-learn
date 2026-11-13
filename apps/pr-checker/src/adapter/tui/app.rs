@@ -3,6 +3,8 @@
 //! [`Effect`], and [`super::view::draw`] draws a state. All three are free of I/O, so they are
 //! tested directly; the event loop in the parent module performs the effects.
 
+use std::iter;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::adapter::view::{DisplayRow, loading_row, report_rows};
@@ -244,20 +246,33 @@ impl App {
             received: progress.received + 1,
             ..progress
         });
-        let slots = self
-            .slots
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(position, slot)| {
-                if position == index {
-                    Slot::Done(report.clone())
-                } else {
-                    slot
-                }
-            })
+        // The report goes to the slot at `index`, moved rather than cloned: it is the only `Some`
+        // in the sequence zipped with the slots.
+        let replacements = iter::repeat_with(|| None)
+            .take(index)
+            .chain(iter::once(Some(report)))
+            .chain(iter::repeat_with(|| None));
+        let Self {
+            slots,
+            rows,
+            selected,
+            status,
+            ..
+        } = self;
+        let slots = slots
+            .into_iter()
+            .zip(replacements)
+            .map(|(slot, replacement)| replacement.map_or(slot, Slot::Done))
             .collect();
-        Self { fetch, ..self }.with_slots(slots)
+        // `with_slots` reads the old rows and selection to keep the selection in place.
+        Self {
+            slots: Vec::new(),
+            rows,
+            selected,
+            status,
+            fetch,
+        }
+        .with_slots(slots)
     }
 
     fn finished(self) -> Self {
