@@ -173,7 +173,7 @@ impl App {
                 self.fetch.map_or(0, |progress| progress.received),
                 self.slots.len()
             ),
-            Status::Summary => summary(&self.reports().collect::<Vec<_>>()),
+            Status::Summary => summary(self.reports()),
             Status::Opened(url) => format!("Opened {url}"),
             Status::OpenFailed(error) => format!("Cannot open the browser: {error}"),
             Status::NotAPullRequest => NOT_A_PULL_REQUEST.to_owned(),
@@ -338,20 +338,16 @@ fn clamp(index: usize, len: usize) -> Option<usize> {
     len.checked_sub(1).map(|last| index.min(last))
 }
 
-fn summary(reports: &[&ProjectReport]) -> String {
-    let pull_requests: usize = reports
-        .iter()
-        .filter_map(|report| report.outcome.as_ref().ok())
-        .map(Vec::len)
-        .sum();
-    let failures = reports
-        .iter()
-        .filter(|report| report.outcome.is_err())
-        .count();
-    let counts = format!(
-        "{pull_requests} open pull requests in {} projects",
-        reports.len()
+/// Counts projects, open pull requests and failures in one pass over `reports`.
+fn summary<'a>(reports: impl Iterator<Item = &'a ProjectReport>) -> String {
+    let (projects, pull_requests, failures) = reports.fold(
+        (0, 0, 0),
+        |(projects, pull_requests, failures), report| match &report.outcome {
+            Ok(found) => (projects + 1, pull_requests + found.len(), failures),
+            Err(_) => (projects + 1, pull_requests, failures + 1),
+        },
     );
+    let counts = format!("{pull_requests} open pull requests in {projects} projects");
     match failures {
         0 => counts,
         failures => format!("{counts}, {failures} failed"),
