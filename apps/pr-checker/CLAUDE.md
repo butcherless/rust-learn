@@ -8,15 +8,10 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 
 Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
 
-Build and run:
+Running it (`GITHUB_TOKEN`, `cargo pr`, `--tui`, `--config`) is in the README.
 
 ```bash
 cargo build -p pr-checker                                                   # debug → target/debug/pr-checker
-cargo build --release -p pr-checker                                         # optimized → target/release/pr-checker
-GITHUB_TOKEN=$(gh auth token) cargo pr                                      # real API with apps/pr-checker/projects.toml
-GITHUB_TOKEN=$(gh auth token) cargo pr --tui                                # interactive UI, needs a real terminal
-GITHUB_TOKEN=$(gh auth token) cargo run -p pr-checker -- --config <path>    # another project list
-GITHUB_TOKEN=$(gh auth token) ./target/release/pr-checker --config apps/pr-checker/projects.toml
 ```
 
 Test:
@@ -28,31 +23,20 @@ cargo test -p pr-checker --test github_client_wiremock maps_error_statuses  # on
 cargo llvm-cov -p pr-checker                                                # coverage of this project only
 ```
 
-`--config <path>` defaults to `./projects.toml`, relative to the current directory; the `cargo pr` alias passes `apps/pr-checker/projects.toml` so it works from the root. The alias already sets `--config`, so `cargo pr --config <path>` fails as a repeated flag; use `cargo run -p pr-checker` for another file.
-
-`tui/mod.rs` (the event loop, 0%) and the success path of `main.rs` (it always calls the real API) are untested I/O shells that stay in the coverage report; keep logic out of them so the 90% minimum holds. Line coverage is about 91%, the lowest of the workspace.
+`tui/mod.rs` (the event loop) and the success path of `main.rs` (it always calls the real API) are untested I/O shells; keep logic out of them so the 90% minimum holds.
 
 ## Architecture
 
-Hexagonal, with dependencies pointing inward: `adapter → service → domain`.
+The layers and the module table are in `IMPLEMENTATION_PLAN.md`. Beyond them:
 
-- **`domain`**: types and the `PullRequestSource` port. It may import only `std` and `thiserror`.
-- **`service::list_open_prs`**: generic over the port, and never fails as a whole: each `ProjectReport` holds its own `Result`. It uses `buffered`, not `buffer_unordered`, so output follows config order (FR5).
-- **`adapter`**:
-  - `config`: TOML file to `Vec<Project>`.
-  - `github`: implements the port.
-  - `view`: pure presentation model shared by both outputs. `rows` gives each row's text, `RowKind` and PR URL. Tests assert on it, not on ANSI output.
-  - `cli`: arguments, and `render`, which maps rows to a comfy-table. comfy-table drops colors when stdout is not a TTY.
-  - `tui`: the `--tui` UI.
-- **`main.rs`**: composition root. Startup errors exit with 2, project failures with 1. It hardcodes `DEFAULT_BASE_URL`, so tests exercise `GithubClient::new(&server.uri(), ...)` directly.
+- `service::list_open_prs` never fails as a whole: each `ProjectReport` holds its own `Result`.
+- Tests assert on `adapter::view::rows`, not on ANSI output. comfy-table drops colors when stdout is not a TTY.
+- `main.rs` hardcodes `DEFAULT_BASE_URL`, so tests exercise `GithubClient::new(&server.uri(), ...)` directly.
 
-`tui::app` and `tui::view` follow The Elm Architecture, as ratatui recommends, split like `severance-pay-calculator`:
-- `message(key)` maps a key to a `Message`.
-- `App::update(self, Message) -> (App, Effect)` consumes the state and returns the next one.
+`tui` follows The Elm Architecture, as ratatui recommends, split like `severance-pay-calculator`:
 - `App` keeps the display rows, computed once when the reports load, so moving and drawing don't rebuild them.
-- `tui::view::draw(&App, frame)` only draws. The selection is plain data; `draw` builds a fresh `TableState` from it.
-
-`tui::run` is the only code with side effects. It performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and sends the result back as a `Message`, so tests never touch a terminal or a browser. Rendering is tested with ratatui's `TestBackend`.
+- `view::draw` only draws, and builds a fresh `TableState` from the selection, which is plain data.
+- `run` is the only code with side effects: it performs each `Effect` (`Fetch`, `Open(url)`, `Quit`) and sends the result back as a `Message`, so tests never touch a terminal or a browser.
 
 ## Conventions
 
@@ -63,7 +47,7 @@ The shared rules are in the root `CLAUDE.md`. In this project:
 
 ### Tests
 
-- Tests must not need `GITHUB_TOKEN`. Use wiremock for `GithubClient` and an in-memory fake for `PullRequestSource`.
+- Wiremock for `GithubClient`, and an in-memory fake for `PullRequestSource`.
 - Shared builders: `view::fixtures` and `tui::app::fixtures` (`#[cfg(test)]`) for unit tests, and `tests/common/mod.rs` for integration tests.
 - The full status-to-error table is unit tested on `map_status`. Wiremock tests only check the wiring.
 - `tests/cli_exit_codes.rs` runs the compiled binary (`CARGO_BIN_EXE_pr-checker`) for startup errors only, which stop before any HTTP call. Config files used by tests live in `tests/fixtures/`.

@@ -5,7 +5,7 @@ Este fichero orienta a Claude Code (claude.ai/code) cuando trabaja en el proyect
 Aplicación de consola en Rust, `calendario`, que gestiona el `Calendar` laboral de uno o varios `Year` en un fichero JSON.
 - `README.md` es la guía de uso breve y remite a los requisitos.
 - La fuente de verdad es `requisitos-calendario-laboral.md`: reglas (RN-xx), requisitos funcionales (RF-xx), decisiones y el glosario de conceptos (§2.1).
-- Las librerías y las convenciones siguen `apps/severance-pay-calculator`. Las versiones compartidas están en `[workspace.dependencies]` del `Cargo.toml` raíz.
+- Las librerías y las convenciones siguen `apps/severance-pay-calculator`.
 
 **Idiomas (RNF-07):**
 - En español: la documentación (este fichero, los requisitos, el rustdoc `///`/`//!` y los comentarios) y todo lo que ve el usuario.
@@ -13,52 +13,19 @@ Aplicación de consola en Rust, `calendario`, que gestiona el `Calendar` laboral
 
 ## Comandos
 
-Todos los comandos se ejecutan desde la raíz del workspace. El paquete es `calendario-laboral` (para `-p`) y el binario, `calendario`.
-
-### Construir y ejecutar
+Desde la raíz del workspace. El paquete es `calendario-laboral` (para `-p`) y el binario, `calendario`. El README tiene un ejemplo de cada comando, y la §5 de los requisitos, su sintaxis y su RF.
 
 ```bash
-cargo build -p calendario-laboral                  # build de desarrollo → target/debug/calendario (target/ de la raíz)
-cargo build --release -p calendario-laboral        # build optimizado → target/release/calendario
-cargo install --path apps/calendario-laboral       # instala `calendario` en ~/.cargo/bin
-cargo cal --help                                   # ayuda del programa; `cargo cal mark --help` para un subcomando
-cargo run --release -p calendario-laboral -- --file apps/calendario-laboral/calendario.json month   # optimizado
+cargo build -p calendario-laboral                  # → target/debug/calendario
 cargo doc -p calendario-laboral --no-deps --open   # rustdoc del crate
+cargo cal month 2026 6 > junio.txt                 # al redirigir no hay ventana ni color, y van letras en lugar de barras; igual con NO_COLOR=1
+CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color aunque la salida no sea un terminal
 ```
 
-El fichero del `Calendar` es `--file <ruta>`; si no, `$CALENDARIO_FILE`; y si tampoco, `./calendario.json`, relativo al directorio actual. Si el fichero no existe, se parte de un `Calendar` vacío y el primer cambio lo crea.
-
-El alias `cargo cal` pasa `--file apps/calendario-laboral/calendario.json`, el calendario de uso real (versionado en git). Como `--file` gana a la variable, con el alias `CALENDARIO_FILE` no tiene efecto, y `cargo cal --file …` falla por repetir la opción. Para otro fichero, usa `cargo run -p calendario-laboral -- --file <ruta> …`.
-
-Las consultas se pueden lanzar sobre el calendario real. En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla completa que se recarga con `r` (RN-28) y se cierra con `Esc` o `q` (RN-22); `--no-tui` las imprime en la consola:
-
-```bash
-cargo cal list                                     # RF-04; `list 2026` para un año
-cargo cal day 2026-06-08                           # RF-05; sin fecha, hoy
-cargo cal month 2026 junio                         # RF-06, RF-14; o `month 2026 6`; `month junio`, del año actual; sin argumentos, el mes actual
-cargo cal year 2026                                # RF-07; necesita 169 columnas con la cuadrícula de vacaciones (en la ventana, lo que no cabe se corta)
-cargo cal year 2026 --no-tui                       # en la consola, como antes de RN-22
-cargo cal summary 2026                             # RF-08, RF-14: incluye las horas por mes y el acumulado
-cargo cal config                                   # RF-15: fin de semana, jornada reducida, y cupo y horas de cada año
-cargo cal month 2026 6 > junio.txt                 # al redirigir no hay ventana, ni color, y van letras en lugar de barras; sin color también con NO_COLOR=1
-CLICOLOR_FORCE=1 cargo cal month 2026 6 | less -R  # fuerza el color (barras) aunque la salida no sea un terminal
-```
-
-Los cambios escriben en el fichero; para probarlos sin tocar el calendario real, usa otro:
+`cargo cal` trabaja sobre el calendario real (versionado). Para probar cambios, usa otro fichero:
 
 ```bash
 cal() { cargo run -q -p calendario-laboral -- --file /tmp/calendario.json "$@"; }
-cal add-year 2026                                  # RF-01; --festivos-de 2025 copia sus festivos (RF-19)
-cal remove-year 2026 --confirmar                   # RF-20; --confirmar solo si tiene marcas
-cal mark festivo 2026-03-03 --desc "Fiesta local"  # RF-02, un día
-cal mark vacaciones 2026-06-05 2026-06-12          # RF-02, un rango
-cal mark reducido 2026-12-24
-cal edit 2 --hasta 2026-06-15 --desc Viaje         # RF-18: conserva el id; --tipo, --desde, --hasta, --desc "" la quita
-cal unmark 1                                       # RF-03, con el id que muestra `list`; varios: `unmark 1 2`
-cal hours 2026 laborable-verano 8,5                # RF-09, RN-25: las horas son de cada año; con coma o punto
-cal quota 2026 23                                  # RF-10
-cal reduced-days lunes viernes                     # RF-16; --ninguno para quitarlos
-cal weekend sábado domingo                         # RF-17; también --ninguno
 ```
 
 ### Verificar
@@ -68,10 +35,10 @@ cargo test -p calendario-laboral                   # unitarios, tests/cli.rs (ej
 cargo test -p calendario-laboral rn_14             # los tests de un requisito
 cargo test -p calendario-laboral --lib domain::    # los tests de un módulo
 cargo test -p calendario-laboral --test cli        # solo los que ejecutan el binario
-cargo llvm-cov -p calendario-laboral --fail-under-lines 90   # requisito de build (RNF-06); --open para el HTML
+cargo llvm-cov -p calendario-laboral --fail-under-lines 90   # lo que exige la CI (RNF-06); --open para el HTML
 ```
 
-La CI ejecuta fmt y clippy de todo el workspace y, en un job propio de este proyecto, el build en release y el `cargo llvm-cov -p calendario-laboral --fail-under-lines 90` de arriba (RNF-06). Antes de dar un cambio por terminado, ejecuta esos mismos comandos. La cobertura está en torno al 99 %: sube el mínimo en lugar de bajarlo.
+Antes de dar un cambio por terminado, pasa fmt, clippy y la cobertura. Ronda el 98 %.
 
 ## Flujo para hacer cambios
 
@@ -132,7 +99,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
     - Las horas llevan coma decimal (`decimal`).
   - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`. `r` da `Effect::Reload` (RN-28): `run` llama a la función que recibe, y `Viewer::reloaded` cambia el texto manteniendo la línea, o guarda el error para la línea de ayuda.
     - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con `Output::Window`. `Args::output(terminal)` elige una vez entre `Window` y `Console`: la ventana solo en un terminal y sin `--no-tui`.
-    - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI) y la primera visible. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
+    - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI), la primera visible y el error de la última recarga. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
     - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
   - `json`: DTOs con serde; el dominio no conoce serde. `KindDto` repite a propósito los nombres de `MarkKind`, porque son el formato del fichero.
     - `decode` valida a través de los constructores del dominio.
@@ -165,11 +132,9 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 
 ## IntelliJ
 
-- Cómo abrir el workspace y crear configuraciones de ejecución: README raíz, apartado IntelliJ IDEA.
-- En las configuraciones de este proyecto pasa siempre `--file` (o la variable `CALENDARIO_FILE`); si no, se crea un `calendario.json` en la raíz del workspace.
+En las configuraciones de ejecución (README raíz) pasa siempre `--file` o `CALENDARIO_FILE`; si no, se crea un `calendario.json` en la raíz del workspace.
 
 ## Git
 
-- Las reglas de Git son las del `CLAUDE.md` raíz: se trabaja y se sube directamente en `main`.
 - Un commit por cambio de requisito, con el documento, los tests y el código juntos, y solo con fmt, clippy y la cobertura en verde.
 - `apps/calendario-laboral/calendario.json`, el calendario de uso real, está versionado: cada cambio con `cargo cal` se sube con un commit. Los tests nunca lo usan (trabajan sobre ficheros temporales).

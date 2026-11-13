@@ -42,7 +42,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | `adapter::github` | `GithubClient`, `GithubToken` (redacted `Debug`), wire DTO, pure mapper and status mapping |
 | `adapter::view` | Pure presentation model shared by both outputs: `rows` (`DisplayRow`: kind, cells, URL), `HEADER`, `ORANGE` |
 | `adapter::cli` | `Args` (clap) and `render` (comfy-table and colors) |
-| `adapter::tui` | `app`: The Elm Architecture (`message`, `App::update` returning the next state and an `Effect`, `App::view`), tested with `TestBackend`. `run`: the `EventStream` loop that performs effects, terminal setup and restore, `open::that_detached` |
+| `adapter::tui` | `app`: The Elm Architecture (`message`, and `App::update` returning the next state and an `Effect`). `view::draw`: the drawing, tested with `TestBackend`. `run`: the `EventStream` loop that performs effects, terminal setup and restore, `open::that_detached` |
 | `main.rs` | Composition root. The only place `anyhow` is used |
 
 ### HTTP
@@ -80,13 +80,13 @@ User-facing limitations are in the README. These only affect unusual input:
 
 ## Definition of done
 
-- [x] `cargo build` and `cargo build --release` succeed with no warnings.
-- [x] `cargo test` passes offline without a token.
-- [x] `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` are clean.
-- [x] Line coverage (`cargo llvm-cov`) is at least 90%, enforced in CI.
-- [x] `cargo run` without a token exits 2 with a clear message.
+- [x] `cargo build -p pr-checker` and `--release` succeed with no warnings.
+- [x] `cargo test -p pr-checker` passes offline without a token.
+- [x] clippy with `-D warnings` and `cargo fmt --check` are clean.
+- [x] Line coverage is at least 90%, enforced in CI.
+- [x] Without a token, it exits 2 with a clear message.
 - [x] The domain has no HTTP, serialization or CLI imports.
 - [x] `README.md` is updated and `projects.toml` is present.
-- [x] `GITHUB_TOKEN=... cargo run` prints the colored table from the real API.
-- [ ] `GITHUB_TOKEN=... cargo run -- --tui` checked by hand against real data, including opening a
+- [x] `cargo pr` prints the colored table from the real API.
+- [ ] `cargo pr --tui` checked by hand against real data, including opening a
   pull request in the browser.

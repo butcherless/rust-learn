@@ -12,14 +12,14 @@ and README, and they share one `Cargo.lock`, one `target/` folder, the toolchain
 |---|---|---|
 | [pr-checker](apps/pr-checker) | Lists the open pull requests of a set of GitHub repositories, as a table or an interactive terminal UI | `cargo pr` |
 | [severance-pay-calculator](apps/severance-pay-calculator) | Calculates Spanish severance pay, in an interactive terminal UI or as a printed report | `cargo sev` |
-| [calendario-laboral](apps/calendario-laboral) | Calendario laboral de consola: festivos, vacaciones, jornadas y horas por año, guardado en JSON | `cargo cal` |
+| [calendario-laboral](apps/calendario-laboral) | A console work calendar: holidays, vacation, shifts and hours per year, stored in JSON, with year and month views | `cargo cal` |
 
 Each project's README explains how to use it.
 
 ## Requirements
 
 - [Rust](https://www.rust-lang.org/tools/install). `rust-toolchain.toml` selects the toolchain,
-  pinned to 1.99.1 for now (see the file), with clippy, rustfmt and `llvm-tools`.
+  pinned to 1.99.1 (the file says why), with clippy, rustfmt and `llvm-tools`.
 - For coverage only, [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov): install it once
   with `brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`.
 - For the dependency checks only, [cargo-deny](https://github.com/EmbarkStudios/cargo-deny):

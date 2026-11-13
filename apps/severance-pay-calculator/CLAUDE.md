@@ -2,22 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working on the `severance-pay-calculator` project of this workspace.
 
-A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--print`, it prints the report to stdout instead. It is a port of the Python script `~/projects/calc_amount.py`. Its structure and conventions follow `apps/pr-checker`. `README.md` covers usage: options, keys and exit codes.
+A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--print`, it prints the report to stdout instead. It is a port of the Python script `~/projects/calc_amount.py`. Its structure and conventions follow `apps/pr-checker`. `README.md` covers usage: options, calculation, keys and exit codes.
 
 ## Commands
 
 Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
 
-Build and run:
+Running it (`cargo sev`, `--print` and the options) is in the README.
 
 ```bash
 cargo build -p severance-pay-calculator                 # debug → target/debug/severance-pay-calculator
-cargo build --release -p severance-pay-calculator       # optimized → target/release/severance-pay-calculator
-cargo sev                                               # start the interactive UI (needs a real terminal; Esc quits)
-cargo sev --print                                       # print the report for the defaults and today, no UI
-cargo sev --print --annual-pay 40000 --dismissal 20 --from 2020-01-01 --to 2025-12-31
-cargo run --release -p severance-pay-calculator         # optimized run
-./target/release/severance-pay-calculator --print       # run a release build without cargo
 ```
 
 Test:
@@ -29,18 +23,11 @@ cargo test -p severance-pay-calculator shows_the_python_report_grouped   # one t
 cargo llvm-cov -p severance-pay-calculator              # coverage of this project only; --open for HTML
 ```
 
-Coverage:
-- `tui/mod.rs` (0%) and the UI branch of `main.rs` stay untested because they drive the real terminal, as in pr-checker. Keep logic out of them so the 90% minimum holds.
-- Every other file is at or near 100%.
+`tui/mod.rs` and the UI branch of `main.rs` stay untested because they drive the real terminal; keep logic out of them so the 90% minimum holds. Every other file is at or near 100%.
 
 ## Parity with the Python script
 
-The calculation must give the same output as `calc_amount.py`:
-- daily pay = `annual_pay / 365 * days_per_year / 365`
-- days = `(current - initial).num_days() + 1`, which counts both dates
-- total = days × daily pay
-
-The arithmetic stays in `f64` so that rounding matches Python's floats. `domain::thousands` reproduces Python's `f"{x:,.Nf}"`.
+The calculation (in the README) must give the same output as `calc_amount.py`. Days are `(current - initial).num_days() + 1`, which counts both dates. The arithmetic stays in `f64` so that rounding matches Python's floats. `domain::thousands` reproduces Python's `f"{x:,.Nf}"`.
 
 The reference case is the Python screenshot from 2026-11-07: 53,000 · 33 · 13.128 · 2021-10-11 → 2026-11-07 · 1,854 days · 24,340. Tests pin it in `domain`, in `report` (the `--print` text, character by character) and in `tui::view` (the rendered screen). If one of them fails, the calculation changed, not just the presentation.
 
@@ -70,13 +57,12 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `App::value(field)` is what the view reads.
   - `fixtures` has `app`, `apply` and `typed`.
 - **`tui::view`** is the drawing. It only reads `App`.
-  - Panels sit side by side from 76 columns and stack below that.
-  - The Forecast panel sits below them only when the terminal is tall enough: 30 rows side by side. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
+  - Panels sit side by side from 76 columns, and the Forecast panel below them only from 30 rows. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
   - Panel sizes are computed from `GROUPS`, `Field::ALL`, `FORECAST_YEARS` and the widest dismissal text.
   - Colors: cyan input border, orange group headings, cyan values, green total, red errors, gray help.
 - **`tui::mod`** is the only code with side effects: the terminal and the synchronous `crossterm::event::read` loop.
 - **`cli`**: clap `Args`. The flags fill in both the UI's starting form and `--print`. `DismissalArg` keeps clap out of the domain and accepts 20, 33 and 45 as aliases.
-- **`main.rs`**: the composition root. It reads the clock and passes today in. Exit codes: 1 when the calculation fails, 2 for invalid arguments (from clap).
+- **`main.rs`**: the composition root. It reads the clock and passes today in.
 - **`tests/cli.rs`** runs the binary, only with `--print` and `--help`. `tests/fixtures/python_output.txt` is shared with `report`'s unit test.
 
 ## Conventions

@@ -7,7 +7,8 @@ resumen anual con días y horas laborables y el cupo de vacaciones.
 ## Inicio rápido
 
 Desde la raíz del workspace (lo que hay que instalar está en su [README](../../README.md#requirements)), el alias
-`cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, el calendario de uso real, que está versionado:
+`cargo cal` ejecuta el programa sobre `apps/calendario-laboral/calendario.json`, el calendario de uso real, que está
+versionado. Los comandos que lo cambian escriben en él; para probarlos, usa otro fichero (ver [Uso](#uso)).
 
 ```bash
 # Años
@@ -51,9 +52,8 @@ colores y los códigos de salida están en la
 [§5 de los requisitos](requisitos-calendario-laboral.md#5-interfaz-de-consola), y el formato del
 JSON en la [§6](requisitos-calendario-laboral.md#6-persistencia).
 
-El alias ya pasa `--file`, así que con él `CALENDARIO_FILE` no tiene efecto y `cargo cal --file …`
-falla por repetir la opción. Para otro fichero:
-`cargo run -p calendario-laboral -- --file <ruta> <comando>`.
+Para otro fichero: `cargo run -p calendario-laboral -- --file <ruta> <comando>`. Con el alias,
+`CALENDARIO_FILE` no tiene efecto y `--file` falla por repetido.
 
 ## Desarrollo
 
