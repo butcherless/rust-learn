@@ -9,7 +9,7 @@ mod kind;
 mod month;
 mod resolve;
 
-pub use absence::{Absence, next_absence};
+pub use absence::{Absence, AbsencePart, next_absence};
 pub use calendar::{Calendar, DEFAULT_VACATION_QUOTA, Mark, MarkId, Marking, WEEK, Year};
 pub use date::{DateRange, check_year, days_of_year, parse_date};
 pub use error::DomainError;

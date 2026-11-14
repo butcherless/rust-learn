@@ -5,76 +5,79 @@ use chrono::NaiveDate;
 
 use super::style::styled;
 use super::*;
-use crate::domain::{Absence, MonthExt};
+use crate::domain::{Absence, DateRange, MonthExt};
 
 /// El título de la sección.
 pub const ABSENCE_TITLE: &str = "Próxima ausencia";
 /// El texto cuando no quedan ausencias en el calendario.
 pub const NO_ABSENCE: &str = "No hay más ausencias";
 
-/// Las líneas de la sección: el título y, si hay ausencia, sus tipos, sus fechas y sus días.
+/// Las líneas de la sección: el título y una por cada parte de la ausencia, con la barra de su
+/// tipo, su etiqueta, alineada con la más larga, y sus fechas; o el aviso de que no hay más.
 pub(super) fn next_absence(absence: Option<&Absence>, marker: Marker) -> Vec<String> {
     let title = styled(Style::new().bold(), ABSENCE_TITLE);
-    match absence {
-        None => vec![title, NO_ABSENCE.to_owned()],
-        Some(absence) => vec![
-            title,
-            absence
-                .kinds
+    let parts: Vec<String> = match absence {
+        None => vec![NO_ABSENCE.to_owned()],
+        Some(absence) => {
+            let width = absence
+                .parts
                 .iter()
-                .map(|&kind| format!("{} {}", marker.symbol(kind), kind.label()))
-                .collect::<Vec<_>>()
-                .join(" · "),
-            dates(absence.range.from(), absence.range.to()),
-            format!(
-                "{} · {}",
-                count(absence.days, "día laborable", "días laborables"),
-                when(absence.days_until)
-            ),
-        ],
-    }
+                .map(|part| part.kind.label().chars().count())
+                .max()
+                .unwrap_or(0);
+            absence
+                .parts
+                .iter()
+                .map(|part| {
+                    format!(
+                        "{} {:<width$} {}",
+                        marker.symbol(part.kind),
+                        part.kind,
+                        dates(part.range)
+                    )
+                })
+                .collect()
+        }
+    };
+    iter::once(title).chain(parts).collect()
 }
 
-/// `8 de diciembre`.
+/// `8 diciembre`.
 fn day_of_month(date: NaiveDate) -> String {
     format!(
-        "{} de {}",
+        "{} {}",
         date.day(),
         month_name(Month::of(date)).to_lowercase()
     )
 }
 
-/// `el 8 de diciembre`, `del 7 al 8 de diciembre` o `del 28 de diciembre al 6 de enero`.
-fn dates(from: NaiveDate, to: NaiveDate) -> String {
+/// `8 diciembre`, `7-8 diciembre` o `28 diciembre-6 enero`.
+fn dates(range: DateRange) -> String {
+    let (from, to) = (range.from(), range.to());
     if from == to {
-        format!("el {}", day_of_month(from))
+        day_of_month(from)
     } else if Month::of(from) == Month::of(to) && from.year() == to.year() {
-        format!("del {} al {}", from.day(), day_of_month(to))
+        format!("{}-{}", from.day(), day_of_month(to))
     } else {
-        format!("del {} al {}", day_of_month(from), day_of_month(to))
-    }
-}
-
-/// Cuándo empieza: `hoy`, `mañana` o `en 23 días`.
-fn when(days_until: i64) -> String {
-    match days_until {
-        0 => "hoy".to_owned(),
-        1 => "mañana".to_owned(),
-        days_until => format!("en {}", days(days_until)),
+        format!("{}-{}", day_of_month(from), day_of_month(to))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::AbsencePart;
     use crate::domain::fixtures::{date, range};
 
-    fn absence(from: NaiveDate, to: NaiveDate, kinds: &[DayKind], days_until: i64) -> Absence {
+    fn absence(parts: &[(DayKind, NaiveDate, NaiveDate)]) -> Absence {
         Absence {
-            range: range(from, to),
-            kinds: kinds.to_vec(),
-            days: 2,
-            days_until,
+            parts: parts
+                .iter()
+                .map(|&(kind, from, to)| AbsencePart {
+                    kind,
+                    range: range(from, to),
+                })
+                .collect(),
         }
     }
 
@@ -92,47 +95,33 @@ mod tests {
     }
 
     #[test]
-    fn rn_30_the_section_shows_the_kinds_the_dates_and_when_it_starts() {
+    fn rn_30_one_line_per_part_with_its_kind_and_dates() {
         let (holiday, vacation) = (DayKind::Holiday, DayKind::Vacation);
         [
             (
-                absence(date(2026, 12, 8), date(2026, 12, 8), &[holiday], 0),
-                ["F Festivo", "el 8 de diciembre", "2 días laborables · hoy"],
+                absence(&[(holiday, date(2026, 12, 8), date(2026, 12, 8))]),
+                vec!["F Festivo 8 diciembre"],
             ),
             (
-                absence(date(2026, 12, 7), date(2026, 12, 8), &[holiday], 1),
-                [
-                    "F Festivo",
-                    "del 7 al 8 de diciembre",
-                    "2 días laborables · mañana",
-                ],
+                absence(&[(holiday, date(2026, 12, 7), date(2026, 12, 8))]),
+                vec!["F Festivo 7-8 diciembre"],
             ),
             (
-                absence(
-                    date(2026, 12, 28),
-                    date(2027, 1, 6),
-                    &[vacation, holiday],
-                    23,
-                ),
-                [
-                    "V Vacaciones · F Festivo",
-                    "del 28 de diciembre al 6 de enero",
-                    "2 días laborables · en 23 días",
-                ],
+                absence(&[
+                    (vacation, date(2026, 12, 4), date(2026, 12, 4)),
+                    (holiday, date(2026, 12, 7), date(2026, 12, 8)),
+                ]),
+                vec!["V Vacaciones 4 diciembre", "F Festivo    7-8 diciembre"],
             ),
             (
-                absence(date(2026, 5, 29), date(2026, 6, 1), &[vacation], 2),
-                [
-                    "V Vacaciones",
-                    "del 29 de mayo al 1 de junio",
-                    "2 días laborables · en 2 días",
-                ],
+                absence(&[(vacation, date(2026, 12, 28), date(2027, 1, 6))]),
+                vec!["V Vacaciones 28 diciembre-6 enero"],
             ),
         ]
         .into_iter()
         .for_each(|(absence, expected)| {
             let lines = plain(&next_absence(Some(&absence), Marker::Letter));
-            assert_eq!(lines[0], ABSENCE_TITLE);
+            assert_eq!(lines.first().map(String::as_str), Some(ABSENCE_TITLE));
             assert_eq!(lines[1..], expected, "{absence:?}");
         });
         assert_eq!(
@@ -142,17 +131,26 @@ mod tests {
     }
 
     #[test]
-    fn rn_30_one_day_absence_counts_in_the_singular_and_uses_the_bar_with_color() {
-        let one = Absence {
-            days: 1,
-            ..absence(date(2026, 12, 8), date(2026, 12, 8), &[DayKind::Holiday], 3)
-        };
-        let lines = next_absence(Some(&one), Marker::Bar);
+    fn rn_30_with_color_the_title_is_bold_and_each_part_has_its_bar() {
+        let lines = next_absence(
+            Some(&absence(&[(
+                DayKind::Holiday,
+                date(2026, 12, 8),
+                date(2026, 12, 8),
+            )])),
+            Marker::Bar,
+        );
         assert_eq!(lines[0], "\u{1b}[1mPróxima ausencia\u{1b}[0m");
+        assert_eq!(
+            lines[1],
+            format!(
+                "{} Festivo 8 diciembre",
+                Marker::Bar.symbol(DayKind::Holiday)
+            )
+        );
         assert!(
-            lines[1].contains("▌") && lines[1].contains('\u{1b}'),
+            lines[1].contains('▌') && lines[1].contains('\u{1b}'),
             "{lines:?}"
         );
-        assert_eq!(plain(&lines)[3], "1 día laborable · en 3 días");
     }
 }

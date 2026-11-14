@@ -233,7 +233,7 @@ fn sorted(marks: impl Iterator<Item = Mark>) -> Vec<Mark> {
 mod tests {
     use super::*;
     use crate::domain::fixtures::{calendar, date, marked, range, today};
-    use crate::domain::{DayKind, Origin, parse_date};
+    use crate::domain::{AbsencePart, DayKind, Origin, parse_date};
 
     fn mark_command(kind: MarkKind, from: NaiveDate, to: Option<NaiveDate>) -> Command {
         Command::Mark {
@@ -892,8 +892,11 @@ mod tests {
             };
             // Las vacaciones por defecto de 2026 (RN-14), sea cual sea el mes que se muestra.
             assert_eq!(
-                absence.map(|absence| absence.range),
-                Some(range(date(2026, 7, 1), date(2026, 8, 4))),
+                absence.map(|absence| absence.parts),
+                Some(vec![AbsencePart {
+                    kind: DayKind::Vacation,
+                    range: range(date(2026, 7, 1), date(2026, 8, 4)),
+                }]),
                 "{command:?}"
             );
         });

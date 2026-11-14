@@ -76,7 +76,7 @@ fn rf_01_rf_02_rf_06_rf_11_marks_are_saved_and_shown_without_color_when_redirect
         ]
     );
     assert!(
-        month.ends_with("Vacaciones restantes: 19 / 25\nDías trabajados: 255 / 365 (69,9%)\n"),
+        month.ends_with(" Vacaciones\nDías trabajados: 255 / 365 (69,9%)\n"),
         "{month}"
     );
     assert!(
@@ -160,7 +160,7 @@ fn rf_07_rf_08_rf_09_rf_10_configuration_changes_the_views() {
     // Marco superior, franja del año con su línea (RN-23), 4 filas de meses de 10 líneas con su
     // rejilla, una en blanco, la nota de vacaciones por defecto, la leyenda, el cupo, los días
     // trabajados, las horas del año y la media mensual (RN-21, RN-24, RN-29).
-    assert_eq!(year.lines().count(), 3 + 4 * 10 + 7, "{year}");
+    assert_eq!(year.lines().count(), 3 + 4 * 10 + 6, "{year}");
     // RF-14: 20 días de vacaciones por defecto desde el 1 de julio; julio queda con 3 días.
     assert!(
         summary

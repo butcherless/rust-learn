@@ -243,16 +243,13 @@ mod tests {
             "15 L  16 L  17 L  18 L  19 R  20 S  21 S    ░░ ░░ ░░ ░░ ░░",
             "22 L  23 L  24 L  25 L  26 R  27 S  28 S",
             "29 L  30 L                                  Próxima ausencia",
-            "                                            V Vacaciones",
-            "                                            del 5 al 12 de junio",
-            "                                            6 días laborables · en 4 días",
+            "                                            V Vacaciones 5-12 junio",
             "",
             "Marcas:",
             "  #1   vacaciones 2026-06-05 → 2026-06-12  Viaje",
             "",
             "Horas laborables de junio: 131,0 h en 16 días · acumulado del año: 985,5 h",
             LEGEND,
-            "Vacaciones restantes: 19 / 25",
             "Días trabajados: 255 / 365 (69,9%)",
             "",
         ]
@@ -406,8 +403,9 @@ mod tests {
         );
         // El marco superior (RN-21) y la franja del año con su línea (RN-23); cuatro filas de tres
         // meses, de 8 líneas, la de horas (RF-14) y la línea de la rejilla debajo; una en blanco
-        // y, después, leyenda, cupo, horas del año y media mensual (RN-24).
-        assert_eq!(lines.len(), 3 + 4 * 10 + 6, "{text}");
+        // y, después, leyenda, días trabajados (RN-29), horas del año y media mensual (RN-24). Las
+        // vacaciones restantes no se repiten: las da la cuadrícula (RN-27).
+        assert_eq!(lines.len(), 3 + 4 * 10 + 5, "{text}");
         let hours = format!(
             "┊ {a:^40} ┊ {b:^40} ┊ {c:^40} ┊",
             a = "174,5 h · 22 días",
@@ -416,7 +414,13 @@ mod tests {
         );
         assert_eq!(lines.get(11), Some(&hours.as_str()));
         assert_eq!(lines.get(44), Some(&LEGEND));
-        assert_eq!(lines.get(45), Some(&"Vacaciones restantes: 24 / 25"));
+        assert!(
+            lines
+                .get(45)
+                .is_some_and(|line| line.starts_with("Días trabajados: ")),
+            "{text}"
+        );
+        assert!(!text.contains("Vacaciones restantes"), "{text}");
         assert_eq!(
             lines.get(33),
             Some(
@@ -562,9 +566,9 @@ mod tests {
                     "",
                     "",
                     ABSENCE_TITLE,
-                    "V Vacaciones",
-                    "del 1 de julio al 4 de agosto",
-                    "25 días laborables · en 30 días",
+                    "V Vacaciones 1 julio-4 agosto",
+                    "",
+                    "",
                 ]
                 .map(String::from)[..]
             ),
@@ -638,7 +642,6 @@ mod tests {
             ),
             "{text}"
         );
-        assert!(text.contains("\nVacaciones restantes: 0 / 25\n"), "{text}");
         let year = shown(
             calendar(),
             Command::Year {
