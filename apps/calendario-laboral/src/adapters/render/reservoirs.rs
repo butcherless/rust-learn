@@ -4,7 +4,8 @@ use anstyle::RgbColor;
 
 use super::style::styled;
 use super::*;
-use crate::adapters::reservoirs::{Reading, ReservoirTable};
+use crate::adapters::feed::Reading;
+use crate::adapters::reservoirs::ReservoirTable;
 use crate::domain::ReservoirLevel;
 
 /// El título de la sección.
@@ -25,7 +26,8 @@ pub const PROCESSED_BY: &str = "Datos procesados por MapasDeEmbalses.es";
 
 /// El naranja de pr-checker para lo que está en curso.
 const ORANGE: Color = Color::Rgb(RgbColor(255, 165, 0));
-const NAME_WIDTH: usize = 15;
+/// El ancho de los nombres, también en la tabla de mercados (RN-32).
+pub(super) const NAME_WIDTH: usize = 15;
 const HM3_WIDTH: usize = 9;
 const PERCENT_WIDTH: usize = 6;
 const AVERAGE_HEADER: &str = "Media 10 años";
@@ -38,7 +40,7 @@ pub(super) fn reservoir_table(table: &ReservoirTable) -> Vec<String> {
         "Embalse", "Capacidad", "Volumen", "%"
     );
     let rows = table.rows().iter().map(|&(reservoir, reading)| {
-        let light = light(reading, table.lit());
+        let light = light(&reading, table.lit());
         match reading {
             Reading::Waiting | Reading::Fetching => format!("{light} {}", reservoir.name),
             Reading::Failed => format!("{light} {:<NAME_WIDTH$} {UNAVAILABLE}", reservoir.name),
@@ -80,8 +82,8 @@ fn percent(value: f64) -> String {
 }
 
 /// La luz de una fila: gris mientras espera, naranja que parpadea mientras se pide, y verde o
-/// roja según la respuesta, como en pr-checker.
-fn light(reading: Reading, lit: bool) -> String {
+/// roja según la respuesta, como en pr-checker. La usan también los mercados (RN-32).
+pub(super) fn light<T>(reading: &Reading<T>, lit: bool) -> String {
     let (symbol, color) = match reading {
         Reading::Waiting => (LIGHT_OFF, Color::Ansi(AnsiColor::BrightBlack)),
         Reading::Fetching if lit => (LIGHT_ON, ORANGE),
@@ -189,7 +191,7 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(case, reading, lit, expected)| {
-            assert_eq!(light(reading, lit), expected, "{case}");
+            assert_eq!(light(&reading, lit), expected, "{case}");
         });
         assert_eq!(orange_rgb(), "\u{1b}[38;2;255;165;0m");
     }

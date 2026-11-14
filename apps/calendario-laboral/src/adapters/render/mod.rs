@@ -5,6 +5,7 @@
 //! un terminal o está definida `NO_COLOR`.
 
 mod calendar;
+mod markets;
 mod next_absence;
 mod reservoirs;
 mod style;
@@ -17,7 +18,7 @@ use std::iter;
 use anstyle::{Ansi256Color, AnsiColor, Color, Style};
 use chrono::{Datelike, NaiveDate, Weekday};
 
-use crate::adapters::reservoirs::ReservoirTable;
+use crate::adapters::panel::Panel;
 use crate::application::{Event, MonthView, Report};
 use crate::domain::{
     Calendar, DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Shift,
@@ -25,6 +26,7 @@ use crate::domain::{
 };
 
 use calendar::{month, year};
+pub use markets::{MARKETS_SOURCE, MARKETS_TITLE};
 pub use next_absence::{ABSENCE_TITLE, no_absence};
 pub use reservoirs::{
     LIGHT_OFF, LIGHT_ON, PROCESSED_BY, RESERVOIRS_TITLE, UNAVAILABLE, source_line,
@@ -172,18 +174,18 @@ pub fn report(report: &Report, marker: Marker) -> String {
     report_with(report, marker, None)
 }
 
-/// [`report`] con la tabla de embalses de la ventana debajo de la próxima ausencia, en las vistas
-/// de mes y de año (RN-31).
-pub fn report_with(report: &Report, marker: Marker, reservoirs: Option<&ReservoirTable>) -> String {
+/// [`report`] con las tablas de embalses y de mercados de la ventana debajo de la próxima
+/// ausencia, en las vistas de mes y de año (RN-31, RN-32).
+pub fn report_with(report: &Report, marker: Marker, panel: Option<&Panel>) -> String {
     match report {
         Report::Marks(marks) if marks.is_empty() => lines(iter::once("No hay marcas.".to_owned())),
         Report::Marks(marks) => lines(marks.iter().map(mark_line)),
         Report::Day(resolved) => day(resolved, marker),
         Report::Month(view, totals, absence) => {
-            month(view, totals, absence.as_ref(), reservoirs, marker)
+            month(view, totals, absence.as_ref(), panel, marker)
         }
         Report::Year(months, totals, absence) => {
-            year(months, totals, absence.as_ref(), reservoirs, marker)
+            year(months, totals, absence.as_ref(), panel, marker)
         }
         Report::Summary(totals) => summary(totals, marker),
         Report::Config(calendar) => config(calendar),
@@ -1034,10 +1036,10 @@ mod tests {
     }
 
     #[test]
-    fn rn_31_month_and_year_put_the_reservoirs_below_the_next_absence_only_in_the_window() {
+    fn rn_31_rn_32_reservoirs_and_markets_go_below_the_next_absence_only_in_the_window() {
         use crate::adapters::reservoirs::fixtures::RESERVOIRS;
 
-        let table = ReservoirTable::new(&RESERVOIRS);
+        let table = Panel::new(&RESERVOIRS);
         [
             Command::Month {
                 year: 2026,
@@ -1073,6 +1075,16 @@ mod tests {
                 "{command:?}"
             );
             assert!(lines[title + 3].contains("○ El Pardo"), "{command:?}");
+            // RN-32: los mercados, tras el título, la cabecera, los tres embalses (aún sin fuente) y
+            // una línea en blanco, en la misma columna.
+            let (markets, markets_column) = find(MARKETS_TITLE).expect("markets");
+            assert_eq!(markets, title + 6, "{command:?}");
+            assert_eq!(
+                lines[markets].chars().take(markets_column).count(),
+                lines[title].chars().take(title_column).count(),
+                "{command:?}"
+            );
+            assert!(lines[markets + 2].contains("○ IBEX 35"), "{command:?}");
             assert!(
                 !plain(&report(&result, Marker::Letter)).contains(RESERVOIRS_TITLE),
                 "the console has no reservoirs: {command:?}"

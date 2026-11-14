@@ -5,8 +5,8 @@
 //! terminal; [`run`] es el único código con efectos secundarios. La tecla `r` vuelve a leer el
 //! fichero y a dibujar la vista (RN-28).
 //!
-//! En las vistas de mes y de año, las respuestas de los embalses llegan de otro hilo mientras la
-//! ventana está abierta (RN-31). Cada vez solo se escriben las líneas de la pantalla que han
+//! En las vistas de mes y de año, las respuestas de los embalses y los mercados llegan de otro
+//! hilo mientras la ventana está abierta (RN-31, RN-32). Cada vez solo se escriben las líneas de la pantalla que han
 //! cambiado: [`Screen`] es lo que hay escrito, y [`draw`] lo compara con lo nuevo.
 
 use std::io::{self, Write};
@@ -24,11 +24,11 @@ use crossterm::terminal::{
 };
 use crossterm::{execute, queue};
 
-use crate::adapters::reservoirs::{Fetched, ReservoirTable};
+use crate::adapters::panel::{Panel, Update};
 use crate::application::Report;
 use crate::domain::MADRID_RESERVOIRS;
 
-/// Cada cuánto cambia la luz de la fila que se consulta (RN-31).
+/// Cada cuánto cambia la luz de la fila que se consulta (RN-31, RN-32).
 const BLINK: Duration = Duration::from_millis(500);
 /// Cada cuánto se miran las respuestas mientras llegan.
 const POLL: Duration = Duration::from_millis(100);
@@ -56,8 +56,8 @@ pub const fn opens(report: &Report, output: Output) -> bool {
     }
 }
 
-/// Si la vista lleva los embalses de Madrid: solo las de mes y de año (RN-31).
-pub const fn shows_reservoirs(report: &Report) -> bool {
+/// Si la vista lleva los embalses y los mercados: solo las de mes y de año (RN-31, RN-32).
+pub const fn shows_panel(report: &Report) -> bool {
     match report {
         Report::Month(..) | Report::Year(..) => true,
         Report::Summary(..) | Report::Marks(..) | Report::Day(..) | Report::Config(..) => false,
@@ -248,13 +248,14 @@ fn text_height(rows: u16) -> u16 {
 
 /// Muestra el texto que `text` da para `report` en la pantalla alternativa hasta que se cierra con
 /// `Esc` o `q`; `r` cambia el informe por lo que devuelva `reload` (RN-28). Si hay `fetched`, la
-/// vista lleva la tabla de embalses, que se rellena con cada respuesta (RN-31). El terminal se
+/// vista lleva las tablas de embalses y de mercados, que se rellenan con cada respuesta (RN-31,
+/// RN-32). El terminal se
 /// restaura también si el bucle falla.
 pub fn run(
     report: Report,
-    text: impl Fn(&Report, Option<&ReservoirTable>) -> String,
+    text: impl Fn(&Report, Option<&Panel>) -> String,
     reload: impl FnMut() -> Result<Report, String>,
-    fetched: Option<Receiver<Fetched>>,
+    fetched: Option<Receiver<Update>>,
 ) -> io::Result<()> {
     let mut out = io::stdout();
     terminal::enable_raw_mode()?;
@@ -268,22 +269,20 @@ pub fn run(
 fn event_loop(
     out: &mut impl Write,
     initial: Report,
-    text: impl Fn(&Report, Option<&ReservoirTable>) -> String,
+    text: impl Fn(&Report, Option<&Panel>) -> String,
     mut reload: impl FnMut() -> Result<Report, String>,
-    fetched: Option<Receiver<Fetched>>,
+    fetched: Option<Receiver<Update>>,
 ) -> io::Result<()> {
     let mut report = initial;
-    let mut table = fetched
-        .as_ref()
-        .map(|_| ReservoirTable::new(&MADRID_RESERVOIRS));
-    let mut viewer = Viewer::new(&text(&report, table.as_ref()));
+    let mut panel = fetched.as_ref().map(|_| Panel::new(&MADRID_RESERVOIRS));
+    let mut viewer = Viewer::new(&text(&report, panel.as_ref()));
     let mut screen = Screen::default();
     let mut blinked = Instant::now();
     loop {
         let next = viewer.screen(terminal::size()?);
         draw(out, &screen, &next)?;
         screen = next;
-        let fetching = table.as_ref().is_some_and(ReservoirTable::is_fetching);
+        let fetching = panel.as_ref().is_some_and(Panel::is_fetching);
         let wait = if fetching { POLL } else { IDLE };
         let key = if event::poll(wait)? {
             event::read()?.as_key_press_event().and_then(message)
@@ -298,24 +297,24 @@ fn event_loop(
                 Effect::Reload => match reload() {
                     Ok(reloaded) => {
                         report = reloaded;
-                        viewer = next.reloaded(Ok(text(&report, table.as_ref())));
+                        viewer = next.reloaded(Ok(text(&report, panel.as_ref())));
                     }
                     Err(error) => viewer = next.reloaded(Err(error)),
                 },
             }
         }
-        // RN-31: las respuestas que hayan llegado y, cada medio segundo, el parpadeo.
-        let arrived: Vec<Fetched> = fetched.iter().flat_map(Receiver::try_iter).collect();
+        // RN-31, RN-32: las respuestas que hayan llegado y, cada medio segundo, el parpadeo.
+        let arrived: Vec<Update> = fetched.iter().flat_map(Receiver::try_iter).collect();
         let blink = fetching && blinked.elapsed() >= BLINK;
         if blink {
             blinked = Instant::now();
         }
         if !arrived.is_empty() || blink {
-            table = table.map(|table| {
-                let table = arrived.into_iter().fold(table, ReservoirTable::fetched);
-                if blink { table.ticked() } else { table }
+            panel = panel.map(|panel| {
+                let panel = arrived.into_iter().fold(panel, Panel::updated);
+                if blink { panel.ticked() } else { panel }
             });
-            viewer = viewer.retexted(&text(&report, table.as_ref()));
+            viewer = viewer.retexted(&text(&report, panel.as_ref()));
         }
     }
 }
@@ -536,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn rn_31_only_month_and_year_show_the_reservoirs() {
+    fn rn_31_rn_32_only_month_and_year_show_the_reservoirs_and_markets() {
         [
             (
                 "month",
@@ -562,7 +561,7 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(case, report, expected)| {
-            assert_eq!(shows_reservoirs(&report), expected, "{case}");
+            assert_eq!(shows_panel(&report), expected, "{case}");
         });
     }
 

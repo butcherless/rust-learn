@@ -3,11 +3,13 @@
 
 use std::iter;
 
+use super::markets::market_table;
 use super::next_absence::next_absence;
 use super::reservoirs::reservoir_table;
 use super::style::{paint_grid, styled};
 use super::vacation_grid::vacation_grid;
 use super::*;
+use crate::adapters::panel::Panel;
 use crate::domain::Absence;
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
@@ -146,24 +148,29 @@ const VACATION_GAP: &str = "    ";
 
 /// La columna de la derecha: la cuadrícula de vacaciones y, debajo, tras al menos una línea en
 /// blanco, la próxima ausencia desde la línea `absence_from` (RN-27, RN-30) y, en la ventana,
-/// tras otra línea en blanco, los embalses (RN-31).
+/// tras sendas líneas en blanco, los embalses (RN-31) y los mercados (RN-32).
 fn right_column(
     summary: &Summary,
     absence: Option<&Absence>,
     absence_from: usize,
-    reservoirs: Option<&ReservoirTable>,
+    panel: Option<&Panel>,
     marker: Marker,
 ) -> Vec<String> {
     let grid = vacation_grid(summary, marker);
     let gap = absence_from.max(grid.len() + 1) - grid.len();
-    let reservoirs = reservoirs
-        .map(|table| iter::once(String::new()).chain(reservoir_table(table)))
+    let panel = panel
+        .map(|panel| {
+            iter::once(String::new())
+                .chain(reservoir_table(&panel.reservoirs))
+                .chain(iter::once(String::new()))
+                .chain(market_table(&panel.markets))
+        })
         .into_iter()
         .flatten();
     grid.into_iter()
         .chain(iter::repeat_n(String::new(), gap))
         .chain(next_absence(absence, summary.year, marker))
-        .chain(reservoirs)
+        .chain(panel)
         .collect()
 }
 
@@ -192,7 +199,7 @@ pub(super) fn month(
     view: &MonthView,
     summary: &Summary,
     absence: Option<&Absence>,
-    reservoirs: Option<&ReservoirTable>,
+    panel: Option<&Panel>,
     marker: Marker,
 ) -> String {
     let marks = (!view.marks.is_empty())
@@ -209,7 +216,7 @@ pub(super) fn month(
         .flatten();
     // RN-27, RN-30: el mes se alarga con semanas en blanco si la columna de la derecha es más
     // alta, para que no quede junto a las marcas.
-    let vacations = right_column(summary, absence, 0, reservoirs, marker);
+    let vacations = right_column(summary, absence, 0, panel, marker);
     let weeks = vacations.len().saturating_sub(2);
     let grid = beside_vacations(
         month_grid(
@@ -237,7 +244,7 @@ pub(super) fn year(
     months: &[MonthView],
     summary: &Summary,
     absence: Option<&Absence>,
-    reservoirs: Option<&ReservoirTable>,
+    panel: Option<&Panel>,
     marker: Marker,
 ) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
@@ -289,7 +296,7 @@ pub(super) fn year(
             top.into_iter().chain(rows),
             from,
             // RN-30: la próxima ausencia empieza en el título de la segunda fila de meses.
-            right_column(summary, absence, YEAR_ROW_LINES, reservoirs, marker),
+            right_column(summary, absence, YEAR_ROW_LINES, panel, marker),
         )
         .chain(iter::once(String::new()))
         .chain(default_vacation_note(

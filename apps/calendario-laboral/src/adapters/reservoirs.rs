@@ -1,21 +1,16 @@
 //! Adaptador de los embalses de RN-31: el cliente de la API de MapasDeEmbalses.es, las peticiones
-//! de una en una en otro hilo y el estado de la tabla que dibuja `render`.
-
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
-use std::time::Duration;
+//! de una en una y el estado de la tabla que dibuja `render`.
 
 use chrono::NaiveDate;
 use serde::Deserialize;
 
+use super::feed::{Reading, http_client};
 use crate::domain::{Reservoir, ReservoirLevel, WeeklyLevel, reservoir_level};
 
 /// La raíz de la API pública.
 pub const API_URL: &str = "https://mapasdeembalses.es/api/v1";
 /// Las semanas que se piden: todo el histórico, que empieza en 1988.
 const HISTORY_WEEKS: u32 = 2000;
-const TIMEOUT: Duration = Duration::from_secs(10);
-const USER_AGENT: &str = concat!("calendario-laboral/", env!("CARGO_PKG_VERSION"));
 
 /// Un error al pedir el histórico de un embalse.
 #[derive(Debug, thiserror::Error)]
@@ -41,12 +36,8 @@ pub struct ApiClient {
 impl ApiClient {
     /// Un cliente para la API de `base_url`, sin barra al final.
     pub fn new(base_url: &str) -> Result<Self, ReservoirError> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(TIMEOUT)
-            .user_agent(USER_AGENT)
-            .build()?;
         Ok(Self {
-            client,
+            client: http_client()?,
             base_url: base_url.to_owned(),
         })
     }
@@ -97,55 +88,29 @@ pub struct Fetched {
     pub level: Option<ReservoirLevel>,
 }
 
-/// Pide los embalses de uno en uno y en orden, y manda cada respuesta por `sender` en cuanto
-/// llega. Para en cuanto nadie la escucha.
-pub fn fetch_in_order<S: HistorySource>(
-    source: &S,
-    reservoirs: &[Reservoir],
-    sender: &Sender<Fetched>,
-) {
+/// Las respuestas de los embalses, en orden. Cada petición se hace al pedir el elemento siguiente,
+/// así que van de una en una y paran en cuanto se deja de iterar.
+pub fn fetched<'a, S: HistorySource>(
+    source: &'a S,
+    reservoirs: &'a [Reservoir],
+) -> impl Iterator<Item = Fetched> + 'a {
     reservoirs
         .iter()
         .enumerate()
-        .map(|(index, reservoir)| Fetched {
+        .map(move |(index, reservoir)| Fetched {
             index,
             level: source
                 .history(reservoir.slug)
                 .ok()
                 .and_then(|history| reservoir_level(&history)),
         })
-        .try_for_each(|fetched| sender.send(fetched))
-        .unwrap_or(());
-}
-
-/// [`fetch_in_order`] en otro hilo. Las respuestas llegan por el `Receiver`.
-pub fn spawn<S: HistorySource + Send + 'static>(
-    source: S,
-    reservoirs: &'static [Reservoir],
-) -> Receiver<Fetched> {
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || fetch_in_order(&source, reservoirs, &sender));
-    receiver
-}
-
-/// El estado de una fila.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Reading {
-    /// Aún no se ha pedido.
-    Waiting,
-    /// Se está pidiendo.
-    Fetching,
-    /// Ha llegado.
-    Loaded(ReservoirLevel),
-    /// Ha fallado.
-    Failed,
 }
 
 /// La tabla de embalses mientras llegan las respuestas: cada embalse con su [`Reading`], y si la
 /// luz de la fila que se consulta está encendida en el parpadeo.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReservoirTable {
-    rows: Vec<(Reservoir, Reading)>,
+    rows: Vec<(Reservoir, Reading<ReservoirLevel>)>,
     lit: bool,
 }
 
@@ -200,13 +165,11 @@ impl ReservoirTable {
 
     /// Si aún falta alguna respuesta.
     pub fn is_fetching(&self) -> bool {
-        self.rows
-            .iter()
-            .any(|(_, reading)| matches!(reading, Reading::Waiting | Reading::Fetching))
+        self.rows.iter().any(|(_, reading)| reading.is_pending())
     }
 
     /// Las filas, en orden.
-    pub fn rows(&self) -> &[(Reservoir, Reading)] {
+    pub fn rows(&self) -> &[(Reservoir, Reading<ReservoirLevel>)] {
         &self.rows
     }
 
@@ -267,6 +230,7 @@ pub mod fixtures {
 mod tests {
     use super::fixtures::{RESERVOIRS, atazar};
     use super::*;
+    use crate::adapters::feed::USER_AGENT;
     use crate::domain::fixtures::date;
     use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -340,11 +304,10 @@ mod tests {
     }
 
     #[test]
-    fn rn_31_requests_go_one_by_one_in_order_and_stop_when_nobody_listens() {
-        let receiver = spawn(FakeSource, &RESERVOIRS);
+    fn rn_31_requests_go_one_by_one_in_order_and_only_while_iterating() {
         let level = reservoir_level(&[atazar().latest]);
         assert_eq!(
-            receiver.iter().collect::<Vec<_>>(),
+            fetched(&FakeSource, &RESERVOIRS).collect::<Vec<_>>(),
             [
                 Fetched { index: 0, level },
                 Fetched {
@@ -357,10 +320,13 @@ mod tests {
                 },
             ]
         );
-        // Sin nadie escuchando, la primera respuesta no se puede mandar y no se pide nada más.
-        let (sender, receiver) = mpsc::channel();
-        drop(receiver);
-        fetch_in_order(&PanicsAfterFirst::default(), &RESERVOIRS, &sender);
+        // Solo se pide el embalse del elemento que se toma.
+        let source = PanicsAfterFirst::default();
+        assert_eq!(
+            fetched(&source, &RESERVOIRS).next().map(|f| f.index),
+            Some(0)
+        );
+        assert_eq!(source.asked.get(), 1);
     }
 
     /// Falla el test si se le pide más de un embalse.
@@ -379,7 +345,7 @@ mod tests {
 
     #[test]
     fn rn_31_each_answer_fills_its_row_and_starts_the_next_one() {
-        let rows = |table: &ReservoirTable| -> Vec<Reading> {
+        let rows = |table: &ReservoirTable| -> Vec<Reading<ReservoirLevel>> {
             table.rows().iter().map(|&(_, reading)| reading).collect()
         };
         let start = ReservoirTable::new(&RESERVOIRS);

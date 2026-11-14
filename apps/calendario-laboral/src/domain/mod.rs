@@ -6,6 +6,7 @@ mod date;
 mod error;
 mod hours;
 mod kind;
+mod market;
 mod month;
 mod reservoir;
 mod resolve;
@@ -16,6 +17,7 @@ pub use date::{DateRange, check_year, days_of_year, parse_date};
 pub use error::DomainError;
 pub use hours::Hours;
 pub use kind::{Category, DayKind, MarkKind, Shift};
+pub use market::{Market, Quote};
 pub use month::{Month, MonthExt};
 pub use reservoir::{
     AVERAGE_YEARS, MADRID_RESERVOIRS, Reservoir, ReservoirLevel, WeeklyLevel, reservoir_level,

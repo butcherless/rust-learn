@@ -42,7 +42,7 @@ En un terminal, `month`, `year` y `summary` se abren en una ventana a pantalla c
 `RePág` `AvPág` e `Inicio` `Fin` desplazan la vista si no cabe, `r` la recarga con los cambios del
 fichero, y `Esc` o `q` la cierran y vuelven a la consola. En la ventana, `month` y `year` muestran
 también los embalses de la Comunidad de Madrid, que se piden de uno en uno a la API de
-MapasDeEmbalses.es al abrirla (RN-31). Con `--no-tui`, o al redirigir la salida,
+MapasDeEmbalses.es al abrirla (RN-31), y debajo el IBEX 35 y el Brent, de Expansión (RN-32). Con `--no-tui`, o al redirigir la salida,
 se imprimen en la consola.
 
 Para instalar el binario en `~/.cargo/bin`: `cargo install --path apps/calendario-laboral`.
