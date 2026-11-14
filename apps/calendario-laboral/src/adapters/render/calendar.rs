@@ -3,9 +3,11 @@
 
 use std::iter;
 
+use super::next_absence::next_absence;
 use super::style::{paint_grid, styled};
 use super::vacation_grid::vacation_grid;
 use super::*;
+use crate::domain::Absence;
 
 /// Ancho visible de una celda de día: el número a dos posiciones, un espacio y el símbolo.
 const CELL_WIDTH: usize = 4;
@@ -141,6 +143,26 @@ fn year_hours_lines(summary: &Summary) -> [String; 2] {
 /// Separación entre el calendario, del mes o del año, y la cuadrícula de vacaciones (RN-27).
 const VACATION_GAP: &str = "    ";
 
+/// La columna de la derecha: la cuadrícula de vacaciones y, debajo, tras al menos una línea en
+/// blanco, la próxima ausencia desde la línea `absence_from` (RN-27, RN-30).
+fn right_column(
+    summary: &Summary,
+    absence: Option<&Absence>,
+    absence_from: usize,
+    marker: Marker,
+) -> Vec<String> {
+    let grid = vacation_grid(summary, marker);
+    let gap = absence_from.max(grid.len() + 1) - grid.len();
+    grid.into_iter()
+        .chain(iter::repeat_n(String::new(), gap))
+        .chain(next_absence(absence, marker))
+        .collect()
+}
+
+/// Las líneas de una fila de meses de la vista de año con la línea de la rejilla de debajo: el
+/// título, los días de la semana, las semanas y las horas.
+const YEAR_ROW_LINES: usize = 2 + MAX_WEEKS + 1 + 1;
+
 /// `lines` con las líneas de `vacations` a la derecha, desde la línea `from` (RN-27).
 fn beside_vacations(
     lines: impl Iterator<Item = String>,
@@ -158,7 +180,12 @@ fn beside_vacations(
         })
 }
 
-pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> String {
+pub(super) fn month(
+    view: &MonthView,
+    summary: &Summary,
+    absence: Option<&Absence>,
+    marker: Marker,
+) -> String {
     let marks = (!view.marks.is_empty())
         .then(|| {
             iter::once(String::new())
@@ -171,9 +198,9 @@ pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> Stri
         })
         .into_iter()
         .flatten();
-    // RN-27: el mes se alarga con semanas en blanco si la cuadrícula de vacaciones es más alta
-    // (un cupo de más de 30 días), para que no quede junto a las marcas.
-    let vacations = vacation_grid(summary, marker);
+    // RN-27, RN-30: el mes se alarga con semanas en blanco si la columna de la derecha es más
+    // alta, para que no quede junto a las marcas.
+    let vacations = right_column(summary, absence, 0, marker);
     let weeks = vacations.len().saturating_sub(2);
     let grid = beside_vacations(
         month_grid(
@@ -200,8 +227,13 @@ pub(super) fn month(view: &MonthView, summary: &Summary, marker: Marker) -> Stri
 }
 
 /// Los meses de tres en tres, dentro de una rejilla gris punteada con marco (RN-21), con la
-/// cuadrícula de vacaciones a la derecha de la primera fila (RN-27).
-pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> String {
+/// cuadrícula de vacaciones y la próxima ausencia a la derecha de la primera fila (RN-27, RN-30).
+pub(super) fn year(
+    months: &[MonthView],
+    summary: &Summary,
+    absence: Option<&Absence>,
+    marker: Marker,
+) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
     let columns = months.len().min(MONTHS_PER_ROW);
     // RN-23: la franja con el año, dentro del marco y sobre la primera fila de meses.
@@ -250,7 +282,8 @@ pub(super) fn year(months: &[MonthView], summary: &Summary, marker: Marker) -> S
         beside_vacations(
             top.into_iter().chain(rows),
             from,
-            vacation_grid(summary, marker),
+            // RN-30: la próxima ausencia empieza en el título de la segunda fila de meses.
+            right_column(summary, absence, YEAR_ROW_LINES, marker),
         )
         .chain(iter::once(String::new()))
         .chain(default_vacation_note(

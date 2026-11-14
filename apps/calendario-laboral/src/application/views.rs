@@ -1,18 +1,29 @@
-//! Las vistas de mes y de año, que resuelven el año una sola vez (RF-06, RF-07, RF-14).
+//! Las vistas de mes y de año, que resuelven el año una sola vez (RF-06, RF-07, RF-14), con la
+//! próxima ausencia (RN-30).
 
 use super::*;
 
 /// La vista de un mes y el resumen de su año (RF-06, RF-14).
-pub(super) fn month(calendar: &Calendar, year: i32, month: Month) -> Result<Outcome, DomainError> {
+pub(super) fn month(
+    calendar: &Calendar,
+    year: i32,
+    month: Month,
+    today: NaiveDate,
+) -> Result<Outcome, DomainError> {
     let (days, year) = (resolve_year(calendar, year)?, calendar.year(year)?);
     Ok(Outcome::Report(Report::Month(
         month_view(year, month, &days)?,
         summary_of(year, &days),
+        next_absence(calendar, today)?,
     )))
 }
 
 /// Los 12 meses y el resumen de un año, con el año resuelto una sola vez (RF-07, RF-14).
-pub(super) fn year(calendar: &Calendar, year: i32) -> Result<Outcome, DomainError> {
+pub(super) fn year(
+    calendar: &Calendar,
+    year: i32,
+    today: NaiveDate,
+) -> Result<Outcome, DomainError> {
     let (days, year) = (resolve_year(calendar, year)?, calendar.year(year)?);
     Ok(Outcome::Report(Report::Year(
         Month::ALL
@@ -20,6 +31,7 @@ pub(super) fn year(calendar: &Calendar, year: i32) -> Result<Outcome, DomainErro
             .map(|month| month_view(year, month, &days))
             .collect::<Result<_, _>>()?,
         summary_of(year, &days),
+        next_absence(calendar, today)?,
     )))
 }
 

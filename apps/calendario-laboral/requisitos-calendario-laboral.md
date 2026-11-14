@@ -5,7 +5,7 @@ Aplicación de consola en Rust para gestionar el calendario laboral de uno o var
 | | |
 |---|---|
 | **Fecha** | 2026-11-13 |
-| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-29; pendientes RF-12 y RF-13 (§9) |
+| **Estado** | Implementados RF-01 a RF-11, RF-14 a RF-20 y RN-01 a RN-30; pendientes RF-12 y RF-13 (§9) |
 | **Binario** | `calendario` (crate `calendario-laboral`) |
 | **Guía de desarrollo** | [CLAUDE.md](CLAUDE.md): comandos para construir, ejecutar y verificar, arquitectura y convenciones |
 
@@ -109,6 +109,7 @@ El `DayKind` de un día es el de **mayor prioridad** entre los `Mark` que lo cub
 | RN-27 | Las vistas de mes y de año muestran, a la derecha del calendario, una cuadrícula con las vacaciones del año: un cuadro por día del cupo, cinco por fila (5×5 con 25 días), primero los **usados** en naranja (el color de `Vacation`) y después los **restantes** en verde. Usados son todos los días de `DayKind` `Vacation` del año, ya disfrutados o reservados con una marca para más adelante, también los de `DefaultVacation` (RN-14): es la misma cuenta que «Vacaciones restantes» (RN-10), así que un día solo vuelve a verde si se libera, quitando o cambiando su marca. Restantes, el cupo menos los usados, nunca por debajo de cero. Si los usados superan el cupo, hay un cuadro por cada uno, todos naranjas; como mucho hay 366 cuadros. Cada cuadro son dos columnas (`██`), separados por un espacio. A la derecha, centrados en vertical, el título `Vacaciones` y los días de cada estado (`██ Usadas     20`, `░░ Restantes   5`). Sin color, los restantes se dibujan con `░░`. En la vista de mes, la cuadrícula empieza en la línea del título, y la vista cabe en 80 columnas; si la cuadrícula es más alta que el mes (cupo de más de 30 días), el mes se alarga con líneas en blanco. En la de año empieza en el título de la primera fila de meses, a 4 espacios del marco, y la vista ocupa 169 columnas. |
 | RN-28 | En la ventana de RN-22, `r` o `R` recargan la vista: vuelven a leer el fichero y a lanzar la misma consulta, y la vista se redibuja desde la misma línea (o desde la última que deje la pantalla llena, si el texto nuevo es más corto). Así se ven los cambios hechos desde otra consola sin cerrar la ventana. Si el fichero no se puede leer, la vista sigue como estaba y la línea de ayuda muestra `No se ha podido recargar: <error>` hasta la siguiente recarga. La línea de ayuda incluye `r: recargar`. |
 | RN-29 | Bajo «Vacaciones restantes», las vistas de mes, de año y `summary` muestran los días trabajados del año entre los días del año, y su porcentaje con un decimal: `Días trabajados: 224 / 365 (61,4%)`. Días trabajados son los laborables del año (RN-09: `Working`, `Reduced`, `SummerWorking` y `SummerReduced`), los mismos de «Días laborables»; días del año, 365, o 366 si es bisiesto. Es el año entero, también los días que aún no han llegado. Un año sin días da 0. |
+| RN-30 | Las vistas de mes y de año muestran, debajo de la cuadrícula de vacaciones (RN-27) y tras una línea en blanco, la **próxima ausencia** desde la fecha actual. Empieza en el primer día de `Category` `Absence` (`Holiday` o `Vacation`, también las de RN-14) desde hoy, incluido, y sigue por los días seguidos que no se trabajan (fines de semana, festivos y vacaciones) hasta el último festivo o día de vacaciones del tramo; puede pasar al año siguiente si está en el calendario. Se busca en los años del calendario desde el actual, sea cual sea el que se muestra. Son cuatro líneas: el título `Próxima ausencia` en negrita; la barra del color de cada tipo de ausencia del tramo (o su letra, sin color, RN-20) con su etiqueta, en el orden en que aparecen (`▌ Festivo · ▌ Vacaciones`); las fechas (`el 8 de diciembre`, `del 7 al 8 de diciembre`, `del 28 de diciembre al 6 de enero`); y los días de ausencia del tramo con cuándo empieza (`2 días laborables · en 23 días`, `· hoy`, `· mañana`). Si no hay ninguna, debajo del título va `No hay más ausencias`. En la vista de mes, el mes se alarga con líneas en blanco si hace falta, y la vista sigue cabiendo en 80 columnas. En la de año, la sección empieza en el título de la segunda fila de meses, para no quedar junto a la línea de la rejilla. |
 
 ## 4. Requisitos funcionales
 
@@ -178,7 +179,10 @@ Lu    Ma    Mi    Ju    Vi    Sá    Do      ██ ░░ ░░ ░░ ░░ 
  8 V   9 V  10 V  11 V  12 V  13 S  14 S    ░░ ░░ ░░ ░░ ░░   ░░ Restantes  19
 15 L  16 L  17 L  18 L  19 R  20 S  21 S    ░░ ░░ ░░ ░░ ░░
 22 L  23 L  24 L  25 L  26 R  27 S  28 S
-29 L  30 L
+29 L  30 L                                  Próxima ausencia
+                                            V Vacaciones
+                                            del 5 al 12 de junio
+                                            6 días laborables · en 4 días
 
 Marcas:
   #1   vacaciones 2026-06-05 → 2026-06-12  Viaje
@@ -287,6 +291,7 @@ Las decisiones vigentes que no se deducen de las reglas, con su motivo.
 | **RN-27**: usados son todos los días de vacaciones marcados, los mismos que cuenta «Vacaciones restantes»; la cuadrícula no depende de la fecha. La vista de año ocupa 169 columnas, y en la ventana se corta lo que no cabe. | Un día reservado ya no está disponible; solo vuelve a verde si se libera. |
 | **RN-28**: `viewer` no conoce el fichero: `run` recibe una función que devuelve el texto nuevo, y `main` la construye con la ruta y el `Command`. | La ventana sigue sin efectos que no sean del terminal. |
 | **RN-29**: los días trabajados son los laborables de todo el año, también los que no han llegado; el porcentaje va sin espacio (`61,4%`). | Como el resto de totales, mide el año planificado. |
+| **RN-30**: la próxima ausencia depende de la fecha del reloj, a diferencia del resto de la vista, y une los fines de semana que quedan entre ausencias. | Una semana de vacaciones con su fin de semana, o un puente, es una sola ausencia. |
 
 ### Pendiente o posibles ampliaciones
 

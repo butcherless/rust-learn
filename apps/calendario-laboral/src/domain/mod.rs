@@ -1,5 +1,6 @@
 //! Dominio puro: tipos, reglas y resolución. Sin E/S y sin estado mutable.
 
+mod absence;
 mod calendar;
 mod date;
 mod error;
@@ -8,6 +9,7 @@ mod kind;
 mod month;
 mod resolve;
 
+pub use absence::{Absence, next_absence};
 pub use calendar::{Calendar, DEFAULT_VACATION_QUOTA, Mark, MarkId, Marking, WEEK, Year};
 pub use date::{DateRange, check_year, days_of_year, parse_date};
 pub use error::DomainError;
@@ -25,6 +27,11 @@ pub mod fixtures {
     use chrono::NaiveDate;
 
     use super::{Calendar, DateRange, MarkKind};
+
+    /// La fecha actual de los tests de las vistas: el lunes 1 de junio de 2026 (RN-30).
+    pub fn today() -> NaiveDate {
+        date(2026, 6, 1)
+    }
 
     /// Una fecha que existe.
     pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
