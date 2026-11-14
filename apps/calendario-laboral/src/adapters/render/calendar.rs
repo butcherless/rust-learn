@@ -155,7 +155,7 @@ fn right_column(
     let gap = absence_from.max(grid.len() + 1) - grid.len();
     grid.into_iter()
         .chain(iter::repeat_n(String::new(), gap))
-        .chain(next_absence(absence, marker))
+        .chain(next_absence(absence, summary.year, marker))
         .collect()
 }
 

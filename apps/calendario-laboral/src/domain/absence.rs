@@ -1,9 +1,9 @@
-//! La próxima ausencia desde una fecha (RN-30).
+//! La próxima ausencia marcada de un año desde una fecha (RN-30).
 
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 
 use crate::domain::{
-    Calendar, Category, DateRange, DayKind, DomainError, ResolvedDay, Year, resolve_year,
+    Calendar, Category, DateRange, DayKind, DomainError, Origin, ResolvedDay, resolve_year,
 };
 
 /// Una parte seguida de una ausencia con el mismo tipo; los fines de semana de en medio no la
@@ -17,49 +17,47 @@ pub struct AbsencePart {
 }
 
 /// Un tramo de días seguidos que no se trabajan, que empieza y acaba en un festivo o un día de
-/// vacaciones, partido por tipos en orden (RN-30).
+/// vacaciones marcados, partido por tipos en orden (RN-30).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Absence {
     /// Las partes del tramo, en orden; nunca está vacío.
     pub parts: Vec<AbsencePart>,
 }
 
-/// La próxima ausencia desde `today`, incluido, en los años del calendario desde el de `today`.
-/// Un tramo puede seguir en el año siguiente si también está en el calendario.
-pub fn next_absence(calendar: &Calendar, today: NaiveDate) -> Result<Option<Absence>, DomainError> {
-    let days: Vec<ResolvedDay> = calendar
-        .years()
-        .iter()
-        .map(Year::number)
-        .filter(|&number| number >= today.year())
-        .map(|number| resolve_year(calendar, number))
-        .collect::<Result<Vec<_>, _>>()?
+/// La próxima ausencia marcada del año `number` desde `today`, incluido; en un año futuro, desde
+/// su primer día. Las vacaciones por defecto (RN-14) no cuentan y cortan el tramo.
+pub fn next_absence(
+    calendar: &Calendar,
+    number: i32,
+    today: NaiveDate,
+) -> Result<Option<Absence>, DomainError> {
+    let days: Vec<ResolvedDay> = resolve_year(calendar, number)?
         .into_iter()
-        .flatten()
         .filter(|day| day.date >= today)
         .collect();
     Ok(absence_in(&days))
 }
 
-fn is_absence(day: &ResolvedDay) -> bool {
-    day.kind.category() == Category::Absence
+/// Un festivo o un día de vacaciones fijado por un `Mark`.
+fn is_marked_absence(day: &ResolvedDay) -> bool {
+    day.kind.category() == Category::Absence && matches!(day.origin, Origin::Mark(_))
 }
 
-/// La primera ausencia de `days`, que van seguidos salvo donde falta un año.
+/// Un día que puede quedar dentro de una ausencia: una ausencia marcada o un fin de semana.
+fn is_free(day: &ResolvedDay) -> bool {
+    is_marked_absence(day) || day.kind.category() == Category::NonWorking
+}
+
+/// La primera ausencia de `days`, que son días seguidos de un mismo año.
 fn absence_in(days: &[ResolvedDay]) -> Option<Absence> {
-    let start = days.iter().position(is_absence)?;
-    let rest = days.get(start..)?;
-    let first = rest.first()?.date;
-    // Los días seguidos (sin saltar un año que no esté en el calendario) que no se trabajan. Solo
-    // se quedan los de ausencia, así que los fines de semana del final no cuentan.
-    let absences: Vec<&ResolvedDay> = rest
+    let start = days.iter().position(is_marked_absence)?;
+    // Los días seguidos que no se trabajan. Solo se quedan los de ausencia, así que los fines de
+    // semana del final no cuentan.
+    let absences: Vec<&ResolvedDay> = days
+        .get(start..)?
         .iter()
-        .zip(first.iter_days())
-        .take_while(|(day, expected)| {
-            day.date == *expected && day.kind.category() != Category::Working
-        })
-        .map(|(day, _)| day)
-        .filter(|day| is_absence(day))
+        .take_while(|day| is_free(day))
+        .filter(|day| is_marked_absence(day))
         .collect();
     let parts = absences
         .chunk_by(|before, after| before.kind == after.kind)
@@ -123,28 +121,30 @@ mod tests {
                 absence(&[(vacation, date(2026, 12, 14), date(2026, 12, 22))]),
             ),
             ("no quedan ausencias", date(2026, 12, 23), None),
-            (
-                "un año que no está en el calendario",
-                date(2027, 1, 4),
-                None,
-            ),
+            ("un año pasado", date(2027, 1, 4), None),
         ]
         .into_iter()
         .for_each(|(case, today, expected)| {
-            assert_eq!(next_absence(&december, today), Ok(expected), "{case}");
+            assert_eq!(next_absence(&december, 2026, today), Ok(expected), "{case}");
         });
     }
 
     #[test]
-    fn rn_30_default_vacation_counts_and_an_absence_can_cross_into_the_next_year() {
+    fn rn_30_only_marked_absences_of_the_shown_year_count() {
         assert_eq!(
-            next_absence(&calendar(), date(2026, 6, 1)),
+            next_absence(&calendar(), 2026, date(2026, 6, 1)),
+            Ok(None),
+            "las vacaciones por defecto (RN-14) no cuentan"
+        );
+        let summer = marked(&[(MarkKind::Holiday, "2026-07-03", "2026-07-03")]);
+        assert_eq!(
+            next_absence(&summer, 2026, date(2026, 6, 1)),
             Ok(absence(&[(
-                DayKind::Vacation,
-                date(2026, 7, 1),
-                date(2026, 8, 4)
+                DayKind::Holiday,
+                date(2026, 7, 3),
+                date(2026, 7, 3)
             )])),
-            "vacaciones por defecto (RN-14)"
+            "un festivo entre vacaciones por defecto, que no salen en el tramo"
         );
         let holiday = |calendar: Calendar, day| {
             calendar
@@ -152,21 +152,32 @@ mod tests {
                 .expect("mark")
                 .0
         };
-        let year_end = holiday(
+        let two_years = holiday(
             holiday(
                 calendar().with_year(2027).expect("year"),
                 date(2026, 12, 31),
             ),
             date(2027, 1, 1),
         );
-        assert_eq!(
-            next_absence(&year_end, date(2026, 12, 30)),
-            Ok(absence(&[(
-                DayKind::Holiday,
-                date(2026, 12, 31),
-                date(2027, 1, 1)
-            )])),
-            "fin de año"
-        );
+        [
+            (
+                "el tramo no pasa al año siguiente",
+                2026,
+                absence(&[(DayKind::Holiday, date(2026, 12, 31), date(2026, 12, 31))]),
+            ),
+            (
+                "un año futuro, desde su primer día",
+                2027,
+                absence(&[(DayKind::Holiday, date(2027, 1, 1), date(2027, 1, 1))]),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(case, year, expected)| {
+            assert_eq!(
+                next_absence(&two_years, year, date(2026, 12, 30)),
+                Ok(expected),
+                "{case}"
+            );
+        });
     }
 }

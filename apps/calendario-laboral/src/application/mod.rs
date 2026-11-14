@@ -869,7 +869,7 @@ mod tests {
     }
 
     #[test]
-    fn rn_30_month_and_year_carry_the_next_absence_from_today() {
+    fn rn_30_month_and_year_carry_the_next_absence_of_the_shown_year() {
         [
             Command::Month {
                 year: 2026,
@@ -883,19 +883,20 @@ mod tests {
         ]
         .into_iter()
         .for_each(|command| {
-            let absence = match report(calendar(), command.clone()) {
+            let calendar = marked(&[(MarkKind::Holiday, "2026-12-08", "2026-12-08")]);
+            let absence = match report(calendar, command.clone()) {
                 Some(Report::Month(_, _, absence) | Report::Year(_, _, absence)) => absence,
                 Some(
                     Report::Marks(_) | Report::Day(_) | Report::Summary(_) | Report::Config(_),
                 )
                 | None => None,
             };
-            // Las vacaciones por defecto de 2026 (RN-14), sea cual sea el mes que se muestra.
+            // La del año que se muestra, sea cual sea el mes.
             assert_eq!(
                 absence.map(|absence| absence.parts),
                 Some(vec![AbsencePart {
-                    kind: DayKind::Vacation,
-                    range: range(date(2026, 7, 1), date(2026, 8, 4)),
+                    kind: DayKind::Holiday,
+                    range: range(date(2026, 12, 8), date(2026, 12, 8)),
                 }]),
                 "{command:?}"
             );

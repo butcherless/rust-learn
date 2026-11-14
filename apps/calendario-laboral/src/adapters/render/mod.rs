@@ -23,7 +23,7 @@ use crate::domain::{
 };
 
 use calendar::{month, year};
-pub use next_absence::{ABSENCE_TITLE, NO_ABSENCE};
+pub use next_absence::{ABSENCE_TITLE, no_absence};
 use style::paint;
 pub use text::event;
 use text::{config, day, summary};
@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn rn_30_in_the_year_view_the_next_absence_starts_at_the_second_row_of_months() {
         let text = shown(
-            calendar(),
+            marked(&[(MarkKind::Vacation, "2026-08-17", "2026-08-28")]),
             Command::Year {
                 year: 2026,
                 today: today(),
@@ -562,15 +562,7 @@ mod tests {
         assert_eq!(
             right.get(11..17),
             Some(
-                &[
-                    "",
-                    "",
-                    ABSENCE_TITLE,
-                    "V Vacaciones 1 julio-4 agosto",
-                    "",
-                    "",
-                ]
-                .map(String::from)[..]
+                &["", "", ABSENCE_TITLE, "V Vacaciones 17-28 agosto", "", "",].map(String::from)[..]
             ),
             "{text}"
         );
@@ -601,8 +593,9 @@ mod tests {
 
     #[test]
     fn rn_23_year_shows_the_year_once_in_a_band_above_the_months() {
+        // Con una ausencia marcada, para que el aviso de RN-30, que lleva el año, no salga.
         let colored = colored(
-            calendar(),
+            marked(&[(MarkKind::Holiday, "2026-12-08", "2026-12-08")]),
             Command::Year {
                 year: 2026,
                 today: today(),

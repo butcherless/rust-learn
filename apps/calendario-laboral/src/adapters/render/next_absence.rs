@@ -9,15 +9,18 @@ use crate::domain::{Absence, DateRange, MonthExt};
 
 /// El título de la sección.
 pub const ABSENCE_TITLE: &str = "Próxima ausencia";
-/// El texto cuando no quedan ausencias en el calendario.
-pub const NO_ABSENCE: &str = "No hay más ausencias";
+/// El texto cuando no quedan ausencias marcadas en el año `year`.
+pub fn no_absence(year: i32) -> String {
+    format!("No quedan ausencias marcadas en {year}")
+}
 
 /// Las líneas de la sección: el título y una por cada parte de la ausencia, con la barra de su
-/// tipo, su etiqueta, alineada con la más larga, y sus fechas; o el aviso de que no hay más.
-pub(super) fn next_absence(absence: Option<&Absence>, marker: Marker) -> Vec<String> {
+/// tipo, su etiqueta, alineada con la más larga, y sus fechas; o el aviso de que no quedan en
+/// `year`, el año que se muestra.
+pub(super) fn next_absence(absence: Option<&Absence>, year: i32, marker: Marker) -> Vec<String> {
     let title = styled(Style::new().bold(), ABSENCE_TITLE);
     let parts: Vec<String> = match absence {
-        None => vec![NO_ABSENCE.to_owned()],
+        None => vec![no_absence(year)],
         Some(absence) => {
             let width = absence
                 .parts
@@ -91,7 +94,7 @@ mod tests {
     #[test]
     fn rn_30_texts_are_fixed() {
         assert_eq!(ABSENCE_TITLE, "Próxima ausencia");
-        assert_eq!(NO_ABSENCE, "No hay más ausencias");
+        assert_eq!(no_absence(2027), "No quedan ausencias marcadas en 2027");
     }
 
     #[test]
@@ -120,13 +123,13 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(absence, expected)| {
-            let lines = plain(&next_absence(Some(&absence), Marker::Letter));
+            let lines = plain(&next_absence(Some(&absence), 2026, Marker::Letter));
             assert_eq!(lines.first().map(String::as_str), Some(ABSENCE_TITLE));
             assert_eq!(lines[1..], expected, "{absence:?}");
         });
         assert_eq!(
-            plain(&next_absence(None, Marker::Letter)),
-            [ABSENCE_TITLE, NO_ABSENCE]
+            plain(&next_absence(None, 2027, Marker::Letter)),
+            [ABSENCE_TITLE.to_owned(), no_absence(2027)]
         );
     }
 
@@ -138,6 +141,7 @@ mod tests {
                 date(2026, 12, 8),
                 date(2026, 12, 8),
             )])),
+            2026,
             Marker::Bar,
         );
         assert_eq!(lines[0], "\u{1b}[1mPróxima ausencia\u{1b}[0m");

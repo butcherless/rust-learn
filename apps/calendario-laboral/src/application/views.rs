@@ -14,7 +14,7 @@ pub(super) fn month(
     Ok(Outcome::Report(Report::Month(
         month_view(year, month, &days)?,
         summary_of(year, &days),
-        next_absence(calendar, today)?,
+        next_absence(calendar, year.number(), today)?,
     )))
 }
 
@@ -31,7 +31,7 @@ pub(super) fn year(
             .map(|month| month_view(year, month, &days))
             .collect::<Result<_, _>>()?,
         summary_of(year, &days),
-        next_absence(calendar, today)?,
+        next_absence(calendar, year.number(), today)?,
     )))
 }
 
