@@ -4,4 +4,5 @@
 pub mod cli;
 pub mod json;
 pub mod render;
+pub mod reservoirs;
 pub mod viewer;

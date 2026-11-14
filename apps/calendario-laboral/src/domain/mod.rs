@@ -7,6 +7,7 @@ mod error;
 mod hours;
 mod kind;
 mod month;
+mod reservoir;
 mod resolve;
 
 pub use absence::{Absence, AbsencePart, next_absence};
@@ -16,6 +17,9 @@ pub use error::DomainError;
 pub use hours::Hours;
 pub use kind::{Category, DayKind, MarkKind, Shift};
 pub use month::{Month, MonthExt};
+pub use reservoir::{
+    AVERAGE_YEARS, MADRID_RESERVOIRS, Reservoir, ReservoirLevel, WeeklyLevel, reservoir_level,
+};
 pub use resolve::{
     MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Summary, resolve_day, resolve_year,
     summarize, summary_of,

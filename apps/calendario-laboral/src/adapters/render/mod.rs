@@ -6,6 +6,7 @@
 
 mod calendar;
 mod next_absence;
+mod reservoirs;
 mod style;
 mod text;
 mod vacation_grid;
@@ -14,8 +15,9 @@ use std::fmt::Display;
 use std::iter;
 
 use anstyle::{Ansi256Color, AnsiColor, Color, Style};
-use chrono::{Datelike, Weekday};
+use chrono::{Datelike, NaiveDate, Weekday};
 
+use crate::adapters::reservoirs::ReservoirTable;
 use crate::application::{Event, MonthView, Report};
 use crate::domain::{
     Calendar, DayKind, Mark, Month, MonthTotal, Origin, REFERENCE_DAY_HOURS, ResolvedDay, Shift,
@@ -24,6 +26,7 @@ use crate::domain::{
 
 use calendar::{month, year};
 pub use next_absence::{ABSENCE_TITLE, no_absence};
+pub use reservoirs::{LIGHT_OFF, LIGHT_ON, RESERVOIRS_TITLE, UNAVAILABLE, source_line};
 use style::paint;
 pub use text::event;
 use text::{config, day, summary};
@@ -164,12 +167,22 @@ fn working_days_line(summary: &Summary) -> String {
 /// El texto del resultado de una consulta, terminado en salto de línea. `marker` decide cómo se
 /// identifica el tipo de cada día (RN-20).
 pub fn report(report: &Report, marker: Marker) -> String {
+    report_with(report, marker, None)
+}
+
+/// [`report`] con la tabla de embalses de la ventana debajo de la próxima ausencia, en las vistas
+/// de mes y de año (RN-31).
+pub fn report_with(report: &Report, marker: Marker, reservoirs: Option<&ReservoirTable>) -> String {
     match report {
         Report::Marks(marks) if marks.is_empty() => lines(iter::once("No hay marcas.".to_owned())),
         Report::Marks(marks) => lines(marks.iter().map(mark_line)),
         Report::Day(resolved) => day(resolved, marker),
-        Report::Month(view, totals, absence) => month(view, totals, absence.as_ref(), marker),
-        Report::Year(months, totals, absence) => year(months, totals, absence.as_ref(), marker),
+        Report::Month(view, totals, absence) => {
+            month(view, totals, absence.as_ref(), reservoirs, marker)
+        }
+        Report::Year(months, totals, absence) => {
+            year(months, totals, absence.as_ref(), reservoirs, marker)
+        }
         Report::Summary(totals) => summary(totals, marker),
         Report::Config(calendar) => config(calendar),
     }
@@ -1016,5 +1029,52 @@ mod tests {
                 "Diciembre"
             ]
         );
+    }
+
+    #[test]
+    fn rn_31_month_and_year_put_the_reservoirs_below_the_next_absence_only_in_the_window() {
+        use crate::adapters::reservoirs::fixtures::RESERVOIRS;
+
+        let table = ReservoirTable::new(&RESERVOIRS);
+        [
+            Command::Month {
+                year: 2026,
+                month: Month::June,
+                today: today(),
+            },
+            Command::Year {
+                year: 2026,
+                today: today(),
+            },
+        ]
+        .into_iter()
+        .for_each(|command| {
+            let result = match execute(calendar(), command.clone()) {
+                Ok(Outcome::Report(result)) => result,
+                other => panic!("{other:?}"),
+            };
+            let window = plain(&report_with(&result, Marker::Letter, Some(&table)));
+            let lines: Vec<&str> = window.lines().collect();
+            let find = |title: &str| {
+                lines
+                    .iter()
+                    .enumerate()
+                    .find_map(|(index, line)| line.find(title).map(|column| (index, column)))
+            };
+            let (absence, absence_column) = find(ABSENCE_TITLE).expect("absence");
+            let (title, title_column) = find(RESERVOIRS_TITLE).expect("reservoirs");
+            // La ausencia ocupa dos líneas (el título y el aviso), y luego va una en blanco.
+            assert_eq!(title, absence + 3, "{command:?}");
+            assert_eq!(
+                lines[title].chars().take(title_column).count(),
+                lines[absence].chars().take(absence_column).count(),
+                "{command:?}"
+            );
+            assert!(lines[title + 3].contains("○ El Pardo"), "{command:?}");
+            assert!(
+                !plain(&report(&result, Marker::Letter)).contains(RESERVOIRS_TITLE),
+                "the console has no reservoirs: {command:?}"
+            );
+        });
     }
 }

@@ -4,20 +4,36 @@
 //! [`Viewer::update`] devuelve el estado siguiente y un [`Effect`]. El estado no sabe nada del
 //! terminal; [`run`] es el único código con efectos secundarios. La tecla `r` vuelve a leer el
 //! fichero y a dibujar la vista (RN-28).
+//!
+//! En las vistas de mes y de año, las respuestas de los embalses llegan de otro hilo mientras la
+//! ventana está abierta (RN-31). Cada vez solo se escriben las líneas de la pantalla que han
+//! cambiado: [`Screen`] es lo que hay escrito, y [`draw`] lo compara con lo nuevo.
 
 use std::io::{self, Write};
 use std::iter;
+use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
+use anstyle::{AnsiColor, Style};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
+use crossterm::style::{Attribute, Print, SetAttribute};
 use crossterm::terminal::{
     self, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen,
     LeaveAlternateScreen,
 };
 use crossterm::{execute, queue};
 
+use crate::adapters::reservoirs::{Fetched, ReservoirTable};
 use crate::application::Report;
+use crate::domain::MADRID_RESERVOIRS;
+
+/// Cada cuánto cambia la luz de la fila que se consulta (RN-31).
+const BLINK: Duration = Duration::from_millis(500);
+/// Cada cuánto se miran las respuestas mientras llegan.
+const POLL: Duration = Duration::from_millis(100);
+/// Cuánto se espera una tecla cuando ya no llegan respuestas; al pasar, solo se redibuja.
+const IDLE: Duration = Duration::from_secs(60);
 
 /// Dónde pueden mostrarse los informes: en la ventana, o solo en la consola si la salida no es un
 /// terminal o se ha pedido `--no-tui` (RN-22).
@@ -37,6 +53,14 @@ pub const fn opens(report: &Report, output: Output) -> bool {
     match output {
         Output::Window => fills_screen,
         Output::Console => false,
+    }
+}
+
+/// Si la vista lleva los embalses de Madrid: solo las de mes y de año (RN-31).
+pub const fn shows_reservoirs(report: &Report) -> bool {
+    match report {
+        Report::Month(..) | Report::Year(..) => true,
+        Report::Summary(..) | Report::Marks(..) | Report::Day(..) | Report::Config(..) => false,
     }
 }
 
@@ -124,6 +148,34 @@ impl Viewer {
         }
     }
 
+    /// La vista con `text` en lugar del texto de antes, desde la misma línea y con el mismo error:
+    /// la tabla de embalses ha cambiado (RN-31).
+    pub fn retexted(self, text: &str) -> Self {
+        Self {
+            top: self.top,
+            error: self.error,
+            ..Self::new(text)
+        }
+    }
+
+    /// Lo que debe verse en un terminal de `size` (columnas, filas): las líneas que caben,
+    /// completadas con líneas vacías, y la de ayuda en gris en la última fila.
+    pub fn screen(&self, size: (u16, u16)) -> Screen {
+        let height = usize::from(text_height(size.1));
+        let grey = Style::new().fg_color(Some(AnsiColor::BrightBlack.into()));
+        let help = format!("{grey}{}{grey:#}", self.help(height));
+        Screen {
+            size,
+            rows: self
+                .visible(height)
+                .map(str::to_owned)
+                .chain(iter::repeat(String::new()))
+                .take(height)
+                .chain(iter::once(help))
+                .collect(),
+        }
+    }
+
     /// El estado tras `message`.
     pub fn update(self, message: Message, height: usize) -> (Self, Effect) {
         let top = self.top(height);
@@ -182,13 +234,32 @@ impl Viewer {
     }
 }
 
-/// Muestra `text` en la pantalla alternativa hasta que se cierra con `Esc` o `q`; `r` la cambia
-/// por lo que devuelva `reload` (RN-28). El terminal se restaura también si el bucle falla.
-pub fn run(text: &str, reload: impl FnMut() -> Result<String, String>) -> io::Result<()> {
+/// Lo que hay escrito en la pantalla: su tamaño y cada fila, la de ayuda incluida.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Screen {
+    size: (u16, u16),
+    rows: Vec<String>,
+}
+
+/// Las filas del texto: todas menos la de ayuda, y al menos una.
+fn text_height(rows: u16) -> u16 {
+    rows.saturating_sub(1).max(1)
+}
+
+/// Muestra el texto que `text` da para `report` en la pantalla alternativa hasta que se cierra con
+/// `Esc` o `q`; `r` cambia el informe por lo que devuelva `reload` (RN-28). Si hay `fetched`, la
+/// vista lleva la tabla de embalses, que se rellena con cada respuesta (RN-31). El terminal se
+/// restaura también si el bucle falla.
+pub fn run(
+    report: Report,
+    text: impl Fn(&Report, Option<&ReservoirTable>) -> String,
+    reload: impl FnMut() -> Result<Report, String>,
+    fetched: Option<Receiver<Fetched>>,
+) -> io::Result<()> {
     let mut out = io::stdout();
     terminal::enable_raw_mode()?;
     let result = execute!(out, EnterAlternateScreen, DisableLineWrap, Hide)
-        .and_then(|()| event_loop(&mut out, Viewer::new(text), reload));
+        .and_then(|()| event_loop(&mut out, report, text, reload, fetched));
     let restored =
         execute!(out, Show, EnableLineWrap, LeaveAlternateScreen).and(terminal::disable_raw_mode());
     result.and(restored)
@@ -196,46 +267,79 @@ pub fn run(text: &str, reload: impl FnMut() -> Result<String, String>) -> io::Re
 
 fn event_loop(
     out: &mut impl Write,
-    initial: Viewer,
-    mut reload: impl FnMut() -> Result<String, String>,
+    initial: Report,
+    text: impl Fn(&Report, Option<&ReservoirTable>) -> String,
+    mut reload: impl FnMut() -> Result<Report, String>,
+    fetched: Option<Receiver<Fetched>>,
 ) -> io::Result<()> {
-    let mut viewer = initial;
+    let mut report = initial;
+    let mut table = fetched
+        .as_ref()
+        .map(|_| ReservoirTable::new(&MADRID_RESERVOIRS));
+    let mut viewer = Viewer::new(&text(&report, table.as_ref()));
+    let mut screen = Screen::default();
+    let mut blinked = Instant::now();
     loop {
-        let (_, rows) = terminal::size()?;
-        // La última fila es la de ayuda.
-        let height = rows.saturating_sub(1).max(1);
-        draw(out, &viewer, height)?;
-        if let Some(message) = event::read()?.as_key_press_event().and_then(message) {
-            let (next, effect) = viewer.update(message, usize::from(height));
+        let next = viewer.screen(terminal::size()?);
+        draw(out, &screen, &next)?;
+        screen = next;
+        let fetching = table.as_ref().is_some_and(ReservoirTable::is_fetching);
+        let wait = if fetching { POLL } else { IDLE };
+        let key = if event::poll(wait)? {
+            event::read()?.as_key_press_event().and_then(message)
+        } else {
+            None
+        };
+        if let Some(message) = key {
+            let (next, effect) = viewer.update(message, usize::from(text_height(screen.size.1)));
             match effect {
                 Effect::Quit => return Ok(()),
                 Effect::None => viewer = next,
-                Effect::Reload => viewer = next.reloaded(reload()),
+                Effect::Reload => match reload() {
+                    Ok(reloaded) => {
+                        report = reloaded;
+                        viewer = next.reloaded(Ok(text(&report, table.as_ref())));
+                    }
+                    Err(error) => viewer = next.reloaded(Err(error)),
+                },
             }
+        }
+        // RN-31: las respuestas que hayan llegado y, cada medio segundo, el parpadeo.
+        let arrived: Vec<Fetched> = fetched.iter().flat_map(Receiver::try_iter).collect();
+        let blink = fetching && blinked.elapsed() >= BLINK;
+        if blink {
+            blinked = Instant::now();
+        }
+        if !arrived.is_empty() || blink {
+            table = table.map(|table| {
+                let table = arrived.into_iter().fold(table, ReservoirTable::fetched);
+                if blink { table.ticked() } else { table }
+            });
+            viewer = viewer.retexted(&text(&report, table.as_ref()));
         }
     }
 }
 
-fn draw(out: &mut impl Write, viewer: &Viewer, height: u16) -> io::Result<()> {
-    queue!(out, Clear(ClearType::All))?;
-    viewer
-        .visible(usize::from(height))
-        .zip(0..height)
+/// Escribe `next` sobre la pantalla, que tiene `previous`: solo las filas que han cambiado, o
+/// todas tras borrarla si el terminal ha cambiado de tamaño.
+fn draw(out: &mut impl Write, previous: &Screen, next: &Screen) -> io::Result<()> {
+    let resized = previous.size != next.size;
+    if resized {
+        queue!(out, Clear(ClearType::All))?;
+    }
+    next.rows
+        .iter()
+        .zip(0..u16::MAX)
+        .filter(|&(line, row)| resized || previous.rows.get(usize::from(row)) != Some(line))
         .try_for_each(|(line, row)| {
             queue!(
                 out,
                 MoveTo(0, row),
+                Clear(ClearType::CurrentLine),
                 Print(line),
                 SetAttribute(Attribute::Reset)
             )
         })?;
-    queue!(
-        out,
-        MoveTo(0, height),
-        SetForegroundColor(Color::DarkGrey),
-        Print(viewer.help(usize::from(height))),
-        ResetColor
-    )?;
     out.flush()
 }
 
@@ -374,7 +478,8 @@ mod tests {
     #[test]
     fn rn_22_draws_the_visible_lines_and_the_help_below() {
         let mut screen = Vec::new();
-        assert!(draw(&mut screen, &numbered(10).scrolled(2), 3).is_ok());
+        let next = numbered(10).scrolled(2).screen((80, 4));
+        assert!(draw(&mut screen, &Screen::default(), &next).is_ok());
         let screen = String::from_utf8_lossy(&screen);
         let help = screen.find("Líneas 3–5 de 10");
         assert!(help.is_some(), "{screen}");
@@ -427,6 +532,98 @@ mod tests {
         assert_eq!(
             failed.reloaded(Ok("nueva\n".to_owned())).help(3),
             "r: recargar · Esc o q: salir"
+        );
+    }
+
+    #[test]
+    fn rn_31_only_month_and_year_show_the_reservoirs() {
+        [
+            (
+                "month",
+                report(Command::Month {
+                    year: 2026,
+                    month: Month::June,
+                    today: today(),
+                }),
+                true,
+            ),
+            (
+                "year",
+                report(Command::Year {
+                    year: 2026,
+                    today: today(),
+                }),
+                true,
+            ),
+            ("summary", report(Command::Summary(2026)), false),
+            ("day", report(Command::Day(date(2026, 6, 8))), false),
+            ("list", report(Command::List(None)), false),
+            ("config", report(Command::Config), false),
+        ]
+        .into_iter()
+        .for_each(|(case, report, expected)| {
+            assert_eq!(shows_reservoirs(&report), expected, "{case}");
+        });
+    }
+
+    #[test]
+    fn rn_31_only_the_rows_that_changed_are_written_again() {
+        let before = numbered(3).screen((80, 4));
+        let after = numbered(3)
+            .retexted("línea 1\nnueva 2\nlínea 3\n")
+            .screen((80, 4));
+        let mut written = Vec::new();
+        assert!(draw(&mut written, &before, &after).is_ok());
+        let written = String::from_utf8_lossy(&written);
+        assert!(written.contains("nueva 2"), "{written}");
+        assert!(!written.contains("línea 1"), "{written}");
+        assert!(!written.contains("línea 3"), "{written}");
+        assert!(!written.contains("\u{1b}[2J"), "{written}");
+    }
+
+    #[test]
+    fn rn_31_a_resized_terminal_is_cleared_and_written_again() {
+        let before = numbered(3).screen((80, 4));
+        let mut written = Vec::new();
+        assert!(draw(&mut written, &before, &numbered(3).screen((100, 4))).is_ok());
+        let written = String::from_utf8_lossy(&written);
+        assert!(written.contains("\u{1b}[2J"), "{written}");
+        ["línea 1", "línea 2", "línea 3", "r: recargar"]
+            .into_iter()
+            .for_each(|line| assert!(written.contains(line), "{line}: {written}"));
+    }
+
+    #[test]
+    fn rn_31_new_reservoir_rows_keep_the_line_and_the_reload_error() {
+        let viewer = numbered(10)
+            .scrolled(3)
+            .reloaded(Err("JSON no válido".to_owned()))
+            .retexted(
+                &(1..=10)
+                    .map(|line| format!("nueva {line}\n"))
+                    .collect::<String>(),
+            );
+        assert_eq!(
+            viewer.visible(2).collect::<Vec<_>>(),
+            ["nueva 4", "nueva 5"]
+        );
+        assert!(
+            viewer
+                .help(2)
+                .starts_with("No se ha podido recargar: JSON no válido")
+        );
+    }
+
+    #[test]
+    fn rn_31_the_screen_fills_the_text_rows_and_puts_the_help_last() {
+        let screen = numbered(2).screen((80, 4));
+        assert_eq!(
+            screen
+                .rows
+                .iter()
+                .map(|row| anstream::adapter::strip_str(row).to_string())
+                .collect::<Vec<_>>(),
+            ["línea 1", "línea 2", "", "r: recargar · Esc o q: salir"]
         );
     }
 

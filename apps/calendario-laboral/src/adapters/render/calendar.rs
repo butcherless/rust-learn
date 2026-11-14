@@ -4,6 +4,7 @@
 use std::iter;
 
 use super::next_absence::next_absence;
+use super::reservoirs::reservoir_table;
 use super::style::{paint_grid, styled};
 use super::vacation_grid::vacation_grid;
 use super::*;
@@ -144,18 +145,25 @@ fn year_hours_lines(summary: &Summary) -> [String; 2] {
 const VACATION_GAP: &str = "    ";
 
 /// La columna de la derecha: la cuadrícula de vacaciones y, debajo, tras al menos una línea en
-/// blanco, la próxima ausencia desde la línea `absence_from` (RN-27, RN-30).
+/// blanco, la próxima ausencia desde la línea `absence_from` (RN-27, RN-30) y, en la ventana,
+/// tras otra línea en blanco, los embalses (RN-31).
 fn right_column(
     summary: &Summary,
     absence: Option<&Absence>,
     absence_from: usize,
+    reservoirs: Option<&ReservoirTable>,
     marker: Marker,
 ) -> Vec<String> {
     let grid = vacation_grid(summary, marker);
     let gap = absence_from.max(grid.len() + 1) - grid.len();
+    let reservoirs = reservoirs
+        .map(|table| iter::once(String::new()).chain(reservoir_table(table)))
+        .into_iter()
+        .flatten();
     grid.into_iter()
         .chain(iter::repeat_n(String::new(), gap))
         .chain(next_absence(absence, summary.year, marker))
+        .chain(reservoirs)
         .collect()
 }
 
@@ -184,6 +192,7 @@ pub(super) fn month(
     view: &MonthView,
     summary: &Summary,
     absence: Option<&Absence>,
+    reservoirs: Option<&ReservoirTable>,
     marker: Marker,
 ) -> String {
     let marks = (!view.marks.is_empty())
@@ -200,7 +209,7 @@ pub(super) fn month(
         .flatten();
     // RN-27, RN-30: el mes se alarga con semanas en blanco si la columna de la derecha es más
     // alta, para que no quede junto a las marcas.
-    let vacations = right_column(summary, absence, 0, marker);
+    let vacations = right_column(summary, absence, 0, reservoirs, marker);
     let weeks = vacations.len().saturating_sub(2);
     let grid = beside_vacations(
         month_grid(
@@ -228,6 +237,7 @@ pub(super) fn year(
     months: &[MonthView],
     summary: &Summary,
     absence: Option<&Absence>,
+    reservoirs: Option<&ReservoirTable>,
     marker: Marker,
 ) -> String {
     let row_count = months.chunks(MONTHS_PER_ROW).len();
@@ -279,7 +289,7 @@ pub(super) fn year(
             top.into_iter().chain(rows),
             from,
             // RN-30: la próxima ausencia empieza en el título de la segunda fila de meses.
-            right_column(summary, absence, YEAR_ROW_LINES, marker),
+            right_column(summary, absence, YEAR_ROW_LINES, reservoirs, marker),
         )
         .chain(iter::once(String::new()))
         .chain(default_vacation_note(

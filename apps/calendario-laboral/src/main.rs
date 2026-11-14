@@ -2,7 +2,8 @@
 //!
 //! Lee el reloj y el fichero, ejecuta el caso de uso, guarda el fichero si ha cambiado y
 //! muestra el resultado: en la consola o, para `month`, `year` y `summary` en un terminal, en
-//! una ventana a pantalla completa (RN-22), que puede volver a leer el fichero (RN-28).
+//! una ventana a pantalla completa (RN-22), que puede volver a leer el fichero (RN-28). En la
+//! ventana, `month` y `year` piden además los embalses de Madrid a la API (RN-31).
 
 use std::error::Error;
 use std::io::IsTerminal;
@@ -13,9 +14,11 @@ use clap::Parser;
 
 use calendario_laboral::adapters::cli::{Args, error_text};
 use calendario_laboral::adapters::render::Marker;
+use calendario_laboral::adapters::reservoirs::{API_URL, ApiClient, ReservoirTable};
 use calendario_laboral::adapters::viewer::Output;
-use calendario_laboral::adapters::{json, render, viewer};
+use calendario_laboral::adapters::{json, render, reservoirs, viewer};
 use calendario_laboral::application::{Command, Event, Outcome, Report, execute};
+use calendario_laboral::domain::MADRID_RESERVOIRS;
 
 /// Termina con 1 si la operación falla y con 2 si los argumentos no son válidos.
 fn main() -> ExitCode {
@@ -70,7 +73,8 @@ fn query(path: &Path, command: Command) -> Result<Report, Box<dyn Error>> {
 }
 
 /// La ventana si [`viewer::opens`] lo decide, y la consola si no. En la ventana, `reload` da el
-/// informe con el fichero tal como esté al pulsar `r` (RN-28).
+/// informe con el fichero tal como esté al pulsar `r` (RN-28), y las vistas de mes y de año piden
+/// los embalses en otro hilo (RN-31); si el cliente no se puede crear, van sin ellos.
 fn present(
     report: &Report,
     output: Output,
@@ -80,19 +84,24 @@ fn present(
     let marker = Marker::for_color(color);
     if viewer::opens(report, output) {
         // Con `NO_COLOR`, sin los códigos de color, como haría anstream en la consola.
-        let window_text = |report: &Report| {
-            let text = render::report(report, marker);
+        let window_text = |report: &Report, reservoirs: Option<&ReservoirTable>| {
+            let text = render::report_with(report, marker, reservoirs);
             if color {
                 text
             } else {
                 anstream::adapter::strip_str(&text).to_string()
             }
         };
-        viewer::run(&window_text(report), || {
-            reload()
-                .map(|report| window_text(&report))
-                .map_err(|error| error.to_string())
-        })
+        let fetched = viewer::shows_reservoirs(report)
+            .then(|| ApiClient::new(API_URL).ok())
+            .flatten()
+            .map(|client| reservoirs::spawn(client, &MADRID_RESERVOIRS));
+        viewer::run(
+            report.clone(),
+            window_text,
+            || reload().map_err(|error| error.to_string()),
+            fetched,
+        )
     } else {
         anstream::print!("{}", render::report(report, marker));
         Ok(())
