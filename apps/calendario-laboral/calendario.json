@@ -133,6 +133,17 @@
           "to": "2026-12-18"
         }
       ]
+    },
+    {
+      "year": 2027,
+      "vacation_quota": 25,
+      "hours": {
+        "laborable": 8.5,
+        "reducido": 6.0,
+        "laborable_verano": 7.5,
+        "reducido_verano": 7.0
+      },
+      "marks": []
     }
   ]
 }
