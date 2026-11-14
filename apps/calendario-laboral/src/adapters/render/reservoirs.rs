@@ -18,11 +18,10 @@ pub const LIGHT_OFF: &str = "○";
 
 /// La línea de la fuente, con la fecha del dato más reciente.
 pub fn source_line(date: NaiveDate) -> String {
-    format!(
-        "Fuente: MITECO, semana del {} · Datos procesados por MapasDeEmbalses.es",
-        date.format("%d-%m-%Y")
-    )
+    format!("Fuente: MITECO, semana del {}", date.format("%d-%m-%Y"))
 }
+/// La atribución que pide la API, debajo de la fuente.
+pub const PROCESSED_BY: &str = "Datos procesados por MapasDeEmbalses.es";
 
 /// El naranja de pr-checker para lo que está en curso.
 const ORANGE: Color = Color::Rgb(RgbColor(255, 165, 0));
@@ -51,7 +50,12 @@ pub(super) fn reservoir_table(table: &ReservoirTable) -> Vec<String> {
     iter::once(styled(Style::new().bold(), RESERVOIRS_TITLE))
         .chain(iter::once(header))
         .chain(rows)
-        .chain(table.latest_date().map(source_line))
+        .chain(
+            table
+                .latest_date()
+                .into_iter()
+                .flat_map(|date| [source_line(date), PROCESSED_BY.to_owned()]),
+        )
         .collect()
 }
 
@@ -109,8 +113,9 @@ mod tests {
         assert_eq!((LIGHT_ON, LIGHT_OFF), ("●", "○"));
         assert_eq!(
             source_line(date(2026, 11, 10)),
-            "Fuente: MITECO, semana del 10-11-2026 · Datos procesados por MapasDeEmbalses.es"
+            "Fuente: MITECO, semana del 10-11-2026"
         );
+        assert_eq!(PROCESSED_BY, "Datos procesados por MapasDeEmbalses.es");
     }
 
     #[test]
@@ -128,6 +133,7 @@ mod tests {
                 "● El Pardo",
                 "○ La Jarosa",
                 &source_line(date(2026, 11, 10)),
+                PROCESSED_BY,
             ]
         );
         let no_average = ReservoirLevel {
@@ -153,7 +159,7 @@ mod tests {
         assert_eq!(
             plain(&reservoir_table(&ReservoirTable::new(&RESERVOIRS))).len(),
             5,
-            "without any answer there is no source line"
+            "without any answer there are no source lines"
         );
     }
 

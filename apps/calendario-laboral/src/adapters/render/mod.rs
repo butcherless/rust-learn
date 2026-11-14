@@ -26,7 +26,9 @@ use crate::domain::{
 
 use calendar::{month, year};
 pub use next_absence::{ABSENCE_TITLE, no_absence};
-pub use reservoirs::{LIGHT_OFF, LIGHT_ON, RESERVOIRS_TITLE, UNAVAILABLE, source_line};
+pub use reservoirs::{
+    LIGHT_OFF, LIGHT_ON, PROCESSED_BY, RESERVOIRS_TITLE, UNAVAILABLE, source_line,
+};
 use style::paint;
 pub use text::event;
 use text::{config, day, summary};
