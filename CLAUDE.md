@@ -80,6 +80,14 @@ These apply to every project; each project's `CLAUDE.md` adds its own.
 - `anyhow` is allowed only in `main.rs`; library modules use `thiserror` enums.
 - `thiserror` messages must not include their source, because `main` prints the full error chain with `{:#}` and the text would appear twice.
 
+### Documentation
+
+Each fact lives in one place; the others link to it.
+
+- **README:** what a project does and how to use it (options, keys, configuration, exit codes). Usage never goes in a `CLAUDE.md`.
+- **`CLAUDE.md`:** how the code is built and how to change it (rules, workflow, library notes, the module map). Internal rules never go in a README. The build, test and check commands are the one deliberate copy, because Claude only loads `CLAUDE.md` by itself.
+- **Behaviour** of a project with a requirements document (calendario-laboral) is only there; its `CLAUDE.md` names the module and each module's `//!` rustdoc names the function that implements each rule.
+
 ### Tests
 
 - Tests must not use the real network or need tokens. Use wiremock for HTTP clients and in-memory fakes for ports.
