@@ -1,4 +1,6 @@
 //! La tabla de mercados, debajo de los embalses en la ventana (RN-32).
+//!
+//! `price` escribe los precios con punto de miles y coma decimal.
 
 use super::reservoirs::{NAME_WIDTH, UNAVAILABLE, light};
 use super::style::styled;

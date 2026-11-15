@@ -1,6 +1,18 @@
 //! El contenido del fichero: configuración, `Year` y `Mark` (§2.3).
 //!
 //! Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo.
+//!
+//! Los cambios son `with_year`, `without_year`, `with_mark`, `with_replaced_mark`, `without_mark`,
+//! `with_quota`, `with_shift_hours`, `with_year_hours`, `with_weekend`, `with_reduced_days` y
+//! `restore_mark`.
+//!
+//! - Las `Hours` son de cada `Year` (RN-25). `with_year` las hereda con `inherited_hours`: del año
+//!   anterior más cercano, si no del siguiente, y si no las de por defecto.
+//! - `weekend` y `reduced_days` (viernes por defecto, RN-18) se ordenan desde el lunes con
+//!   `from_monday`.
+//! - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta
+//!   (RN-06).
+//! - El id siguiente es el máximo más uno (RN-16).
 
 use std::fmt;
 use std::iter;

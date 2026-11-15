@@ -1,4 +1,8 @@
 //! Los errores de argumentos y la ayuda de clap, en español (RNF-07).
+//!
+//! `error_text` monta en español los errores de argumentos de clap a partir de su `ErrorKind` y su
+//! contexto, y la ayuda con `spanish_clap` sobre el texto de clap (`[valores posibles: …]`,
+//! `[OPCIONES]`…). La versión y los errores poco habituales los muestra clap.
 
 /// Traduce los textos en inglés que clap añade a la ayuda y al uso (RNF-07).
 fn spanish_clap(text: &str) -> String {

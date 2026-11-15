@@ -1,6 +1,11 @@
 //! Adaptador de entrada: los argumentos de la línea de comandos (§5).
 //!
 //! Se convierten en un [`Command`] de la aplicación.
+//!
+//! `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista
+//! vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes. La ayuda usa la
+//! plantilla `HELP`, encabezados en español y `display_order` en los posicionales, porque clap los
+//! ordena si no.
 
 mod errors;
 mod values;

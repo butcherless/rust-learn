@@ -2,6 +2,19 @@
 //!
 //! Quien la llama carga el calendario, ejecuta [`execute`], guarda el calendario nuevo si lo hay
 //! y muestra el resultado. Aquí no hay E/S.
+//!
+//! - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el
+//!   resultado de una consulta (`Report::Config` lleva el `Calendar`).
+//! - Los comandos de varios pasos (`unmark` con varios ids, `add-year --festivos-de`, `edit`)
+//!   encadenan los cambios con `try_fold`: si uno falla, falla todo y no hay nada que guardar
+//!   (RN-13).
+//! - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.
+//! - `remove-year` con `Mark` necesita `confirmed`; si no, devuelve `DomainError::YearHasMarks`.
+//! - `Command::Month` y `Command::Year` llevan `today`, y `Report::Month` y `Report::Year`, la
+//!   `Option<Absence>` de RN-30.
+//!
+//! `execute` solo reparte cada `Command`: los casos de uso están en `marks`, `years`, `settings` y
+//! `views`.
 
 mod marks;
 mod settings;

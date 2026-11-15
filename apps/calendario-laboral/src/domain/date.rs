@@ -1,4 +1,7 @@
 //! Fechas, rangos y la aritmética de calendario que necesitan las reglas.
+//!
+//! `parse_date` es ISO estricto (RN-01), porque chrono por sí solo acepta días de un dígito.
+//! `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
 
 use std::fmt;
 

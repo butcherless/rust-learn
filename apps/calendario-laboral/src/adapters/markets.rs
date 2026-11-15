@@ -1,5 +1,9 @@
 //! Adaptador de los mercados de RN-32: el cliente del JSON de cotizaciones de Expansión y el
 //! estado de la tabla que dibuja `render`.
+//!
+//! Los códigos de Expansión solo están aquí: `request_code` y `response_code` (la respuesta llama
+//! `LCO` al Brent). `MarketTable` espera hasta `started()` y se rellena con una sola respuesta: el
+//! valor que no llega queda `Failed`.
 
 use chrono::{NaiveDate, NaiveTime};
 use serde::Deserialize;

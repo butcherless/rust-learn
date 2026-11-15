@@ -1,5 +1,9 @@
 //! Adaptador de los embalses de RN-31: el cliente de la API de MapasDeEmbalses.es, las peticiones
 //! de una en una y el estado de la tabla que dibuja `render`.
+//!
+//! `ApiClient` pide `/embalses/<clave>/historico?limit=2000` y descarta las semanas sin fecha o sin
+//! datos. `fetched` es un iterador perezoso: cada embalse se pide al tomar su elemento. En
+//! `ReservoirTable`, cada respuesta pasa la fila siguiente a `Fetching`.
 
 use chrono::NaiveDate;
 use serde::Deserialize;

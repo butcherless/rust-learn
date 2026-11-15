@@ -1,5 +1,8 @@
 //! Lo común a los datos que la ventana pide a la red (RN-31, RN-32): el cliente HTTP y el estado
 //! de cada fila mientras llega su respuesta.
+//!
+//! Los tests con wiremock ejecutan el cliente bloqueante con `fixtures::blocking`, en
+//! `spawn_blocking`, porque no puede usarse dentro de un runtime async.
 
 use std::time::Duration;
 

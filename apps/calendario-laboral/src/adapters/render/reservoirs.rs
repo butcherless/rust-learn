@@ -1,4 +1,8 @@
 //! La tabla de embalses de Madrid, debajo de la próxima ausencia en la ventana (RN-31).
+//!
+//! `light`, genérica sobre `Reading<T>`, da las luces de pr-checker también a los mercados.
+//! `current_percent` pinta el porcentaje actual frente a la media de 10 años, comparando con el
+//! decimal que se muestra.
 
 use anstyle::RgbColor;
 

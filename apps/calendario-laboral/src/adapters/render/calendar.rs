@@ -1,5 +1,14 @@
 //! Las vistas de mes y de año: la rejilla de días, la franja del año y sus totales (RF-06, RF-07,
 //! RF-14, RN-21, RN-23, RN-24).
+//!
+//! - Cada mes ocupa `MONTH_WIDTH` columnas, y la vista de año pone 3 por fila en la rejilla de
+//!   RN-21. `month_grid` recibe el título porque la franja de RN-23 va dentro del marco: solo el
+//!   nombre en la vista de año y `Junio 2026` en la de mes.
+//! - Las medias de RN-24 son `Summary::monthly_average_hours` y `monthly_average_days` (con
+//!   `REFERENCE_DAY_HOURS`), y los días trabajados de RN-29, `working_days_line`.
+//! - `right_column` pone debajo de la cuadrícula de vacaciones la próxima ausencia (RN-30): en
+//!   `month`, tras una línea en blanco; en `year`, desde la línea `YEAR_ROW_LINES`, el título de la
+//!   segunda fila de meses. En la ventana añade debajo los embalses y los mercados.
 
 use std::iter;
 

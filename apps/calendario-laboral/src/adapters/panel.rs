@@ -1,5 +1,10 @@
 //! Lo que la ventana pide a la red debajo de la próxima ausencia: los embalses (RN-31) y, después,
 //! los mercados (RN-32). Todas las peticiones van en un hilo aparte, de una en una y en orden.
+//!
+//! `Panel` junta las dos tablas y el parpadeo, común a las dos, y empieza los mercados cuando ya no
+//! falta ningún embalse. `send_updates` para, sin más peticiones, en cuanto nadie escucha. `spawn`
+//! devuelve, con el `Receiver`, el `Panel` inicial de la misma lista de embalses, así la ventana no
+//! la conoce.
 
 use std::iter;
 use std::sync::mpsc::{self, Receiver, Sender};

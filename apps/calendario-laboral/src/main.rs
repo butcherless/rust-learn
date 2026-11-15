@@ -4,6 +4,16 @@
 //! muestra el resultado: en la consola o, para `month`, `year` y `summary` en un terminal, en
 //! una ventana a pantalla completa (RN-22), que puede volver a leer el fichero (RN-28). En la
 //! ventana, `month` y `year` piden además los embalses de Madrid (RN-31) y los mercados (RN-32).
+//!
+//! - `present` elige la ventana si `viewer::opens` lo decide, y si no imprime con anstream. Con
+//!   `NO_COLOR`, quita los códigos de color antes de pasar el texto a la ventana (`color` mira
+//!   `anstream::AutoStream::choice`). Para la recarga le pasa `query`, que vuelve a leer el fichero
+//!   y ejecuta otra vez el mismo `Command`.
+//! - Si `viewer::shows_panel`, crea el `ApiClient` y el `ExpansionClient` y lanza las peticiones
+//!   con `panel::spawn`; si alguno no se puede crear, la ventana va sin embalses ni mercados. La
+//!   consola nunca usa la red, así que `tests/cli.rs` tampoco.
+//! - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos
+//!   (`argument_error`, con `Args::try_parse`). Los avisos van a stderr.
 
 use std::error::Error;
 use std::io::IsTerminal;

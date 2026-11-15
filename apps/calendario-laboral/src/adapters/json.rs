@@ -2,6 +2,17 @@
 //!
 //! Solo se guardan la configuración y los `Mark`; fines de semana, días por defecto y verano
 //! se calculan al resolver. [`decode`] y [`encode`] son puras; [`load`] y [`save`] hacen la E/S.
+//!
+//! - `KindDto` repite a propósito los nombres de `MarkKind`, porque son el formato del fichero; el
+//!   dominio no conoce serde.
+//! - `decode` valida a través de los constructores del dominio.
+//! - `load` devuelve un `Calendar` vacío si el fichero no existe.
+//! - `weekend` y `reduced_days` son nombres de día en inglés; si faltan, toman el valor por
+//!   defecto.
+//! - `save` escribe `<fichero>.tmp` y lo renombra.
+//! - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la
+//!   raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión
+//!   2.
 
 use std::ffi::OsString;
 use std::fs;

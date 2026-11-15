@@ -3,6 +3,14 @@
 //! Cada día se muestra con su color y su letra, para que se lea igual sin color.
 //! Las funciones devuelven texto con códigos ANSI; `anstream` los quita cuando la salida no es
 //! un terminal o está definida `NO_COLOR`.
+//!
+//! - `Marker` (RN-20): `Bar` o `Letter`, en celdas de `CELL_WIDTH` separadas por `CELL_GAP`. `main`
+//!   elige con `Marker::for_color`: `Letter` si no habrá color.
+//! - `report_with(report, marker, Some(&panel))` añade las tablas de embalses y de mercados de la
+//!   ventana (RN-31, RN-32); `report` es `report_with(…, None)`, lo que imprime la consola.
+//! - Los números llevan coma decimal (`decimal`).
+//! - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`. Los
+//!   submódulos usan `use super::*`.
 
 mod calendar;
 mod markets;

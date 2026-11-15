@@ -1,5 +1,7 @@
 //! El mes es `chrono::Month`, una enumeración como `Weekday` (RNF-08); [`MonthExt`] le añade lo
 //! que necesita el dominio.
+//!
+//! El dominio no compara números de mes: `number_from_month` solo sirve para construir fechas.
 
 pub use chrono::Month;
 use chrono::{Datelike, NaiveDate};

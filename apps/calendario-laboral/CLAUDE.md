@@ -55,71 +55,21 @@ Fechas de referencia para los casos de test:
 
 ## Arquitectura
 
-Las dependencias apuntan hacia dentro: `main → adapters → application → domain`.
+Las dependencias apuntan hacia dentro: `main → adapters → application → domain`. El detalle de cada módulo (tipos, decisiones de implementación, qué regla cumple cada función) está en su rustdoc `//!`: léelo antes de cambiarlo, o míralo con `cargo doc -p calendario-laboral --no-deps --open`. Al cambiar un módulo, actualiza su `//!`; este mapa solo cambia si se añade, quita o mueve un módulo.
 
-- **`domain`** es puro: sin E/S y sin mutación. Cada cambio recibe el `Calendar` por valor y devuelve uno nuevo: `with_year`, `without_year`, `with_mark`, `with_replaced_mark`, `without_mark`, `with_quota`, `with_shift_hours`, `with_year_hours`, `with_weekend`, `with_reduced_days` y `restore_mark`.
-  - `month`: `Month` es `chrono::Month`; el trait `MonthExt` le añade `ALL`, `of(date)` e `is_summer()`. El dominio no compara números de mes (`number_from_month` solo para construir fechas).
-  - `kind`: `MarkKind` (`Working`, `Reduced`, `Holiday`, `Vacation`; `Working` fuerza la jornada completa, RN-26), `DayKind` con su letra, etiqueta, `Category` y `Shift`, y `Shift`.
-  - `date`:
-    - `parse_date` es ISO estricto (RN-01); chrono por sí solo acepta días de un dígito.
-    - `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
-  - `hours`: `Hours`, las horas de los cuatro `Shift`, entre 0 y 24 (RN-17).
-  - `calendar`: `Calendar`, `Year`, `Mark` y `MarkId`.
-    - Las `Hours` son de cada `Year` (RN-25). `with_year` las hereda con `inherited_hours`: del año anterior más cercano, si no del siguiente, y si no las de por defecto.
-    - `Calendar` guarda dos listas de `Weekday`: `weekend` y `reduced_days` (viernes por defecto, RN-18; se cambian con `weekend` y `reduced-days`, RF-17 y RF-16). Las dos se ordenan desde el lunes con `from_monday`.
-    - Dos `Mark` son idénticos si tienen el mismo `MarkKind` y `DateRange`; la descripción no cuenta (RN-06).
-    - El id siguiente es el máximo más uno (RN-16).
-  - `resolve`:
-    - El enum privado `Rule` ordena la prioridad con `Ord`: `Reduced` < `Working` (solo de un `Mark`, RN-26) < `Vacation` < `Weekend` < `Holiday`.
-    - Los candidatos van en orden: primero los `Mark`, luego `Weekend` y luego `ReducedWeekday`. Con la misma prioridad gana el primero, así un `Mark` `Reduced` en viernes conserva su `Origin`.
-    - La regla `ReducedWeekday` da `Rule::Reduced` con `Origin::ReducedWeekday`. Reutiliza los `Shift` `Reduced` y `SummerReduced`; no hay jornadas propias de los viernes.
-    - `resolve_year` añade `DefaultVacation` (RN-14) si el `Year` no tiene `Mark` `Vacation`: los primeros `quota` días de `Category` `Working` desde el 1 de julio, con `Origin::DefaultVacation`. Nunca se guarda.
-    - `summarize` devuelve el `Summary`, con los 12 `MonthTotal` (RF-14): días, horas y acumulado, calculados con `scan`. `summary_of` lo calcula a partir de días ya resueltos, para que las vistas de mes y de año resuelvan el año una sola vez.
-    - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría «-0,0».
-  - `absence`: `next_absence(calendar, year, today)` (RN-30) resuelve el año que se muestra y da su primera `Absence`, partida con `chunk_by` en `AbsencePart` (tipo y `DateRange`). Solo empiezan y siguen el tramo los días con `Origin::Mark`; los de `DefaultVacation` lo cortan. Sin ausencia, `render::no_absence(year)`.
-  - `reservoir` (RN-31): `MADRID_RESERVOIRS`, los 13 `Reservoir` (clave de la API y nombre) de mayor a menor capacidad, y `reservoir_level(history)`, que da el último `WeeklyLevel` y la media del porcentaje de la misma semana ISO en los `AVERAGE_YEARS` años anteriores (la API no la da).
-  - `market` (RN-32): `Market` (`Ibex35`, `Brent`) con su `name()`, y `Quote`, la última cotización (precio, cierre anterior, fecha y hora), con `change_percent()`.
+- **`domain`**, puro: sin E/S y sin mutación; cada cambio recibe el `Calendar` por valor y devuelve uno nuevo.
+  - `month` (`MonthExt` sobre `chrono::Month`), `kind` (`MarkKind`, `DayKind`, `Category`, `Shift`), `date` (`parse_date`, `DateRange`), `hours`, `calendar` (`Calendar`, `Year`, `Mark`), `error`.
+  - `resolve`: el `DayKind` de cada día por prioridad de reglas, `DefaultVacation` (RN-14) y el `Summary`.
+  - `absence` (RN-30), `reservoir` (RN-31) y `market` (RN-32).
   - `fixtures` (`#[cfg(test)]`): `date`, `range`, `today` (el 2026-06-01, para las vistas), `calendar` (solo 2026) y `marked`.
-- **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`. `mod.rs` tiene los tipos, `execute` (solo reparte cada `Command`) y los tests; los casos de uso están en `marks.rs`, `years.rs`, `settings.rs` y `views.rs`.
-  - `Outcome::Changed` hay que guardarlo; `Unchanged` (un `Mark` idéntico) no; `Report` es el resultado de una consulta (`Report::Config` lleva el `Calendar`).
-  - Los comandos de varios pasos (`unmark` con varios ids, `add-year --festivos-de`, `edit`) encadenan los cambios con `try_fold`: si uno falla, falla todo y no hay nada que guardar (RN-13).
-  - `excess` en `Event::Marked`, `Edited` y `QuotaSet` lleva el aviso de RN-11.
-  - `remove-year` con `Mark` necesita `confirmed`; si no, devuelve `DomainError::YearHasMarks`.
-  - `Command::Month` y `Command::Year` llevan `today`, y `Report::Month` y `Report::Year`, la `Option<Absence>` de RN-30.
+- **`application`**: `execute(Calendar, Command) -> Result<Outcome, DomainError>`, con los casos de uso en `marks`, `years`, `settings` y `views`.
 - **`adapters`**:
-  - `cli`: clap derive. `mod.rs` define los argumentos y los convierte en `Command`; `values.rs`, los parsers de valores; y `errors.rs`, los errores y la ayuda en español.
-    - `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`), así el dominio no depende de clap y los nombres no se repiten. El mes acepta el nombre en español y el número (`6`, `06`) como alias, y los días de la semana el nombre con o sin tilde (`weekday_arg`).
-    - `WeekdaysArg` son los días de `weekend` y `reduced-days`, con `--ninguno` para una lista vacía. `month` usa `allow_missing_positional`, así un solo argumento es el mes.
-    - La ayuda usa la plantilla `HELP` y encabezados en español, y `display_order` en los posicionales, porque clap los ordena si no.
-    - `error_text` da en español los errores de argumentos de clap, montados a partir de su `ErrorKind` y su contexto, y la ayuda, con `spanish_clap` sobre el texto de clap (`[valores posibles: …]`, `[OPCIONES]`…). La versión y los errores poco habituales los muestra clap.
-  - `render`: todo el texto de consola, en español. `mod.rs` tiene la API (`report`, `event`, `Marker`) y los textos compartidos, y sus tests; `style.rs`, los colores; `calendar.rs`, las vistas de mes y año; `vacation_grid.rs`, la cuadrícula de vacaciones de las vistas de mes y de año; `next_absence.rs`, la próxima ausencia que va debajo; `reservoirs.rs`, la tabla de embalses de la ventana (RN-31), con la luz de cada fila; `markets.rs`, la de mercados (RN-32); y `text.rs`, `summary`, `day`, `config` y los mensajes de eventos. Los submódulos usan `use super::*`.
-    - Devuelve cadenas con códigos ANSI de `anstyle`. `main` las imprime con `anstream`, que los quita si la salida no es un terminal.
-    - `Marker` (RN-20): `Bar` o `Letter`, en celdas de `CELL_WIDTH` separadas por `CELL_GAP`. `main::color` mira `anstream::AutoStream::choice(&stdout())` y `Marker::for_color` elige `Letter` si no habrá color.
-    - Los tests de texto usan `Marker::Letter` y `strip_str`; los de color, `Marker::Bar`.
-    - Cada mes ocupa `MONTH_WIDTH` columnas, y la vista de año pone 3 por fila en la rejilla de RN-21. `month_grid` recibe el título, porque la franja de RN-23 va dentro del marco: solo el nombre en la vista de año y `Junio 2026` en la de mes.
-    - Las medias de RN-24 son `Summary::monthly_average_hours` y `monthly_average_days` (con `REFERENCE_DAY_HOURS`); los días trabajados de RN-29, `working_days_line`, con `Summary::working_days`, `year_days()` y `working_percent()`.
-    - `vacation_grid` (RN-27) cuenta `Summary::vacation_used`, que no depende de la fecha. `beside_vacations` la pone a la derecha del calendario; en `month`, alarga el mes con semanas en blanco si hace falta.
-    - `right_column` pone debajo de la cuadrícula la próxima ausencia (RN-30): en `month`, tras una línea en blanco; en `year`, desde la línea `YEAR_ROW_LINES`, el título de la segunda fila de meses.
-    - `report_with(report, marker, Some(&panel))` añade debajo las tablas de embalses y de mercados (RN-31, RN-32); `report` es `report_with(…, None)`, lo que imprime la consola. `light` (en `reservoirs.rs`, genérica sobre `Reading<T>`) da las luces a las dos tablas; `current_percent`, el color del porcentaje frente a la media; `price` y `decimal`, los números con coma decimal.
-  - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`. `r` da `Effect::Reload` (RN-28): `run` llama a la función que recibe, y `Viewer::reloaded` cambia el texto manteniendo la línea, o guarda el error para la línea de ayuda.
-    - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con `Output::Window`. `Args::output(terminal)` elige una vez entre `Window` y `Console`: la ventana solo en un terminal y sin `--no-tui`.
-    - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI), la primera visible y el error de la última recarga. `message(key)` da el `Message` y `Viewer::update(self, Message, height)` el estado siguiente y el `Effect`; `height` llega en cada llamada porque el terminal cambia de tamaño, y `top` se ajusta para no dejar hueco abajo.
-    - `run` es lo único con efectos: modo raw, pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho se corta), y lo restaura todo también si falla. Recibe el `Report`, la función que lo convierte en texto con el `Panel` y, en `month` y `year` (`shows_panel`), el `Panel` inicial y el `Receiver` de las `Update` que da `panel::spawn` (RN-31, RN-32). Mientras faltan respuestas, el bucle espera las teclas con `event::poll` cada 100 ms, y cada medio segundo cambia el parpadeo; con cada cambio, `Viewer::retexted` cambia el texto manteniendo la línea y el error.
-    - `Viewer::screen(size)` da la `Screen`, lo que debe verse: las filas del texto y la de ayuda. `draw(out, previous, next)` solo escribe las filas que difieren de `previous` (`MoveTo`, `Clear(CurrentLine)` y la línea), y todas tras `Clear(All)` si el terminal ha cambiado de tamaño. Escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`.
-  - `feed`: lo común a los datos de la red. `http_client()`, el cliente bloqueante de reqwest con el tiempo máximo y `USER_AGENT`, y `Reading<T>`, el estado de una fila (`Waiting`, `Fetching`, `Loaded(T)`, `Failed`). `fixtures` (`#[cfg(test)]`) tiene `blocking`, que ejecuta el cliente bloqueante en `spawn_blocking` para los tests con wiremock.
-  - `reservoirs` (RN-31): el puerto `HistorySource` y `ApiClient`, para `API_URL` (`/embalses/<clave>/historico?limit=2000`; descarta las semanas sin fecha o sin datos). `fetched(source, reservoirs)` es un iterador perezoso: cada embalse se pide al tomar su elemento. `ReservoirTable` es el estado de la tabla, y cada respuesta pasa la fila siguiente a `Fetching`. `fixtures` (`#[cfg(test)]`) tiene tres embalses y el nivel de El Atazar.
-  - `markets` (RN-32): el puerto `QuoteSource` y `ExpansionClient`, para `MARKETS_URL` (`/datos-bolsa/lista_valores.html?cod_valor=I.IB,MAT.LCO`). Los códigos de Expansión solo están aquí: `request_code` y `response_code` (la respuesta llama `LCO` al Brent). `MarketTable` espera hasta `started()` y se rellena con una sola respuesta: el valor que no llega queda `Failed`. `fixtures` (`#[cfg(test)]`) tiene las cotizaciones del 2026-11-13.
-  - `panel` (RN-31, RN-32): `Panel` junta las dos tablas y el parpadeo, común a las dos (`lit`, que cambia con `ticked`), y empieza los mercados cuando ya no falta ningún embalse. `updates` encadena las respuestas de los embalses y, al final, la de los mercados, como `Update`; `send_updates` las manda por el canal y para, sin más peticiones, en cuanto nadie escucha, y `spawn` lo hace en otro hilo y devuelve, con el `Receiver`, el `Panel` inicial de la misma lista de embalses, así la ventana no la conoce.
-  - `json`: DTOs con serde; el dominio no conoce serde. `KindDto` repite a propósito los nombres de `MarkKind`, porque son el formato del fichero.
-    - `decode` valida a través de los constructores del dominio.
-    - `load` devuelve un `Calendar` vacío si el fichero no existe.
-    - `weekend` y `reduced_days` son nombres de día en inglés; si faltan, toman el valor por defecto.
-    - `save` escribe `<fichero>.tmp` y lo renombra.
-    - Escribe la versión 2 (`VERSION`), con `hours` en cada año. Lee también la 1: sus `hours` de la raíz se aplican a los años sin las suyas, y el primer cambio guarda el fichero en la versión 2.
-- **`main.rs`** es la raíz de composición y, con `viewer::run`, el único sitio con efectos secundarios: el reloj, el fichero y la consola.
-  - `present` muestra un `Report` en la ventana si `viewer::opens` lo decide (con el `Output` que `main` calcula a partir de `stdout().is_terminal()`), y si no lo imprime con anstream. Con `NO_COLOR`, quita los códigos de color antes de pasarlo a la ventana. Para la recarga de RN-28 le pasa `query`, que vuelve a leer el fichero y ejecuta otra vez el mismo `Command`. Si `viewer::shows_panel`, crea el `ApiClient` y el `ExpansionClient` y lanza las peticiones con `panel::spawn`; si alguno no se puede crear, la ventana va sin embalses ni mercados. La consola nunca usa la red, así que `tests/cli.rs` tampoco.
-  - Códigos de salida: 1 si la operación falla y 2 si los argumentos no son válidos (`argument_error`, con `Args::try_parse`).
-  - Los avisos van a stderr.
+  - `cli`: clap derive (`mod.rs`), los parsers de valores (`values.rs`) y los errores y la ayuda en español (`errors.rs`).
+  - `render`: todo el texto de consola, con códigos ANSI de `anstyle`. `calendar.rs` (mes y año), `vacation_grid.rs` (RN-27), `next_absence.rs` (RN-30), `reservoirs.rs` (RN-31), `markets.rs` (RN-32), `text.rs` (`summary`, `day`, `config` y los eventos) y `style.rs` (colores).
+  - `viewer` (RN-22): la ventana a pantalla completa, con The Elm Architecture como en `severance-pay-calculator`.
+  - `feed`, `reservoirs`, `markets` y `panel` (RN-31, RN-32): el cliente HTTP bloqueante, los dos puertos con sus clientes y tablas, y el hilo que hace las peticiones de una en una.
+  - `json`: el fichero (DTOs con serde, versiones 1 y 2).
+- **`main.rs`**: la raíz de composición y, con `viewer::run`, el único sitio con efectos (reloj, fichero, consola y red).
 
 ## Convenciones
 

@@ -1,4 +1,9 @@
 //! Los valores de los argumentos: listas cerradas construidas a partir del dominio, fechas y horas.
+//!
+//! `choice` es el único parser de valores cerrados: construye los `PossibleValue` de clap a partir
+//! del dominio (`MarkKind::ALL` y `name()`, `Shift::ALL`, y `Month::ALL` con `render::month_name`),
+//! así el dominio no depende de clap y los nombres no se repiten. El mes acepta también el número
+//! (`6`, `06`) como alias, y los días de la semana el nombre con o sin tilde (`weekday_arg`).
 
 use chrono::{NaiveDate, Weekday};
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};

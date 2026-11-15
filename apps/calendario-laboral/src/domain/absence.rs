@@ -1,4 +1,8 @@
 //! La próxima ausencia marcada de un año desde una fecha (RN-30).
+//!
+//! `next_absence` resuelve el año que se muestra y parte la primera `Absence` con `chunk_by` en
+//! `AbsencePart` (tipo y `DateRange`). Solo empiezan y siguen el tramo los días con `Origin::Mark`;
+//! los de `DefaultVacation` lo cortan. Sin ausencia, la vista usa `render::no_absence`.
 
 use chrono::NaiveDate;
 

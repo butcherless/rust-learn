@@ -1,4 +1,18 @@
 //! Resolución del `DayKind` efectivo de cada día (§2.2) y resumen anual (RF-08).
+//!
+//! - El enum privado `Rule` ordena la prioridad con `Ord`: `Reduced` < `Working` (solo de un
+//!   `Mark`, RN-26) < `Vacation` < `Weekend` < `Holiday`.
+//! - Los candidatos van en orden: primero los `Mark`, luego `Weekend` y luego `ReducedWeekday`. Con
+//!   la misma prioridad gana el primero, así un `Mark` `Reduced` en viernes conserva su `Origin`.
+//! - La regla `ReducedWeekday` da `Rule::Reduced` con `Origin::ReducedWeekday` y reutiliza los
+//!   `Shift` `Reduced` y `SummerReduced`: no hay jornadas propias de los viernes.
+//! - `resolve_year` añade `DefaultVacation` (RN-14) si el `Year` no tiene `Mark` `Vacation`, con
+//!   `Origin::DefaultVacation`. Nunca se guarda.
+//! - `summarize` da el `Summary` con los 12 `MonthTotal` (RF-14), con el acumulado calculado con
+//!   `scan`. `summary_of` lo calcula a partir de días ya resueltos, para que las vistas de mes y de
+//!   año resuelvan el año una sola vez.
+//! - Las horas se suman con `fold(0.0, …)`: `Sum` de `f64` empieza en -0.0 y un mes vacío mostraría
+//!   «-0,0».
 
 use std::collections::HashSet;
 

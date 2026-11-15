@@ -1,5 +1,9 @@
 //! La cuadrícula de vacaciones, a la derecha del calendario en las vistas de mes y de año
 //! (RN-27): un cuadro por día del cupo, cinco por fila, primero los usados.
+//!
+//! Los usados son `Summary::vacation_used`, que no depende de la fecha. `beside_vacations` pone la
+//! cuadrícula a la derecha del calendario; en `month`, alarga el mes con semanas en blanco si hace
+//! falta.
 
 use std::iter;
 

@@ -6,8 +6,22 @@
 //! fichero y a dibujar la vista (RN-28).
 //!
 //! En las vistas de mes y de año, las respuestas de los embalses y los mercados llegan de otro
-//! hilo mientras la ventana está abierta (RN-31, RN-32). Cada vez solo se escriben las líneas de la pantalla que han
-//! cambiado: [`Screen`] es lo que hay escrito, y [`draw`] lo compara con lo nuevo.
+//! hilo mientras la ventana está abierta (RN-31, RN-32). Cada vez solo se escriben las líneas de
+//! la pantalla que han cambiado: [`Screen`] es lo que hay escrito, y `draw` lo compara con lo
+//! nuevo.
+//!
+//! - `opens(report, output)` decide si se abre: solo `Month`, `Year` y `Summary`, y solo con
+//!   `Output::Window`, que `Args::output(terminal)` elige una vez (la ventana solo en un terminal y
+//!   sin `--no-tui`). `shows_panel` dice si lleva embalses y mercados.
+//! - `Viewer` guarda las líneas del texto de `render` (con sus códigos ANSI), la primera visible y
+//!   el error de la última recarga. `height` llega en cada `update` porque el terminal cambia de
+//!   tamaño, y `top` se ajusta para no dejar hueco abajo. `reloaded` y `retexted` cambian el texto
+//!   manteniendo la línea.
+//! - `run` pone el modo raw, la pantalla alternativa y `DisableLineWrap` (lo que no cabe a lo ancho
+//!   se corta), y lo restaura todo también si falla. Mientras faltan respuestas, espera las teclas
+//!   con `event::poll` cada `POLL` y cambia el parpadeo cada `BLINK`.
+//! - `draw` escribe en cualquier `Write`, así que se testea sobre un `Vec<u8>`; tras un cambio de
+//!   tamaño borra la pantalla y escribe todas las filas.
 
 use std::io::{self, Write};
 use std::iter;
