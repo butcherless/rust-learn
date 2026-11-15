@@ -232,6 +232,7 @@ mod tests {
     use super::fixtures::{brent, ibex};
     use super::*;
     use crate::adapters::feed::USER_AGENT;
+    use crate::adapters::feed::fixtures::blocking;
     use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -239,9 +240,7 @@ mod tests {
     /// async.
     async fn quotes_from(server: &MockServer) -> Result<Vec<(Market, Quote)>, MarketError> {
         let base_url = server.uri();
-        tokio::task::spawn_blocking(move || ExpansionClient::new(&base_url)?.quotes())
-            .await
-            .expect("blocking task")
+        blocking(move || ExpansionClient::new(&base_url)?.quotes()).await
     }
 
     #[tokio::test]

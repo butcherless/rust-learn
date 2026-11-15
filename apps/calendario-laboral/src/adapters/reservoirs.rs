@@ -215,6 +215,7 @@ mod tests {
     use super::fixtures::{RESERVOIRS, atazar};
     use super::*;
     use crate::adapters::feed::USER_AGENT;
+    use crate::adapters::feed::fixtures::blocking;
     use crate::domain::fixtures::date;
     use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -236,9 +237,7 @@ mod tests {
     /// `ApiClient::history` en un hilo bloqueante, como pide reqwest dentro de un runtime async.
     async fn history_from(server: &MockServer) -> Result<Vec<WeeklyLevel>, ReservoirError> {
         let base_url = server.uri();
-        tokio::task::spawn_blocking(move || ApiClient::new(&base_url)?.history("atazar-el"))
-            .await
-            .expect("blocking task")
+        blocking(move || ApiClient::new(&base_url)?.history("atazar-el")).await
     }
 
     #[tokio::test]

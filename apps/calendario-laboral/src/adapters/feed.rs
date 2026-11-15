@@ -39,6 +39,18 @@ impl<T> Reading<T> {
     }
 }
 
+/// Lo que comparten los tests de los clientes HTTP.
+#[cfg(test)]
+pub mod fixtures {
+    /// Ejecuta `call` fuera del runtime de tokio, donde el cliente bloqueante sí puede crearse y
+    /// usarse, y espera su resultado.
+    pub async fn blocking<T: Send + 'static>(call: impl FnOnce() -> T + Send + 'static) -> T {
+        tokio::task::spawn_blocking(call)
+            .await
+            .expect("blocking task")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
