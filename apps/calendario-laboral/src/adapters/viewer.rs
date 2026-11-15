@@ -26,7 +26,6 @@ use crossterm::{execute, queue};
 
 use crate::adapters::panel::{Panel, Update};
 use crate::application::Report;
-use crate::domain::MADRID_RESERVOIRS;
 
 /// Cada cuánto cambia la luz de la fila que se consulta (RN-31, RN-32).
 const BLINK: Duration = Duration::from_millis(500);
@@ -247,15 +246,15 @@ fn text_height(rows: u16) -> u16 {
 }
 
 /// Muestra el texto que `text` da para `report` en la pantalla alternativa hasta que se cierra con
-/// `Esc` o `q`; `r` cambia el informe por lo que devuelva `reload` (RN-28). Si hay `fetched`, la
-/// vista lleva las tablas de embalses y de mercados, que se rellenan con cada respuesta (RN-31,
-/// RN-32). El terminal se
-/// restaura también si el bucle falla.
+/// `Esc` o `q`; `r` cambia el informe por lo que devuelva `reload` (RN-28). Si hay `fetched`, el
+/// panel de [`panel::spawn`](crate::adapters::panel::spawn) y su `Receiver`, la vista lleva las
+/// tablas de embalses y de mercados, que se rellenan con cada respuesta (RN-31, RN-32). El terminal
+/// se restaura también si el bucle falla.
 pub fn run(
     report: Report,
     text: impl Fn(&Report, Option<&Panel>) -> String,
     reload: impl FnMut() -> Result<Report, String>,
-    fetched: Option<Receiver<Update>>,
+    fetched: Option<(Panel, Receiver<Update>)>,
 ) -> io::Result<()> {
     let mut out = io::stdout();
     terminal::enable_raw_mode()?;
@@ -271,10 +270,10 @@ fn event_loop(
     initial: Report,
     text: impl Fn(&Report, Option<&Panel>) -> String,
     mut reload: impl FnMut() -> Result<Report, String>,
-    fetched: Option<Receiver<Update>>,
+    fetched: Option<(Panel, Receiver<Update>)>,
 ) -> io::Result<()> {
     let mut report = initial;
-    let mut panel = fetched.as_ref().map(|_| Panel::new(&MADRID_RESERVOIRS));
+    let (mut panel, updates) = fetched.unzip();
     let mut viewer = Viewer::new(&text(&report, panel.as_ref()));
     let mut screen = Screen::default();
     let mut blinked = Instant::now();
@@ -304,7 +303,7 @@ fn event_loop(
             }
         }
         // RN-31, RN-32: las respuestas que hayan llegado y, cada medio segundo, el parpadeo.
-        let arrived: Vec<Update> = fetched.iter().flat_map(Receiver::try_iter).collect();
+        let arrived: Vec<Update> = updates.iter().flat_map(Receiver::try_iter).collect();
         let blink = fetching && blinked.elapsed() >= BLINK;
         if blink {
             blinked = Instant::now();

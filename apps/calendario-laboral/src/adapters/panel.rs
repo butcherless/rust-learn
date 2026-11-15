@@ -101,12 +101,13 @@ pub fn send_updates(updates: impl Iterator<Item = Update>, sender: &Sender<Updat
         .for_each(drop);
 }
 
-/// [`updates`] en otro hilo. Las respuestas llegan por el `Receiver`.
+/// [`updates`] en otro hilo: el panel al empezar, para la misma lista de embalses, y el
+/// `Receiver` por el que llegan las respuestas.
 pub fn spawn<R, Q>(
     reservoir_source: R,
     quote_source: Q,
     reservoirs: &'static [Reservoir],
-) -> Receiver<Update>
+) -> (Panel, Receiver<Update>)
 where
     R: HistorySource + Send + 'static,
     Q: QuoteSource + Send + 'static,
@@ -118,7 +119,7 @@ where
             &sender,
         );
     });
-    receiver
+    (Panel::new(reservoirs), receiver)
 }
 
 #[cfg(test)]
@@ -191,13 +192,10 @@ mod tests {
         drop(receiver);
         send_updates(updates(&history, &quotes, &RESERVOIRS), &sender);
         assert_eq!((history.asked.get(), quotes.asked.get()), (1, 0));
-        // Y en otro hilo llegan todas.
-        assert_eq!(
-            spawn(Counting::default(), Counting::default(), &RESERVOIRS)
-                .iter()
-                .count(),
-            4
-        );
+        // Y en otro hilo llegan todas, para el panel de los mismos embalses.
+        let (panel, receiver) = spawn(Counting::default(), Counting::default(), &RESERVOIRS);
+        assert_eq!(panel, Panel::new(&RESERVOIRS));
+        assert_eq!(receiver.iter().count(), 4);
     }
 
     #[test]
