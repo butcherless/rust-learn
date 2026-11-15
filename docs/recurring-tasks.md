@@ -38,6 +38,22 @@
 - Review the GitHub Actions workflows for efficiency and security, following the official GitHub
   Actions documentation; `zizmor .github/` must report no findings.
 
+## Pending issues
+
+- **TOOL-1: move from Rust 1.99.1 to stable.** `rust-toolchain.toml` pins 1.99.1 because the
+  line coverage of 1.100.0 counts blank lines and test attributes as uncovered. Measured on
+  2026-11-15 with `cargo +<toolchain> llvm-cov -p <package> --summary-only`:
+
+  | Package | 1.99.1 | 1.100.0 |
+  |---|---|---|
+  | pr-checker | 92.69 % (89/1218 missed) | 88.24 % (145/1233), below the 90 % minimum |
+  | severance-pay-calculator | 98.24 % (19/1079) | 93.51 % (71/1094) |
+  | calendario-laboral | 98.24 % (116/6580) | 93.17 % (466/6823) |
+
+  On each new stable release, repeat the comparison. When every package keeps its coverage, set
+  `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
+  this entry. Don't lower the minimum to get there.
+
 ## Last check
 
 2026-11-15
