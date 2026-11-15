@@ -68,12 +68,30 @@ fn values(level: &ReservoirLevel) -> String {
         .ten_year_percent
         .map_or_else(|| "—".to_owned(), percent);
     format!(
-        "{:>HM3_WIDTH$} {:>HM3_WIDTH$} {:>PERCENT_WIDTH$} {average:>width$}",
+        "{:>HM3_WIDTH$} {:>HM3_WIDTH$} {} {average:>width$}",
         hm3(level.latest.capacity_hm3),
         hm3(level.latest.volume_hm3),
-        percent(level.latest.percent),
+        current_percent(level),
         width = AVERAGE_HEADER.chars().count()
     )
+}
+
+/// El porcentaje actual, alineado y en verde si iguala o supera a la media de 10 años o en rojo
+/// si es menor, con el decimal que se muestra. Sin media, va sin color.
+fn current_percent(level: &ReservoirLevel) -> String {
+    let text = format!("{:>PERCENT_WIDTH$}", percent(level.latest.percent));
+    let tenths = |value: f64| (value * 10.0).round();
+    match level.ten_year_percent {
+        None => text,
+        Some(average) => {
+            let color = if tenths(level.latest.percent) >= tenths(average) {
+                AnsiColor::Green
+            } else {
+                AnsiColor::Red
+            };
+            styled(Style::new().fg_color(Some(Color::Ansi(color))), &text)
+        }
+    }
 }
 
 /// `63,6 %`.
@@ -99,6 +117,7 @@ mod tests {
     use super::*;
     use crate::adapters::reservoirs::Fetched;
     use crate::adapters::reservoirs::fixtures::{RESERVOIRS, atazar};
+    use crate::domain::WeeklyLevel;
     use crate::domain::fixtures::date;
 
     fn plain(lines: &[String]) -> Vec<String> {
@@ -194,6 +213,45 @@ mod tests {
             assert_eq!(light(&reading, lit), expected, "{case}");
         });
         assert_eq!(orange_rgb(), "\u{1b}[38;2;255;165;0m");
+    }
+
+    #[test]
+    fn rn_31_the_current_percent_is_green_from_the_average_and_red_below_it() {
+        let level = |percent, average| ReservoirLevel {
+            latest: WeeklyLevel {
+                percent,
+                ..atazar().latest
+            },
+            ten_year_percent: average,
+        };
+        let colored = |color, text| styled(Style::new().fg_color(Some(Color::Ansi(color))), text);
+        [
+            (
+                "above",
+                level(70.0, Some(66.2)),
+                colored(AnsiColor::Green, "70,0 %"),
+            ),
+            (
+                "equal",
+                level(66.2, Some(66.2)),
+                colored(AnsiColor::Green, "66,2 %"),
+            ),
+            (
+                "equal as shown",
+                level(66.21, Some(66.24)),
+                colored(AnsiColor::Green, "66,2 %"),
+            ),
+            (
+                "below",
+                level(63.6, Some(66.2)),
+                colored(AnsiColor::Red, "63,6 %"),
+            ),
+            ("without an average", level(9.5, None), " 9,5 %".to_owned()),
+        ]
+        .into_iter()
+        .for_each(|(case, level, expected)| {
+            assert_eq!(current_percent(&level), expected, "{case}");
+        });
     }
 
     fn orange_rgb() -> String {
