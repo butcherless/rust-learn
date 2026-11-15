@@ -161,9 +161,9 @@ fn right_column(
     let panel = panel
         .map(|panel| {
             iter::once(String::new())
-                .chain(reservoir_table(&panel.reservoirs))
+                .chain(reservoir_table(&panel.reservoirs, panel.lit()))
                 .chain(iter::once(String::new()))
-                .chain(market_table(&panel.markets))
+                .chain(market_table(&panel.markets, panel.lit()))
         })
         .into_iter()
         .flatten();

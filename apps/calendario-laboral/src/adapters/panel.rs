@@ -18,13 +18,15 @@ pub enum Update {
     Markets(Option<Vec<(Market, Quote)>>),
 }
 
-/// Las tablas de embalses y de mercados mientras llegan sus respuestas.
+/// Las tablas de embalses y de mercados mientras llegan sus respuestas, y si la luz de lo que se
+/// pide está encendida en el parpadeo, que es el mismo para las dos.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Panel {
     /// Los embalses.
     pub reservoirs: ReservoirTable,
     /// Los mercados, que se piden cuando terminan los embalses.
     pub markets: MarketTable,
+    lit: bool,
 }
 
 impl Panel {
@@ -33,6 +35,7 @@ impl Panel {
         Self {
             reservoirs: ReservoirTable::new(reservoirs),
             markets: MarketTable::default(),
+            lit: true,
         }
         .with_markets_started()
     }
@@ -67,9 +70,14 @@ impl Panel {
     /// El panel en la otra mitad del parpadeo.
     pub fn ticked(self) -> Self {
         Self {
-            reservoirs: self.reservoirs.ticked(),
-            markets: self.markets.ticked(),
+            lit: !self.lit,
+            ..self
         }
+    }
+
+    /// Si la luz de lo que se pide está encendida.
+    pub const fn lit(&self) -> bool {
+        self.lit
     }
 
     /// Si aún falta alguna respuesta.
@@ -217,8 +225,13 @@ mod tests {
                 .all(|(_, reading)| *reading == Reading::Failed)
         );
         assert!(!Panel::new(&[]).markets.is_waiting());
-        let ticked = done.clone().ticked();
-        assert_ne!(ticked.reservoirs.lit(), done.reservoirs.lit());
-        assert_ne!(ticked.markets.lit(), done.markets.lit());
+    }
+
+    #[test]
+    fn rn_31_rn_32_the_light_blinks_on_each_tick() {
+        let panel = Panel::new(&RESERVOIRS);
+        assert!(panel.lit());
+        assert!(!panel.clone().ticked().lit());
+        assert!(panel.ticked().ticked().lit());
     }
 }

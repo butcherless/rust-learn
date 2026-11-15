@@ -33,14 +33,14 @@ const PERCENT_WIDTH: usize = 6;
 const AVERAGE_HEADER: &str = "Media 10 años";
 
 /// Las líneas de la sección: el título, la cabecera, una fila por embalse y, si ha llegado algún
-/// dato, la fuente.
-pub(super) fn reservoir_table(table: &ReservoirTable) -> Vec<String> {
+/// dato, la fuente. `lit` es la mitad del parpadeo.
+pub(super) fn reservoir_table(table: &ReservoirTable, lit: bool) -> Vec<String> {
     let header = format!(
         "  {:<NAME_WIDTH$} {:>HM3_WIDTH$} {:>HM3_WIDTH$} {:>PERCENT_WIDTH$} {AVERAGE_HEADER}",
         "Embalse", "Capacidad", "Volumen", "%"
     );
     let rows = table.rows().iter().map(|&(reservoir, reading)| {
-        let light = light(&reading, table.lit());
+        let light = light(&reading, lit);
         match reading {
             Reading::Waiting | Reading::Fetching => format!("{light} {}", reservoir.name),
             Reading::Failed => format!("{light} {:<NAME_WIDTH$} {UNAVAILABLE}", reservoir.name),
@@ -146,7 +146,7 @@ mod tests {
             level: Some(atazar()),
         });
         assert_eq!(
-            plain(&reservoir_table(&table)),
+            plain(&reservoir_table(&table, true)),
             [
                 "Embalses de Madrid",
                 "  Embalse         Capacidad   Volumen      % Media 10 años",
@@ -171,14 +171,14 @@ mod tests {
                 level: Some(no_average),
             });
         assert_eq!(
-            plain(&reservoir_table(&done))[3..5],
+            plain(&reservoir_table(&done, true))[3..5],
             [
                 "● El Pardo        no disponible",
                 "● La Jarosa         426 hm³   271 hm³ 63,6 %             —",
             ]
         );
         assert_eq!(
-            plain(&reservoir_table(&ReservoirTable::new(&RESERVOIRS))).len(),
+            plain(&reservoir_table(&ReservoirTable::new(&RESERVOIRS), true)).len(),
             5,
             "without any answer there are no source lines"
         );

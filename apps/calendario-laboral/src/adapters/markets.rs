@@ -128,12 +128,11 @@ impl ValueDto {
     }
 }
 
-/// La tabla de mercados mientras llega la respuesta: cada valor con su [`Reading`], y si la luz
-/// está encendida en el parpadeo. Los dos valores se piden juntos.
+/// La tabla de mercados mientras llega la respuesta: cada valor con su [`Reading`]. Los dos
+/// valores se piden juntos.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MarketTable {
     rows: Vec<(Market, Reading<Quote>)>,
-    lit: bool,
 }
 
 impl Default for MarketTable {
@@ -144,7 +143,6 @@ impl Default for MarketTable {
                 .into_iter()
                 .map(|market| (market, Reading::Waiting))
                 .collect(),
-            lit: true,
         }
     }
 }
@@ -174,15 +172,6 @@ impl MarketTable {
                 .into_iter()
                 .map(|(market, _)| (market, reading(market)))
                 .collect(),
-            ..self
-        }
-    }
-
-    /// La tabla en la otra mitad del parpadeo.
-    pub fn ticked(self) -> Self {
-        Self {
-            lit: !self.lit,
-            ..self
         }
     }
 
@@ -201,11 +190,6 @@ impl MarketTable {
     /// Las filas, en orden.
     pub fn rows(&self) -> &[(Market, Reading<Quote>)] {
         &self.rows
-    }
-
-    /// Si la luz está encendida.
-    pub const fn lit(&self) -> bool {
-        self.lit
     }
 
     /// Si ha llegado algún valor.
@@ -334,6 +318,5 @@ mod tests {
             assert_eq!(readings(&table), expected, "{case}");
             assert!(!table.is_fetching(), "{case}");
         });
-        assert!(started.clone().ticked().lit() != started.lit());
     }
 }

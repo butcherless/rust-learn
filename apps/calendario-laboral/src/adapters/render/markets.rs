@@ -16,14 +16,14 @@ const PRICE_WIDTH: usize = 9;
 const CHANGE_WIDTH: usize = 9;
 
 /// Las líneas de la sección: el título, la cabecera, una fila por valor y, si ha llegado alguno,
-/// la fuente.
-pub(super) fn market_table(table: &MarketTable) -> Vec<String> {
+/// la fuente. `lit` es la mitad del parpadeo.
+pub(super) fn market_table(table: &MarketTable, lit: bool) -> Vec<String> {
     let header = format!(
         "  {:<NAME_WIDTH$} {:>PRICE_WIDTH$} {:>CHANGE_WIDTH$} Fecha",
         "Valor", "Precio", "Variación"
     );
     let rows = table.rows().iter().map(|&(market, reading)| {
-        let light = light(&reading, table.lit());
+        let light = light(&reading, lit);
         match reading {
             Reading::Waiting | Reading::Fetching => format!("{light} {}", market.name()),
             Reading::Failed => format!("{light} {:<NAME_WIDTH$} {UNAVAILABLE}", market.name()),
@@ -103,7 +103,7 @@ mod tests {
     fn rn_32_rows_show_price_change_and_date_once_the_answer_arrives() {
         let waiting = MarketTable::default();
         assert_eq!(
-            plain(&market_table(&waiting)),
+            plain(&market_table(&waiting, true)),
             [
                 "Mercados",
                 "  Valor              Precio Variación Fecha",
@@ -115,7 +115,7 @@ mod tests {
             .started()
             .fetched(Some(&[(Market::Ibex35, ibex()), (Market::Brent, brent())]));
         assert_eq!(
-            plain(&market_table(&loaded))[2..],
+            plain(&market_table(&loaded, true))[2..],
             [
                 "● IBEX 35         20.020,10   +0,27 % 13-11-2026 17:35",
                 "● Brent ($)           95,90   -0,15 % 13-11-2026",
@@ -124,7 +124,7 @@ mod tests {
         );
         let failed = MarketTable::default().started().fetched(None);
         assert_eq!(
-            plain(&market_table(&failed))[2..],
+            plain(&market_table(&failed, true))[2..],
             [
                 "● IBEX 35         no disponible",
                 "● Brent ($)       no disponible",

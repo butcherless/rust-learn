@@ -106,12 +106,10 @@ pub fn fetched<'a, S: HistorySource>(
         })
 }
 
-/// La tabla de embalses mientras llegan las respuestas: cada embalse con su [`Reading`], y si la
-/// luz de la fila que se consulta está encendida en el parpadeo.
+/// La tabla de embalses mientras llegan las respuestas: cada embalse con su [`Reading`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReservoirTable {
     rows: Vec<(Reservoir, Reading<ReservoirLevel>)>,
-    lit: bool,
 }
 
 impl ReservoirTable {
@@ -130,7 +128,6 @@ impl ReservoirTable {
                     (reservoir, reading)
                 })
                 .collect(),
-            lit: true,
         }
     }
 
@@ -152,15 +149,7 @@ impl ReservoirTable {
                 (reservoir, reading)
             })
             .collect();
-        Self { rows, ..self }
-    }
-
-    /// La tabla en la otra mitad del parpadeo.
-    pub fn ticked(self) -> Self {
-        Self {
-            lit: !self.lit,
-            ..self
-        }
+        Self { rows }
     }
 
     /// Si aún falta alguna respuesta.
@@ -171,11 +160,6 @@ impl ReservoirTable {
     /// Las filas, en orden.
     pub fn rows(&self) -> &[(Reservoir, Reading<ReservoirLevel>)] {
         &self.rows
-    }
-
-    /// Si la luz de la fila que se consulta está encendida.
-    pub const fn lit(&self) -> bool {
-        self.lit
     }
 
     /// La fecha del dato más reciente que ha llegado.
@@ -376,13 +360,5 @@ mod tests {
         assert!(!done.is_fetching());
         assert_eq!(done.latest_date(), Some(date(2026, 11, 10)));
         assert_eq!(ReservoirTable::new(&RESERVOIRS).latest_date(), None);
-    }
-
-    #[test]
-    fn rn_31_the_light_blinks_on_each_tick() {
-        let table = ReservoirTable::new(&RESERVOIRS);
-        assert!(table.lit());
-        assert!(!table.clone().ticked().lit());
-        assert!(table.ticked().ticked().lit());
     }
 }
