@@ -54,19 +54,10 @@ cargo llvm-cov -p <project> --open                    # one project's tests with
 cargo deny check                                      # advisories, licenses, duplicates and sources
 ```
 
-CI runs on pushes to `main` and on pull requests:
-
-- **lint**: fmt and clippy for the whole workspace.
-- **deny**: cargo-deny checks the dependencies for
-  security advisories, licenses, duplicate versions and sources, as set in `deny.toml`. It also
-  runs every Monday.
-- **build-and-test**, one job per project (found with `cargo metadata`, so a new project joins
-  without editing the workflow): the release build, then the tests with coverage. It fails if the
-  project's line coverage drops below 90%, and attaches the HTML report as the
-  `coverage-html-<project>` artifact.
-
-Dependabot opens one weekly pull request with the minor and patch updates of every project, and
-another for the GitHub Actions.
+CI runs on pushes to `main` and on pull requests: fmt and clippy, `cargo deny` (also every
+Monday), and for each project the release build and the tests with coverage, which fail below 90%
+and attach the HTML report. Dependabot opens one weekly pull request with the minor and patch
+updates, and another for the GitHub Actions.
 
 ## IntelliJ IDEA
 

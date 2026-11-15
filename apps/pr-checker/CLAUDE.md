@@ -6,9 +6,7 @@ A Rust CLI that lists the open pull requests of the GitHub repositories in `proj
 
 ## Commands
 
-Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
-
-Running it (`GITHUB_TOKEN`, `cargo pr`, `--tui`, `--config`) is in the README.
+Run from the workspace root. The shared commands, CI and conventions are in the root `CLAUDE.md`, and running it in the README.
 
 ```bash
 cargo build -p pr-checker                                                   # debug → target/debug/pr-checker
@@ -40,13 +38,9 @@ The layers and the module table are in `IMPLEMENTATION_PLAN.md`. Beyond them:
 
 ## Conventions
 
-The shared rules are in the root `CLAUDE.md`. In this project:
+On top of the root `CLAUDE.md`, for tests:
 
-- Dependency injection uses generics with `S: PullRequestSource`.
-
-### Tests
-
-- Wiremock for `GithubClient`, and an in-memory fake for `PullRequestSource`.
+- Wiremock for `GithubClient`, and an in-memory fake for the `PullRequestSource` port (`S: PullRequestSource`).
 - Shared builders: `view::fixtures` and `tui::app::fixtures` (`#[cfg(test)]`) for unit tests, and `tests/common/mod.rs` for integration tests.
 - The full status-to-error table is unit tested on `map_status`. Wiremock tests only check the wiring.
 - `tests/cli_exit_codes.rs` runs the compiled binary (`CARGO_BIN_EXE_pr-checker`) for startup errors only, which stop before any HTTP call. Config files used by tests live in `tests/fixtures/`.

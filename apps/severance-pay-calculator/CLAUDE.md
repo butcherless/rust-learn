@@ -6,9 +6,7 @@ A Rust terminal UI (ratatui) that calculates Spanish severance pay. With `--prin
 
 ## Commands
 
-Workspace-wide commands, CI and the shared conventions are in the root `CLAUDE.md`. Run these from the workspace root.
-
-Running it (`cargo sev`, `--print` and the options) is in the README.
+Run from the workspace root. The shared commands, CI and conventions are in the root `CLAUDE.md`, and running it in the README.
 
 ```bash
 cargo build -p severance-pay-calculator                 # debug → target/debug/severance-pay-calculator

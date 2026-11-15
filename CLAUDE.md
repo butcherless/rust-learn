@@ -13,7 +13,7 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
 - `libs/<name>/`: shared libraries, without a `main`. None exist yet. Create one only when two projects really need the same code, keep it pure domain (no I/O), and declare it in `[workspace.dependencies]`.
 - Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: chrono, clap, crossterm, ratatui, reqwest, serde, serde_json, thiserror, tokio, wiremock). A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
-- `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks (blank lines and test attributes count as uncovered). Try `cargo +stable llvm-cov -p <package>` on each new stable release and go back to `channel = "stable"` when it matches.
+- `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks. TOOL-1 in `docs/recurring-tasks.md` has the measurements and when to go back to stable.
 - Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
 - `docs/`: workspace documents. `docs/recurring-tasks.md` lists the periodic reviews (code against SOLID, official docs, functional style, maintained and non-deprecated libraries and features, and duplication; CI efficiency and security). When asked to apply it, present a coded, prioritized plan first and apply only the approved actions, one commit each.
 - `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`).
@@ -30,16 +30,8 @@ cargo build                                                   # every member, de
 cargo build --release                                         # every member, optimized → target/release/<package>
 cargo build -p <package>                                      # one member (add --release for optimized)
 cargo run -p <package> -- <args>                              # build and run one app; args after `--` go to the program
-cargo <alias> <args>                                          # same through the app's alias in .cargo/config.toml
+cargo <alias> <args>                                          # same through the app's alias: pr, sev, cal (.cargo/config.toml)
 ./target/release/<package> <args>                             # run a release build without cargo
-```
-
-Run aliases:
-
-```bash
-GITHUB_TOKEN=$(gh auth token) cargo pr [--tui]                # pr-checker with apps/pr-checker/projects.toml
-cargo sev [--print]                                           # severance-pay-calculator
-cargo cal <subcomando>                                        # calendario-laboral with apps/calendario-laboral/calendario.json
 ```
 
 Check:
@@ -65,7 +57,7 @@ CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on PRs, with `--loc
 
 Workflow rules: actions are pinned to a commit SHA with the version in a comment, the toolchain and tools (`cargo-llvm-cov`, `cargo-deny`) have fixed versions, and matrix values reach scripts through `env`, never `${{ }}` inside `run`. After editing a workflow or `dependabot.yml`, run `zizmor .github/` (`brew install zizmor`); it should report no findings.
 
-The 90% minimum applies to each project on its own, so a new project needs its own tests. Check it locally with `cargo llvm-cov -p <package> --fail-under-lines 90`. Raise the minimum when coverage grows rather than lowering it.
+The 90% minimum applies to each project on its own, so a new project needs its own tests. Raise it when coverage grows rather than lowering it.
 
 Dependabot (`.github/dependabot.yml`, `directory: "/"`) covers every member through the root `Cargo.lock`. It waits 7 days after a release (`cooldown`) and groups minor and patch bumps into one weekly PR, because separate ones would conflict in the shared lockfile, plus one for GitHub Actions. Major bumps and crossterm minor bumps (it must match ratatui's crossterm) stay manual. For 0.x crates a "minor" bump can break the API, so read the CI result of that PR before merging it.
 
