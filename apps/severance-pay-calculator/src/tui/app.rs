@@ -131,7 +131,7 @@ pub struct App {
 pub fn message(key: KeyEvent) -> Option<Message> {
     match key.code {
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Message::Quit),
-        KeyCode::Esc => Some(Message::Quit),
+        KeyCode::Esc | KeyCode::Char('q') => Some(Message::Quit),
         KeyCode::Tab | KeyCode::Down | KeyCode::Enter => Some(Message::NextField),
         KeyCode::BackTab | KeyCode::Up => Some(Message::PreviousField),
         KeyCode::Right | KeyCode::Char(' ') => Some(Message::NextOption),
@@ -341,6 +341,7 @@ mod tests {
     fn maps_keys() {
         [
             (KeyEvent::from(KeyCode::Esc), Some(Quit)),
+            (KeyEvent::from(KeyCode::Char('q')), Some(Quit)),
             (
                 KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
                 Some(Quit),

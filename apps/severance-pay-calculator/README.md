@@ -51,7 +51,7 @@ The forecast repeats the calculation on each of the next five anniversaries of t
 | `Shift+Tab` / `↑` | Previous field |
 | `→` / `Space`, `←` | Next or previous option of the dismissal type |
 | `Backspace` / `Delete` | Delete a character / clear the field |
-| `Esc` / `Ctrl+C` | Quit |
+| `Esc` / `q` / `Ctrl+C` | Quit |
 
 Invalid input shows an error in place of the report and never blocks typing. The panels sit side
 by side from 76 columns, and the forecast appears when the terminal is tall enough.

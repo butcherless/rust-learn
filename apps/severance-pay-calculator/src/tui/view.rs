@@ -30,7 +30,7 @@ const GROWTH: &str = "░";
 const GAP: &str = "  ";
 const DATE_WIDTH: usize = 10;
 const HORIZON_WIDTH: usize = 3;
-const HELP: &str = "Tab/↓ next · Shift+Tab/↑ previous · ←/→ change type · Del clear · Esc quit";
+const HELP: &str = "Tab/↓ next · Shift+Tab/↑ previous · ←/→ change type · Del clear · Esc/q quit";
 
 /// Draws `app` on the whole frame.
 pub fn draw(app: &App, frame: &mut Frame) {
