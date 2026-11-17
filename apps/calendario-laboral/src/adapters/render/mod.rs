@@ -37,7 +37,7 @@ use calendar::{month, year};
 pub use markets::{MARKETS_SOURCE, MARKETS_TITLE};
 pub use next_absence::{ABSENCE_TITLE, no_absence};
 pub use reservoirs::{
-    LIGHT_OFF, LIGHT_ON, PROCESSED_BY, RESERVOIRS_TITLE, UNAVAILABLE, source_line,
+    LIGHT_OFF, LIGHT_ON, PROCESSED_BY, RESERVOIRS_SOURCE, RESERVOIRS_TITLE, UNAVAILABLE, data_date,
 };
 use style::paint;
 pub use text::event;

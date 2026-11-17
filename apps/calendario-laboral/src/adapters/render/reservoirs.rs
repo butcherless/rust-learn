@@ -21,10 +21,12 @@ pub const LIGHT_ON: &str = "●";
 /// La luz apagada: la fila espera o está en la mitad oscura del parpadeo.
 pub const LIGHT_OFF: &str = "○";
 
-/// La línea de la fuente, con la fecha del dato más reciente.
-pub fn source_line(date: NaiveDate) -> String {
-    format!("Fuente: MITECO, semana del {}", date.format("%d-%m-%Y"))
+/// Lo que sigue al título: la fecha del dato más reciente.
+pub fn data_date(date: NaiveDate) -> String {
+    format!(" · datos del {}", date.format("%d-%m-%Y"))
 }
+/// La línea de la fuente.
+pub const RESERVOIRS_SOURCE: &str = "Fuente: MITECO";
 /// La atribución que pide la API, debajo de la fuente.
 pub const PROCESSED_BY: &str = "Datos procesados por MapasDeEmbalses.es";
 
@@ -37,7 +39,7 @@ const PERCENT_WIDTH: usize = 6;
 const AVERAGE_HEADER: &str = "Media 10 años";
 
 /// Las líneas de la sección: el título, la cabecera, una fila por embalse y, si ha llegado algún
-/// dato, la fuente. `lit` es la mitad del parpadeo.
+/// dato, su fecha tras el título y la fuente. `lit` es la mitad del parpadeo.
 pub(super) fn reservoir_table(table: &ReservoirTable, lit: bool) -> Vec<String> {
     let header = format!(
         "  {:<NAME_WIDTH$} {:>HM3_WIDTH$} {:>HM3_WIDTH$} {:>PERCENT_WIDTH$} {AVERAGE_HEADER}",
@@ -53,14 +55,16 @@ pub(super) fn reservoir_table(table: &ReservoirTable, lit: bool) -> Vec<String> 
             }
         }
     });
-    iter::once(styled(Style::new().bold(), RESERVOIRS_TITLE))
+    let latest = table.latest_date();
+    let title =
+        styled(Style::new().bold(), RESERVOIRS_TITLE) + &latest.map_or_else(String::new, data_date);
+    iter::once(title)
         .chain(iter::once(header))
         .chain(rows)
         .chain(
-            table
-                .latest_date()
+            latest
                 .into_iter()
-                .flat_map(|date| [source_line(date), PROCESSED_BY.to_owned()]),
+                .flat_map(|_| [RESERVOIRS_SOURCE, PROCESSED_BY].map(str::to_owned)),
         )
         .collect()
 }
@@ -136,10 +140,8 @@ mod tests {
         assert_eq!(RESERVOIRS_TITLE, "Embalses de Madrid");
         assert_eq!(UNAVAILABLE, "no disponible");
         assert_eq!((LIGHT_ON, LIGHT_OFF), ("●", "○"));
-        assert_eq!(
-            source_line(date(2026, 11, 10)),
-            "Fuente: MITECO, semana del 10-11-2026"
-        );
+        assert_eq!(data_date(date(2026, 11, 10)), " · datos del 10-11-2026");
+        assert_eq!(RESERVOIRS_SOURCE, "Fuente: MITECO");
         assert_eq!(PROCESSED_BY, "Datos procesados por MapasDeEmbalses.es");
     }
 
@@ -152,12 +154,12 @@ mod tests {
         assert_eq!(
             plain(&reservoir_table(&table, true)),
             [
-                "Embalses de Madrid",
+                &format!("{RESERVOIRS_TITLE}{}", data_date(date(2026, 11, 10))),
                 "  Embalse         Capacidad   Volumen      % Media 10 años",
                 "● El Atazar         426 hm³   271 hm³ 63,6 %        66,2 %",
                 "● El Pardo",
                 "○ La Jarosa",
-                &source_line(date(2026, 11, 10)),
+                RESERVOIRS_SOURCE,
                 PROCESSED_BY,
             ]
         );
@@ -181,10 +183,11 @@ mod tests {
                 "● La Jarosa         426 hm³   271 hm³ 63,6 %             —",
             ]
         );
+        let waiting = plain(&reservoir_table(&ReservoirTable::new(&RESERVOIRS), true));
         assert_eq!(
-            plain(&reservoir_table(&ReservoirTable::new(&RESERVOIRS), true)).len(),
-            5,
-            "without any answer there are no source lines"
+            (waiting[0].as_str(), waiting.len()),
+            (RESERVOIRS_TITLE, 5),
+            "without any answer there is no date nor source lines"
         );
     }
 
