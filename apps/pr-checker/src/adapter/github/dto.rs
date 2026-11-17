@@ -1,6 +1,6 @@
 //! Wire types of the GitHub REST API.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A pull request as returned by `GET /repos/{owner}/{repo}/pulls` and
 /// `GET /repos/{owner}/{repo}/pulls/{number}`.
@@ -19,4 +19,11 @@ pub struct PullRequestDto {
     /// it is `null` while GitHub computes it.
     #[serde(default)]
     pub mergeable: Option<bool>,
+}
+
+/// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MergeRequestDto {
+    /// `merge`, `squash` or `rebase`.
+    pub merge_method: &'static str,
 }

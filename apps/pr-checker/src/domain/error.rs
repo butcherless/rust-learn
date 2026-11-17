@@ -10,7 +10,7 @@ pub enum ProjectParseError {
     InvalidFormat,
 }
 
-/// Why the pull requests of a project could not be retrieved.
+/// Why a request to the source failed: retrieving the pull requests of a project, or merging one.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SourceError {
     /// The repository does not exist or is not visible to the caller.
@@ -28,4 +28,7 @@ pub enum SourceError {
     /// The source answered with content that could not be understood.
     #[error("invalid response: {0}")]
     InvalidResponse(String),
+    /// The pull request cannot be merged: it has conflicts, is a draft, or fails a branch rule.
+    #[error("not mergeable")]
+    NotMergeable,
 }

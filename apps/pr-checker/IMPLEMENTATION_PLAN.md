@@ -3,7 +3,7 @@
 Requirements and design behind the tool. For setup and usage, see [README.md](README.md). For
 commands, code rules and library constraints, see [CLAUDE.md](CLAUDE.md).
 
-**Status (2026-11-13):** FR1-FR14 are implemented on `main` and CI passes. The table mode was run
+**Status (2026-11-13):** FR1-FR15 are implemented on `main` and CI passes. The table mode was run
 against the real GitHub API with the 13 repositories in `projects.toml` (exit `0`; one open pull
 request, mergeable). The terminal UI has only been checked with a dummy token, not by hand against real
 data.
@@ -26,8 +26,9 @@ data.
 | FR12 | Mergeable is `yes` or `no` from the API's `mergeable` flag, or `unknown` while GitHub computes it (`null`). |
 | FR13 | In `--tui`, a light (`●`) starts the status line. While fetching it blinks orange (half a second lit, half a second dark) and the status shows the progress (`Loading… 5/13`). When the fetch ends it stays green, or red if a repository failed. |
 | FR14 | In `--tui`, each repository's rows appear as soon as it finishes, in config order. On the first fetch a repository not yet finished shows a gray `loading…` row; on a refresh it keeps its previous rows until the new ones arrive. The selection stays on the same pull request when it is still listed, and otherwise on the same line. |
+| FR15 | In `--tui`, a Merge column after Mergeable shows a switch per pull request: off on an orange track while open, on a green track once merged in this session, with the knob in the middle while merging. `m` asks for confirmation in the status line and a second `m` on the same pull request merges it (`merge_method: merge`); any other command cancels. One merge at a time. A merged pull request's row turns green (its inverse-video selection too), with State `merged` and Mergeable `—`, and the summary counts it as merged, not open (`1 open pull requests in 3 projects, 1 merged, 1 failed`), until a fetch drops it. A refused merge (405, 409, 422) is `not mergeable` and leaves the switch off. The table mode has no Merge column. |
 
-**Out of scope:** pagination, GitHub Enterprise, closed or merged PRs, review or CI status, JSON
+**Out of scope:** pagination, GitHub Enterprise, listing closed or merged PRs, merge methods other than a merge commit, review or CI status, JSON
 output, caching, retries, release packaging.
 
 ## Architecture
@@ -38,20 +39,22 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | Module | Responsibility |
 |---|---|
 | `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `Mergeable`, `PrUrl` |
-| `domain::port` | `PullRequestSource`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
-| `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`) |
+| `domain::port` | `PullRequestSource` and `PullRequestMerger`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
+| `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`, `NotMergeable`) |
 | `service::list_open_prs` | `stream_open_prs` yields each report with its position as soon as it is ready (`buffer_unordered`); `list_open_prs` collects it back into config order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
 | `adapter::config` | `load_projects` (reads the file) and `parse_projects` (pure) |
 | `adapter::github` | `GithubClient`, `GithubToken` (redacted `Debug`), wire DTO, pure mapper and status mapping |
-| `adapter::view` | Pure presentation model shared by both outputs: `rows` (`DisplayRow`: kind, cells, URL), `HEADER`, `ORANGE` |
+| `adapter::view` | Pure presentation model shared by both outputs: `rows` (`DisplayRow`: kind, cells, `PrRef`), `HEADER`, `ORANGE` |
 | `adapter::cli` | `Args` (clap) and `render` (comfy-table and colors) |
 | `adapter::tui` | `app`: The Elm Architecture (`message`, and `App::update` returning the next state and an `Effect`). `view::draw`: the drawing, tested with `TestBackend`. `run`: the loop that performs effects and waits with `tokio::select!` for keys (`EventStream`), the blink clock and the fetch stream, terminal setup and restore, `open::that_detached` |
 | `main.rs` | Composition root. The only place `anyhow` is used |
 
 ### HTTP
 
-- Endpoints: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests)
-  and [Get a pull request](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request).
+- Endpoints: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests),
+  [Get a pull request](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request) and
+  [Merge a pull request](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
+  (`PUT …/pulls/{number}/merge` with `{"merge_method": "merge"}`; any 2xx means merged).
 - One `reqwest::Client` is reused, with a 10-second timeout.
 - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
   `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: pr-checker/<crate version>`.
@@ -64,6 +67,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | Other non-2xx | `Unavailable("HTTP <code>")` |
 | Transport error | `Unavailable(message)` |
 | Undecodable body | `InvalidResponse(message)` |
+| 405, 409 or 422 to a merge | `NotMergeable` |
 
 ### Design notes
 
@@ -93,4 +97,4 @@ User-facing limitations are in the README. These only affect unusual input:
 - [x] `README.md` is updated and `projects.toml` is present.
 - [x] `cargo pr` prints the colored table from the real API.
 - [ ] `cargo pr --tui` checked by hand against real data, including opening a
-  pull request in the browser.
+  pull request in the browser and merging one.

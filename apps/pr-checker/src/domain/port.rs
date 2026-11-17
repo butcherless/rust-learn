@@ -1,7 +1,7 @@
 //! Outbound port.
 
 use crate::domain::error::SourceError;
-use crate::domain::model::{Project, PullRequest};
+use crate::domain::model::{PrNumber, Project, PullRequest};
 
 /// A source of pull request data.
 pub trait PullRequestSource {
@@ -10,4 +10,14 @@ pub trait PullRequestSource {
         &self,
         project: &Project,
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send;
+}
+
+/// Something that merges pull requests.
+pub trait PullRequestMerger {
+    /// Merges pull request `number` of `project` into its base branch.
+    fn merge(
+        &self,
+        project: &Project,
+        number: PrNumber,
+    ) -> impl Future<Output = Result<(), SourceError>> + Send;
 }

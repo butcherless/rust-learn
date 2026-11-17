@@ -23,7 +23,7 @@ fn table_row(row: DisplayRow) -> Row {
 
 fn color(kind: RowKind) -> Color {
     match kind {
-        RowKind::NoPullRequests => Color::Green,
+        RowKind::NoPullRequests | RowKind::MergedPullRequest => Color::Green,
         RowKind::OpenPullRequest => {
             let (r, g, b) = ORANGE;
             Color::Rgb { r, g, b }
@@ -49,6 +49,7 @@ mod tests {
     fn each_kind_has_its_color() {
         [
             (RowKind::NoPullRequests, Color::Green),
+            (RowKind::MergedPullRequest, Color::Green),
             (
                 RowKind::OpenPullRequest,
                 Color::Rgb {

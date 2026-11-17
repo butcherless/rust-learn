@@ -1,7 +1,7 @@
 # pr-checker
 
 A command-line tool that lists the open pull requests of a set of GitHub repositories, as a colored
-table or in an interactive terminal UI.
+table or in an interactive terminal UI, where it can also merge them.
 
 ```
 ╭────────────────┬───────┬──────────────────────────────┬───────┬───────────╮
@@ -54,11 +54,21 @@ shows a gray `loading…` row, or its previous rows when fetching again. The lig
 the status line blinks orange while fetching, with the progress (`Loading… 5/13`), and then stays
 green, or red if a repository failed. The keys work while fetching.
 
+A Merge column after Mergeable shows a switch on each pull request: off, with an orange track,
+while it is open, and on, with a green track, once you merge it from here. Merging asks first:
+`m` writes `Press m again to merge owner/repo#N` in the status line, a second `m` merges it with a
+merge commit, and any other key cancels. While GitHub merges it the knob sits in the middle, and
+only one merge runs at a time. Once merged, the whole row turns green, the selection included:
+State says `merged`, Mergeable `—`, and the summary counts it as merged instead of open. It stays
+like that until a fetch no longer lists it. If GitHub refuses the merge (conflicts, a draft, a
+branch rule), the row stays orange and the status line says why.
+
 | Key | Action |
 |---|---|
 | `↑` `↓` / `j` `k` | Move the selection |
 | `g` `G` / `Home` `End` | Jump to the first or last row |
 | `Enter` / `o` | Open the selected pull request in your browser |
+| `m` `m` | Merge the selected pull request (the first `m` asks for confirmation) |
 | `r` | Fetch the pull requests again (ignored while fetching) |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
@@ -78,7 +88,9 @@ An invalid entry stops the program with a message naming it. An empty list shows
 **Token:** the `GITHUB_TOKEN` environment variable is required. For private repositories, a
 [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
 needs [read access to pull requests](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
-if it is fine-grained, or the `repo` scope if it is classic.
+if it is fine-grained, or the `repo` scope if it is classic. Merging from the interactive UI also
+needs [write access to contents](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
+for a fine-grained token; without it the merge fails with `unauthorized`.
 
 ## Behavior
 

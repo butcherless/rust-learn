@@ -11,10 +11,10 @@ use common::{project, pull_request};
 use futures::future::join_all;
 use pr_checker::adapter::github::{GithubClient, GithubToken};
 use pr_checker::domain::error::SourceError;
-use pr_checker::domain::model::{Mergeable, PrState, PullRequest};
-use pr_checker::domain::port::PullRequestSource;
+use pr_checker::domain::model::{Mergeable, PrNumber, PrState, PullRequest};
+use pr_checker::domain::port::{PullRequestMerger, PullRequestSource};
 use serde_json::{Value, json};
-use wiremock::matchers::{header, header_exists, method, path, query_param};
+use wiremock::matchers::{body_json, header, header_exists, method, path, query_param};
 use wiremock::{Mock, MockBuilder, MockServer, ResponseTemplate};
 
 const PULLS_PATH: &str = "/repos/acme/widgets/pulls";
@@ -203,4 +203,43 @@ async fn unreachable_server_is_unavailable_without_leaking_the_url() {
         ),
         other => panic!("expected Unavailable, got {other:?}"),
     }
+}
+
+/// A mock of the merge endpoint of pull request #`number`.
+fn merge(number: u64) -> MockBuilder {
+    Mock::given(method("PUT")).and(path(format!("{PULLS_PATH}/{number}/merge")))
+}
+
+/// Merges pull request #7 on a server that only knows `mock`.
+async fn merge_on(mock: Mock) -> Result<(), SourceError> {
+    let server = MockServer::start().await;
+    mock.mount(&server).await;
+    GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
+        .unwrap()
+        .merge(&project("acme/widgets"), PrNumber::from(7))
+        .await
+}
+
+#[tokio::test]
+async fn merges_with_a_merge_commit() {
+    let mock = with_api_headers(merge(7))
+        .and(body_json(json!({"merge_method": "merge"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+            "merged": true,
+            "message": "Pull Request successfully merged",
+        })))
+        .expect(1);
+
+    assert_eq!(merge_on(mock).await, Ok(()));
+}
+
+#[tokio::test]
+async fn a_merge_github_refuses_is_not_mergeable() {
+    let mock = merge(7).respond_with(
+        ResponseTemplate::new(405)
+            .set_body_json(json!({"message": "Pull Request is not mergeable"})),
+    );
+
+    assert_eq!(merge_on(mock).await, Err(SourceError::NotMergeable));
 }

@@ -1,7 +1,9 @@
 //! Presentation model shared by the table and the terminal UI: which rows to show, their text,
 //! their kind and their pull request address. Pure, and free of any rendering library.
 
-use crate::domain::model::{PrUrl, Project, PullRequest};
+use std::fmt;
+
+use crate::domain::model::{PrNumber, PrUrl, Project, PullRequest};
 use crate::service::ProjectReport;
 
 /// The column titles.
@@ -13,6 +15,8 @@ const NO_VALUE: &str = "—";
 pub const NO_PULL_REQUESTS: &str = "no open pull requests";
 /// The message of a project whose first fetch has not finished yet (FR14).
 pub const LOADING_PROJECT: &str = "loading…";
+/// The state of a pull request merged from the terminal UI (FR15).
+pub const MERGED: &str = "merged";
 
 /// What a row represents, which decides its color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,21 +25,75 @@ pub enum RowKind {
     NoPullRequests,
     /// An open pull request.
     OpenPullRequest,
+    /// A pull request merged in this session, until a fetch no longer lists it.
+    MergedPullRequest,
     /// A project whose fetch failed.
     Failed,
     /// A project whose first fetch has not finished yet.
     Loading,
 }
 
-/// One row: its text, what it represents and, for a pull request, its address.
+/// The pull request a row shows: its project, its number and its web page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrRef {
+    /// The repository of the pull request.
+    pub project: Project,
+    /// The pull request number.
+    pub number: PrNumber,
+    /// The pull request's web page.
+    pub url: PrUrl,
+}
+
+impl fmt::Display for PrRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}#{}", self.project, self.number)
+    }
+}
+
+/// One row: its text, what it represents and, for a pull request, which one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DisplayRow {
     /// What the row represents.
     pub kind: RowKind,
     /// The text of each column, in [`HEADER`] order.
     pub cells: [String; 5],
-    /// The pull request's web page. Only set for [`RowKind::OpenPullRequest`].
-    pub url: Option<PrUrl>,
+    /// The pull request shown. Only set for [`RowKind::OpenPullRequest`] and
+    /// [`RowKind::MergedPullRequest`].
+    pub pull_request: Option<PrRef>,
+}
+
+impl DisplayRow {
+    /// The web page of the row's pull request, if it shows one.
+    pub fn url(&self) -> Option<&PrUrl> {
+        self.pull_request
+            .as_ref()
+            .map(|pull_request| &pull_request.url)
+    }
+
+    /// The same pull request once merged: its state is `merged`, and whether it could be merged
+    /// no longer applies. Other rows stay as they are.
+    pub fn merged(self) -> Self {
+        match self.kind {
+            RowKind::OpenPullRequest => {
+                let [project, number, title, _state, _mergeable] = self.cells;
+                Self {
+                    kind: RowKind::MergedPullRequest,
+                    cells: [
+                        project,
+                        number,
+                        title,
+                        MERGED.to_owned(),
+                        NO_VALUE.to_owned(),
+                    ],
+                    ..self
+                }
+            }
+            RowKind::MergedPullRequest
+            | RowKind::NoPullRequests
+            | RowKind::Failed
+            | RowKind::Loading => self,
+        }
+    }
 }
 
 /// Computes every row, in report order.
@@ -63,7 +121,7 @@ pub fn report_rows(report: &ProjectReport) -> Vec<DisplayRow> {
         )],
         Ok(pull_requests) => pull_requests
             .iter()
-            .map(|pull_request| pull_request_row(project.clone(), pull_request))
+            .map(|pull_request| pull_request_row(&report.project, pull_request))
             .collect(),
         Err(error) => vec![message_row(
             RowKind::Failed,
@@ -83,21 +141,25 @@ fn message_row(kind: RowKind, project: String, message: String) -> DisplayRow {
             NO_VALUE.to_owned(),
             NO_VALUE.to_owned(),
         ],
-        url: None,
+        pull_request: None,
     }
 }
 
-fn pull_request_row(project: String, pull_request: &PullRequest) -> DisplayRow {
+fn pull_request_row(project: &Project, pull_request: &PullRequest) -> DisplayRow {
     DisplayRow {
         kind: RowKind::OpenPullRequest,
         cells: [
-            project,
+            project.to_string(),
             pull_request.number.to_string(),
             pull_request.title.to_string(),
             pull_request.state.to_string(),
             pull_request.mergeable.to_string(),
         ],
-        url: Some(pull_request.url.clone()),
+        pull_request: Some(PrRef {
+            project: project.clone(),
+            number: pull_request.number,
+            url: pull_request.url.clone(),
+        }),
     }
 }
 
@@ -138,11 +200,16 @@ mod tests {
     use crate::domain::error::SourceError;
     use crate::domain::model::{Mergeable, PrState, PullRequest};
 
+    /// A row whose pull request, when it has a `url`, is the one of its project and number cells.
     fn row(kind: RowKind, cells: [&str; 5], url: Option<&str>) -> DisplayRow {
         DisplayRow {
             kind,
+            pull_request: url.map(|url| PrRef {
+                project: cells[0].parse().unwrap(),
+                number: PrNumber::from(cells[1].parse::<u64>().unwrap()),
+                url: PrUrl::from(url.to_owned()),
+            }),
             cells: cells.map(String::from),
-            url: url.map(|url| PrUrl::from(url.to_owned())),
         }
     }
 
@@ -152,6 +219,7 @@ mod tests {
         assert_eq!(HEADER, ["Project", "PR #", "Title", "State", "Mergeable"]);
         assert_eq!(NO_PULL_REQUESTS, "no open pull requests");
         assert_eq!(LOADING_PROJECT, "loading…");
+        assert_eq!(MERGED, "merged");
     }
 
     #[test]
@@ -248,6 +316,42 @@ mod tests {
             )
             .collect();
         assert_eq!(projects, ["z/z", "a/a", "m/m"]);
+    }
+
+    #[test]
+    fn a_pull_request_reads_as_project_and_number() {
+        let rows = rows(&[report(
+            "a/b",
+            Ok(vec![pull_request(1, PrState::Open, FIRST_URL)]),
+        )]);
+        let pull_request = rows[0].pull_request.as_ref().unwrap();
+        assert_eq!(pull_request.to_string(), "a/b#1");
+        assert_eq!(rows[0].url(), Some(&pull_request.url));
+    }
+
+    #[test]
+    fn a_merged_pull_request_changes_its_kind_state_and_mergeable() {
+        let reports = [
+            report("a/b", Ok(vec![pull_request(1, PrState::Open, FIRST_URL)])),
+            report("c/d", Ok(vec![])),
+        ];
+        let merged: Vec<DisplayRow> = rows(&reports).into_iter().map(DisplayRow::merged).collect();
+        assert_eq!(
+            merged,
+            [
+                row(
+                    RowKind::MergedPullRequest,
+                    ["a/b", "1", "title 1", MERGED, "—"],
+                    Some(FIRST_URL)
+                ),
+                row(
+                    RowKind::NoPullRequests,
+                    ["c/d", "—", NO_PULL_REQUESTS, "—", "—"],
+                    None
+                ),
+            ]
+        );
+        assert_eq!(merged[0].clone().merged(), merged[0], "merging twice");
     }
 
     #[test]

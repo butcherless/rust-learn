@@ -7,7 +7,8 @@ use std::iter;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::adapter::view::{DisplayRow, loading_row, report_rows};
+use crate::adapter::view::{DisplayRow, PrRef, RowKind, loading_row, report_rows};
+use crate::domain::error::SourceError;
 use crate::domain::model::{PrUrl, Project};
 use crate::service::ProjectReport;
 
@@ -15,6 +16,8 @@ use crate::service::ProjectReport;
 pub const LOADING: &str = "Loading…";
 /// The status line when the selected row has no pull request to open.
 pub const NOT_A_PULL_REQUEST: &str = "This row is not a pull request";
+/// The status line after the first merge key, before the pull request.
+pub const CONFIRM_MERGE: &str = "Press m again to merge";
 const SAFE_SCHEME: &str = "https://";
 
 /// A change of the selected row.
@@ -37,6 +40,8 @@ pub enum Message {
     Move(Move),
     /// Open the selected pull request in the browser.
     OpenSelected,
+    /// Ask to merge the selected pull request, or confirm the request just made.
+    MergeSelected,
     /// Fetch the pull requests again.
     Refresh,
     /// Leave the UI.
@@ -49,6 +54,8 @@ pub enum Message {
     Finished,
     /// The browser was launched for this address, or could not be.
     Opened(PrUrl, Result<(), String>),
+    /// The merge of this pull request finished, or failed.
+    Merged(PrRef, Result<(), SourceError>),
 }
 
 /// Work with side effects that the event loop must do after an update.
@@ -61,6 +68,8 @@ pub enum Effect {
     Fetch,
     /// Launch the browser, then send [`Message::Opened`].
     Open(PrUrl),
+    /// Merge the pull request on GitHub, then send [`Message::Merged`].
+    Merge(PrRef),
     /// Restore the terminal and leave.
     Quit,
 }
@@ -78,6 +87,18 @@ pub enum Light {
     Failed,
 }
 
+/// The switch of a pull request's merge column: off while open, moving while merging, on once
+/// merged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeSwitch {
+    /// Open: the knob on the left, over orange.
+    Off,
+    /// Being merged: the knob in the middle.
+    Moving,
+    /// Merged: the knob on the right, over green.
+    On,
+}
+
 /// What the status line reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Status {
@@ -87,6 +108,9 @@ enum Status {
     OpenFailed(String),
     NotAPullRequest,
     Unsafe(PrUrl),
+    Merging(PrRef),
+    Merged(PrRef),
+    MergeFailed(PrRef, SourceError),
 }
 
 /// One project of the list: still waiting for its first report, or with its latest one.
@@ -113,6 +137,13 @@ pub struct App {
     selected: Option<usize>,
     status: Status,
     fetch: Option<Progress>,
+    /// The pull request of the first merge key, waiting for the second one.
+    confirming: Option<PrRef>,
+    /// The pull request being merged. Only one at a time.
+    merging: Option<PrRef>,
+    /// The pull requests merged in this session. Their rows stay, shown as merged, until a fetch
+    /// no longer lists them.
+    merged: Vec<PrUrl>,
 }
 
 /// Maps a key press to a message. Unbound keys give `None`.
@@ -122,6 +153,7 @@ pub fn message(key: KeyEvent) -> Option<Message> {
         KeyCode::Char('q') | KeyCode::Esc => Some(Message::Quit),
         KeyCode::Char('r') => Some(Message::Refresh),
         KeyCode::Enter | KeyCode::Char('o') => Some(Message::OpenSelected),
+        KeyCode::Char('m') => Some(Message::MergeSelected),
         KeyCode::Up | KeyCode::Char('k') => Some(Message::Move(Move::Up)),
         KeyCode::Down | KeyCode::Char('j') => Some(Message::Move(Move::Down)),
         KeyCode::Home | KeyCode::Char('g') => Some(Message::Move(Move::First)),
@@ -140,6 +172,9 @@ impl App {
             selected: None,
             status: Status::Loading,
             fetch: None,
+            confirming: None,
+            merging: None,
+            merged: Vec::new(),
         };
         let slots = projects.into_iter().map(Slot::Pending).collect();
         (app.with_slots(slots).fetching(), Effect::Fetch)
@@ -155,6 +190,23 @@ impl App {
         self.selected
     }
 
+    /// The merge switch of `row`, or `None` when it is not a pull request.
+    pub fn merge_switch(&self, row: &DisplayRow) -> Option<MergeSwitch> {
+        row.url().map(|url| {
+            if row.kind == RowKind::MergedPullRequest {
+                MergeSwitch::On
+            } else if self
+                .merging
+                .as_ref()
+                .is_some_and(|merging| &merging.url == url)
+            {
+                MergeSwitch::Moving
+            } else {
+                MergeSwitch::Off
+            }
+        })
+    }
+
     /// The light at the start of the status line.
     pub fn light(&self) -> Light {
         match self.fetch {
@@ -167,17 +219,25 @@ impl App {
 
     /// The status line's text.
     pub fn status(&self) -> String {
+        if let Some(pull_request) = &self.confirming {
+            return format!("{CONFIRM_MERGE} {pull_request}");
+        }
         match &self.status {
             Status::Loading => format!(
                 "{LOADING} {}/{}",
                 self.fetch.map_or(0, |progress| progress.received),
                 self.slots.len()
             ),
-            Status::Summary => summary(self.reports()),
+            Status::Summary => self.summary(),
             Status::Opened(url) => format!("Opened {url}"),
             Status::OpenFailed(error) => format!("Cannot open the browser: {error}"),
             Status::NotAPullRequest => NOT_A_PULL_REQUEST.to_owned(),
             Status::Unsafe(url) => format!("Not opening an address that is not https: {url}"),
+            Status::Merging(pull_request) => format!("Merging {pull_request}…"),
+            Status::Merged(pull_request) => format!("Merged {pull_request}"),
+            Status::MergeFailed(pull_request, error) => {
+                format!("Cannot merge {pull_request}: {error}")
+            }
         }
     }
 
@@ -196,11 +256,16 @@ impl App {
     pub fn update(self, message: Message) -> (Self, Effect) {
         match message {
             Message::Quit => (self, Effect::Quit),
+            // Any other key cancels a merge waiting for its confirmation.
             // A fetch in progress is not restarted.
-            Message::Refresh if self.fetch.is_some() => (self, Effect::None),
-            Message::Refresh => (self.fetching(), Effect::Fetch),
-            Message::Move(step) => (self.moved(step), Effect::None),
-            Message::OpenSelected => self.open_selected(),
+            Message::Refresh if self.fetch.is_some() => (self.unconfirmed(), Effect::None),
+            Message::Refresh => (self.unconfirmed().fetching(), Effect::Fetch),
+            Message::Move(step) => (self.unconfirmed().moved(step), Effect::None),
+            Message::OpenSelected => self.unconfirmed().open_selected(),
+            Message::MergeSelected => self.merge_selected(),
+            Message::Merged(pull_request, result) => {
+                (self.merged(pull_request, result), Effect::None)
+            }
             Message::Tick => (self.ticked(), Effect::None),
             Message::Fetched(index, report) => (self.fetched(index, report), Effect::None),
             Message::Finished => (self.finished(), Effect::None),
@@ -216,6 +281,13 @@ impl App {
             Slot::Pending(_) => None,
             Slot::Done(report) => Some(report),
         })
+    }
+
+    fn unconfirmed(self) -> Self {
+        Self {
+            confirming: None,
+            ..self
+        }
     }
 
     fn with_status(self, status: Status) -> Self {
@@ -252,25 +324,22 @@ impl App {
             .take(index)
             .chain(iter::once(Some(report)))
             .chain(iter::repeat_with(|| None));
-        let Self {
-            slots,
-            rows,
-            selected,
-            status,
-            ..
-        } = self;
-        let slots = slots
-            .into_iter()
-            .zip(replacements)
-            .map(|(slot, replacement)| replacement.map_or(slot, Slot::Done))
-            .collect();
+        Self { fetch, ..self }.map_slots(|slots| {
+            slots
+                .into_iter()
+                .zip(replacements)
+                .map(|(slot, replacement)| replacement.map_or(slot, Slot::Done))
+                .collect()
+        })
+    }
+
+    /// Replaces the slots with `change(slots)` and recomputes the rows.
+    fn map_slots(self, change: impl FnOnce(Vec<Slot>) -> Vec<Slot>) -> Self {
+        let slots = change(self.slots);
         // `with_slots` reads the old rows and selection to keep the selection in place.
         Self {
             slots: Vec::new(),
-            rows,
-            selected,
-            status,
-            fetch,
+            ..self
         }
         .with_slots(slots)
     }
@@ -283,8 +352,9 @@ impl App {
         }
     }
 
-    /// Replaces the slots and their rows. The selection stays on the same pull request when it
-    /// is still there, and otherwise on the same line when it still exists.
+    /// Replaces the slots and their rows, with the pull requests merged in this session shown as
+    /// merged. The selection stays on the same pull request when it is still there, and otherwise
+    /// on the same line when it still exists.
     fn with_slots(self, slots: Vec<Slot>) -> Self {
         let rows: Vec<DisplayRow> = slots
             .iter()
@@ -292,12 +362,16 @@ impl App {
                 Slot::Pending(project) => vec![loading_row(project)],
                 Slot::Done(report) => report_rows(report),
             })
+            .map(|row| match row.url() {
+                Some(url) if self.merged.contains(url) => row.merged(),
+                Some(_) | None => row,
+            })
             .collect();
         let same_pull_request = self
             .selected
             .and_then(|index| self.rows.get(index))
-            .and_then(|row| row.url.as_ref())
-            .and_then(|url| rows.iter().position(|row| row.url.as_ref() == Some(url)));
+            .and_then(DisplayRow::url)
+            .and_then(|url| rows.iter().position(|row| row.url() == Some(url)));
         let selected = same_pull_request.or_else(|| clamp(self.selected.unwrap_or(0), rows.len()));
         Self {
             slots,
@@ -319,16 +393,71 @@ impl App {
         Self { selected, ..self }
     }
 
+    fn selected_row(&self) -> Option<&DisplayRow> {
+        self.selected.and_then(|index| self.rows.get(index))
+    }
+
     fn open_selected(self) -> (Self, Effect) {
-        let url = self
-            .selected
-            .and_then(|index| self.rows.get(index))
-            .and_then(|row| row.url.clone());
+        let url = self.selected_row().and_then(DisplayRow::url).cloned();
         match url {
             // The address comes from the API, so only web pages are handed to the system opener.
             Some(url) if url.as_str().starts_with(SAFE_SCHEME) => (self, Effect::Open(url)),
             Some(url) => (self.with_status(Status::Unsafe(url)), Effect::None),
             None => (self.with_status(Status::NotAPullRequest), Effect::None),
+        }
+    }
+
+    /// The first merge key asks for confirmation, and the second one on the same pull request
+    /// merges it. Ignored while another merge runs or when it is already merged.
+    fn merge_selected(self) -> (Self, Effect) {
+        let selected = self.selected_row().and_then(|row| row.pull_request.clone());
+        match selected {
+            None => (
+                self.unconfirmed().with_status(Status::NotAPullRequest),
+                Effect::None,
+            ),
+            Some(pull_request)
+                if self.merging.is_some() || self.merged.contains(&pull_request.url) =>
+            {
+                (self.unconfirmed(), Effect::None)
+            }
+            Some(pull_request) if self.confirming.as_ref() == Some(&pull_request) => (
+                Self {
+                    confirming: None,
+                    merging: Some(pull_request.clone()),
+                    ..self
+                }
+                .with_status(Status::Merging(pull_request.clone())),
+                Effect::Merge(pull_request),
+            ),
+            Some(pull_request) => (
+                Self {
+                    confirming: Some(pull_request),
+                    ..self
+                },
+                Effect::None,
+            ),
+        }
+    }
+
+    fn merged(self, pull_request: PrRef, result: Result<(), SourceError>) -> Self {
+        let app = Self {
+            merging: None,
+            ..self
+        };
+        match result {
+            Ok(()) => Self {
+                merged: app
+                    .merged
+                    .iter()
+                    .cloned()
+                    .chain([pull_request.url.clone()])
+                    .collect(),
+                ..app
+            }
+            .map_slots(|slots| slots)
+            .with_status(Status::Merged(pull_request)),
+            Err(error) => app.with_status(Status::MergeFailed(pull_request, error)),
         }
     }
 }
@@ -338,19 +467,33 @@ fn clamp(index: usize, len: usize) -> Option<usize> {
     len.checked_sub(1).map(|last| index.min(last))
 }
 
-/// Counts projects, open pull requests and failures in one pass over `reports`.
-fn summary<'a>(reports: impl Iterator<Item = &'a ProjectReport>) -> String {
-    let (projects, pull_requests, failures) = reports.fold(
-        (0, 0, 0),
-        |(projects, pull_requests, failures), report| match &report.outcome {
-            Ok(found) => (projects + 1, pull_requests + found.len(), failures),
-            Err(_) => (projects + 1, pull_requests, failures + 1),
-        },
-    );
-    let counts = format!("{pull_requests} open pull requests in {projects} projects");
-    match failures {
-        0 => counts,
-        failures => format!("{counts}, {failures} failed"),
+impl App {
+    /// Counts projects and failures over the reports, and open and merged pull requests over
+    /// the rows, where a merged one is no longer open.
+    fn summary(&self) -> String {
+        let (projects, failures) = self.reports().fold((0, 0), |(projects, failures), report| {
+            (
+                projects + 1,
+                failures + usize::from(report.outcome.is_err()),
+            )
+        });
+        let (open, merged) = self
+            .rows
+            .iter()
+            .fold((0, 0), |(open, merged), row| match row.kind {
+                RowKind::OpenPullRequest => (open + 1, merged),
+                RowKind::MergedPullRequest => (open, merged + 1),
+                RowKind::NoPullRequests | RowKind::Failed | RowKind::Loading => (open, merged),
+            });
+        [
+            Some(format!("{open} open pull requests in {projects} projects")),
+            (merged > 0).then(|| format!("{merged} merged")),
+            (failures > 0).then(|| format!("{failures} failed")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ")
     }
 }
 
@@ -428,6 +571,24 @@ pub mod fixtures {
     pub fn loaded() -> App {
         loaded_with(reports())
     }
+
+    /// The pull request of the first row of [`loaded`], `a/b` #1.
+    pub fn first_pull_request() -> PrRef {
+        loaded().rows()[0].pull_request.clone().unwrap()
+    }
+
+    /// [`loaded`] after merging its first pull request.
+    pub fn merged() -> App {
+        run(
+            loaded(),
+            [
+                Message::MergeSelected,
+                Message::MergeSelected,
+                Message::Merged(first_pull_request(), Ok(())),
+            ],
+        )
+        .0
+    }
 }
 
 #[cfg(test)]
@@ -435,7 +596,8 @@ mod tests {
     use super::*;
 
     use super::fixtures::{
-        FIRST_URL, fetch_of, key, loaded, loaded_with, loading, reports, run, url,
+        FIRST_URL, fetch_of, first_pull_request, key, loaded, loaded_with, loading, merged,
+        reports, run, url,
     };
     use crate::adapter::view::fixtures::{pull_request, report};
     use crate::adapter::view::{RowKind, rows};
@@ -462,6 +624,7 @@ mod tests {
             (key(KeyCode::Char('r')), Some(Message::Refresh)),
             (key(KeyCode::Enter), Some(Message::OpenSelected)),
             (key(KeyCode::Char('o')), Some(Message::OpenSelected)),
+            (key(KeyCode::Char('m')), Some(Message::MergeSelected)),
             (key(KeyCode::Up), Some(Message::Move(Move::Up))),
             (key(KeyCode::Char('j')), Some(Message::Move(Move::Down))),
             (key(KeyCode::Home), Some(Message::Move(Move::First))),
@@ -477,6 +640,7 @@ mod tests {
     fn status_texts_are_fixed() {
         assert_eq!(LOADING, "Loading…");
         assert_eq!(NOT_A_PULL_REQUEST, "This row is not a pull request");
+        assert_eq!(CONFIRM_MERGE, "Press m again to merge");
     }
 
     #[test]
@@ -625,7 +789,7 @@ mod tests {
 
         let moved_down = run(on_second.clone(), [refreshed(&[3, 1, 2])]).0;
         assert_eq!(moved_down.selected(), Some(2));
-        assert_eq!(moved_down.rows()[2].url, Some(url(second)));
+        assert_eq!(moved_down.rows()[2].url(), Some(&url(second)));
 
         let gone = run(on_second, [refreshed(&[1])]).0;
         assert_eq!(gone.selected(), Some(1));
@@ -643,5 +807,128 @@ mod tests {
             ))
             .0;
         assert_eq!(failed.status(), "Cannot open the browser: no browser");
+    }
+
+    fn first_switch(app: &App) -> Option<MergeSwitch> {
+        app.merge_switch(&app.rows()[0])
+    }
+
+    #[test]
+    fn merging_asks_for_confirmation_first() {
+        let (app, effect) = loaded().update(Message::MergeSelected);
+        assert_eq!(effect, Effect::None);
+        assert_eq!(app.status(), format!("{CONFIRM_MERGE} a/b#1"));
+        assert_eq!(first_switch(&app), Some(MergeSwitch::Off));
+
+        let (app, effect) = app.update(Message::MergeSelected);
+        assert_eq!(effect, Effect::Merge(first_pull_request()));
+        assert_eq!(app.status(), "Merging a/b#1…");
+        assert_eq!(first_switch(&app), Some(MergeSwitch::Moving));
+    }
+
+    #[test]
+    fn another_key_cancels_the_confirmation() {
+        [
+            Message::Move(Move::Up),
+            Message::Refresh,
+            Message::OpenSelected,
+        ]
+        .into_iter()
+        .for_each(|other| {
+            let cancelled = run(loaded(), [Message::MergeSelected, other.clone()]).0;
+            assert!(!cancelled.status().starts_with(CONFIRM_MERGE), "{other:?}");
+            // The next merge key asks again instead of merging.
+            let (app, effect) = cancelled.update(Message::MergeSelected);
+            assert_eq!(effect, Effect::None, "{other:?}");
+            assert!(app.status().starts_with(CONFIRM_MERGE), "{other:?}");
+        });
+    }
+
+    #[test]
+    fn clock_and_fetches_keep_the_confirmation() {
+        let fetching = run(loaded(), [Message::Refresh, Message::MergeSelected]).0;
+        let (app, effect) = run(
+            fetching,
+            [
+                Message::Tick,
+                Message::Fetched(0, reports().remove(0)),
+                Message::MergeSelected,
+            ],
+        );
+        assert_eq!(effect, Effect::Merge(first_pull_request()));
+        assert_eq!(first_switch(&app), Some(MergeSwitch::Moving));
+    }
+
+    #[test]
+    fn a_successful_merge_turns_the_switch_on_until_a_fetch_drops_the_pull_request() {
+        let app = merged();
+        assert_eq!(first_switch(&app), Some(MergeSwitch::On));
+        assert_eq!(app.rows()[0], loaded().rows()[0].clone().merged());
+        assert_eq!(app.rows()[1], loaded().rows()[1], "the other rows stay");
+        assert_eq!(app.selected(), Some(0));
+        assert_eq!(app.status(), "Merged a/b#1");
+        assert_eq!(
+            run(app.clone(), [Message::MergeSelected]).1,
+            Effect::None,
+            "already merged"
+        );
+
+        let still_listed = run(app.clone(), fetch_of(reports())).0;
+        assert_eq!(first_switch(&still_listed), Some(MergeSwitch::On));
+        assert_eq!(still_listed.rows()[0].kind, RowKind::MergedPullRequest);
+        assert_eq!(
+            still_listed.status(),
+            "1 open pull requests in 3 projects, 1 merged, 1 failed"
+        );
+
+        let without_it = report(
+            "a/b",
+            Ok(vec![pull_request(
+                2,
+                PrState::Open,
+                "http://github.com/a/b/pull/2",
+            )]),
+        );
+        let dropped = run(app, [Message::Fetched(0, without_it)]).0;
+        assert_eq!(first_switch(&dropped), Some(MergeSwitch::Off));
+        assert_eq!(dropped.rows()[0].kind, RowKind::OpenPullRequest);
+    }
+
+    #[test]
+    fn a_failed_merge_leaves_the_switch_off() {
+        let app = run(
+            loaded(),
+            [
+                Message::MergeSelected,
+                Message::MergeSelected,
+                Message::Merged(first_pull_request(), Err(SourceError::NotMergeable)),
+            ],
+        )
+        .0;
+        assert_eq!(first_switch(&app), Some(MergeSwitch::Off));
+        assert_eq!(app.status(), "Cannot merge a/b#1: not mergeable");
+    }
+
+    #[test]
+    fn only_one_merge_runs_at_a_time() {
+        let merging = run(loaded(), [Message::MergeSelected, Message::MergeSelected]).0;
+        let (app, effect) = run(
+            merging,
+            [
+                Message::Move(Move::Down),
+                Message::MergeSelected,
+                Message::MergeSelected,
+            ],
+        );
+        assert_eq!(effect, Effect::None);
+        assert_eq!(app.merge_switch(&app.rows()[1]), Some(MergeSwitch::Off));
+    }
+
+    #[test]
+    fn other_rows_cannot_be_merged() {
+        let (app, effect) = moves([Move::Last]).update(Message::MergeSelected);
+        assert_eq!(effect, Effect::None);
+        assert_eq!(app.status(), NOT_A_PULL_REQUEST);
+        assert_eq!(app.merge_switch(&app.rows()[3]), None);
     }
 }

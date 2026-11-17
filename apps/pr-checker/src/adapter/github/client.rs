@@ -5,15 +5,15 @@ use std::time::Duration;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
 use reqwest::header::{ACCEPT, HeaderMap, USER_AGENT};
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, Method, RequestBuilder, StatusCode, Url};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use crate::adapter::github::dto::PullRequestDto;
+use crate::adapter::github::dto::{MergeRequestDto, PullRequestDto};
 use crate::adapter::github::mapper::to_domain;
 use crate::domain::error::SourceError;
-use crate::domain::model::{Project, PullRequest};
-use crate::domain::port::PullRequestSource;
+use crate::domain::model::{PrNumber, Project, PullRequest};
+use crate::domain::port::{PullRequestMerger, PullRequestSource};
 
 /// The public GitHub API.
 pub const DEFAULT_BASE_URL: &str = "https://api.github.com";
@@ -26,6 +26,8 @@ const API_VERSION: &str = "2022-11-28";
 const ACCEPT_VALUE: &str = "application/vnd.github+json";
 const RATE_LIMIT_REMAINING_HEADER: &str = "x-ratelimit-remaining";
 const USER_AGENT_VALUE: &str = concat!("pr-checker/", env!("CARGO_PKG_VERSION"));
+/// How pull requests are merged: with a merge commit, GitHub's default.
+const MERGE_METHOD: &str = "merge";
 
 /// A GitHub API token. Its `Debug` output is redacted.
 #[derive(Clone)]
@@ -78,8 +80,8 @@ impl GithubClient {
         })
     }
 
-    /// The address of `/repos/{owner}/{repo}/pulls` followed by `tail`.
-    fn pulls_path(&self, project: &Project, tail: Option<&str>) -> Result<Url, SourceError> {
+    /// The address of `/repos/{owner}/{repo}/pulls` followed by the segments of `tail`.
+    fn pulls_path(&self, project: &Project, tail: &[&str]) -> Result<Url, SourceError> {
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .map_err(|()| SourceError::Unavailable("invalid base URL".to_owned()))?
@@ -95,7 +97,7 @@ impl GithubClient {
     }
 
     fn pulls_url(&self, project: &Project) -> Result<Url, SourceError> {
-        let mut url = self.pulls_path(project, None)?;
+        let mut url = self.pulls_path(project, &[])?;
         url.query_pairs_mut()
             .append_pair("state", "open")
             .append_pair("per_page", "100");
@@ -103,17 +105,26 @@ impl GithubClient {
     }
 
     fn pull_url(&self, project: &Project, number: u64) -> Result<Url, SourceError> {
-        self.pulls_path(project, Some(&number.to_string()))
+        self.pulls_path(project, &[&number.to_string()])
     }
 
-    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, SourceError> {
-        let response = self
-            .http
-            .get(url)
+    fn merge_url(&self, project: &Project, number: PrNumber) -> Result<Url, SourceError> {
+        self.pulls_path(project, &[&number.to_string(), "merge"])
+    }
+
+    /// A request with the headers that every call carries.
+    fn request(&self, method: Method, url: Url) -> RequestBuilder {
+        self.http
+            .request(method, url)
             .bearer_auth(&self.token.0)
             .header(ACCEPT, ACCEPT_VALUE)
             .header(API_VERSION_HEADER, API_VERSION)
             .header(USER_AGENT, USER_AGENT_VALUE)
+    }
+
+    async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, SourceError> {
+        let response = self
+            .request(Method::GET, url)
             .send()
             .await
             .map_err(transport_error)?;
@@ -123,6 +134,28 @@ impl GithubClient {
             return Err(map_status(status, ratelimit_remaining(response.headers())));
         }
         response.json::<T>().await.map_err(body_error)
+    }
+
+    /// Merges the pull request. Any success status means it was merged, so the body is not read.
+    async fn put_merge(&self, project: &Project, number: PrNumber) -> Result<(), SourceError> {
+        let response = self
+            .request(Method::PUT, self.merge_url(project, number)?)
+            .json(&MergeRequestDto {
+                merge_method: MERGE_METHOD,
+            })
+            .send()
+            .await
+            .map_err(transport_error)?;
+
+        let status = response.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(map_merge_status(
+                status,
+                ratelimit_remaining(response.headers()),
+            ))
+        }
     }
 
     /// Lists the open pull requests, then gets each one, because only the single pull request
@@ -144,6 +177,16 @@ impl PullRequestSource for GithubClient {
         project: &Project,
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send {
         self.fetch(project)
+    }
+}
+
+impl PullRequestMerger for GithubClient {
+    fn merge(
+        &self,
+        project: &Project,
+        number: PrNumber,
+    ) -> impl Future<Output = Result<(), SourceError>> + Send {
+        self.put_merge(project, number)
     }
 }
 
@@ -177,6 +220,17 @@ fn map_status(status: StatusCode, ratelimit_remaining: Option<&str>) -> SourceEr
     }
 }
 
+/// Classifies a non-success response to a merge: GitHub refuses one that cannot be done with 405,
+/// a head that changed with 409, and a failed validation with 422.
+fn map_merge_status(status: StatusCode, ratelimit_remaining: Option<&str>) -> SourceError {
+    match status {
+        StatusCode::METHOD_NOT_ALLOWED
+        | StatusCode::CONFLICT
+        | StatusCode::UNPROCESSABLE_ENTITY => SourceError::NotMergeable,
+        other => map_status(other, ratelimit_remaining),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +261,21 @@ mod tests {
                 expected,
                 "status {status}, x-ratelimit-remaining {remaining:?}"
             );
+        });
+    }
+
+    #[test]
+    fn maps_merge_statuses_to_errors() {
+        [
+            (StatusCode::METHOD_NOT_ALLOWED, SourceError::NotMergeable),
+            (StatusCode::CONFLICT, SourceError::NotMergeable),
+            (StatusCode::UNPROCESSABLE_ENTITY, SourceError::NotMergeable),
+            (StatusCode::FORBIDDEN, SourceError::Unauthorized),
+            (StatusCode::NOT_FOUND, SourceError::NotFound),
+        ]
+        .into_iter()
+        .for_each(|(status, expected)| {
+            assert_eq!(map_merge_status(status, None), expected, "status {status}");
         });
     }
 
