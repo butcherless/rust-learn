@@ -1,34 +1,40 @@
-//! The severance pay calculation, ported from `calc_amount.py`. Pure functions, no I/O.
+//! The severance pay calculation under the Estatuto de los Trabajadores (Real Decreto Legislativo
+//! 2/2015): art. 53.1.b for objective dismissals and art. 56.1 for unfair ones. Pure functions, no
+//! I/O.
 
 use std::fmt;
 
-use chrono::{Months, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use thiserror::Error;
 
 use crate::sequence::Cycle;
 
-/// Days in a year, used both to get the daily salary and to prorate the severance.
+/// Days in a year: the daily salary is the annual pay over them.
 pub const DAYS_PER_YEAR: f64 = 365.0;
 
-/// The Python program's annual pay.
+/// Months in a year: periods shorter than a year are prorated by months.
+const MONTHS_PER_YEAR: f64 = 12.0;
+
+/// Days of salary in a monthly payment, which the caps are counted in.
+const DAYS_PER_MONTHLY_PAYMENT: u32 = 30;
+
+/// The default annual pay.
 pub const DEFAULT_ANNUAL_PAY: f64 = 53_000.0;
 
-/// The Python program's initial date. The fallback is unreachable: the date is valid.
+/// The default initial date. The fallback is unreachable: the date is valid.
 pub const DEFAULT_INITIAL_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2021, 10, 11) {
     Some(date) => date,
     None => NaiveDate::MIN,
 };
 
-/// The type of dismissal, which sets how many days of salary are paid per year worked.
+/// The type of dismissal, which sets how many days of salary are paid per year worked and the cap.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Dismissal {
-    /// Objective dismissal: 20 days per year.
+    /// Objective dismissal (art. 53.1.b ET): 20 days per year, up to 12 monthly payments.
     Objective,
-    /// Unfair dismissal: 33 days per year.
+    /// Unfair dismissal (art. 56.1 ET): 33 days per year, up to 24 monthly payments.
     #[default]
     Unfair,
-    /// Unfair dismissal for service before 12 February 2012: 45 days per year.
-    UnfairPre2012,
 }
 
 impl Dismissal {
@@ -37,8 +43,17 @@ impl Dismissal {
         match self {
             Self::Objective => 20,
             Self::Unfair => 33,
-            Self::UnfairPre2012 => 45,
         }
+    }
+
+    /// The most days of salary the severance can reach: 12 monthly payments for an objective
+    /// dismissal and 24 for an unfair one, of 30 days each.
+    pub fn max_days(self) -> u32 {
+        let monthly_payments = match self {
+            Self::Objective => 12,
+            Self::Unfair => 24,
+        };
+        monthly_payments * DAYS_PER_MONTHLY_PAYMENT
     }
 
     /// A short human name.
@@ -46,13 +61,12 @@ impl Dismissal {
         match self {
             Self::Objective => "objective",
             Self::Unfair => "unfair",
-            Self::UnfairPre2012 => "unfair, pre-2012",
         }
     }
 }
 
 impl Cycle for Dismissal {
-    const ALL: &'static [Self] = &[Self::Objective, Self::Unfair, Self::UnfairPre2012];
+    const ALL: &'static [Self] = &[Self::Objective, Self::Unfair];
 }
 
 /// Shows the days and the name, such as `33 days · unfair`.
@@ -68,11 +82,12 @@ pub struct Input {
     pub annual_pay: f64,
     pub dismissal: Dismissal,
     pub initial_date: NaiveDate,
+    /// The last day worked.
     pub current_date: NaiveDate,
 }
 
 impl Input {
-    /// The Python program's values, with `today` as the current date.
+    /// The default values, with `today` as the current date.
     pub fn with_defaults(today: NaiveDate) -> Self {
         Self {
             annual_pay: DEFAULT_ANNUAL_PAY,
@@ -87,12 +102,21 @@ impl Input {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Report {
     pub input: Input,
-    /// Severance earned per calendar day worked.
-    pub daily_pay: f64,
-    /// Days between both dates, counting both.
-    pub days: i64,
+    /// The annual pay over 365 days.
+    pub daily_salary: f64,
+    /// Months of service, a started month counting as a whole one.
+    pub months: u32,
+    /// Days of salary the severance is worth, after the cap.
+    pub severance_days: f64,
     /// Total severance pay.
     pub total: f64,
+}
+
+impl Report {
+    /// Whether the severance reached the dismissal's cap.
+    pub fn capped(&self) -> bool {
+        self.severance_days >= f64::from(self.input.dismissal.max_days())
+    }
 }
 
 /// Why an input cannot be calculated.
@@ -104,8 +128,8 @@ pub enum CalcError {
     DatesReversed,
 }
 
-/// Calculates the severance pay exactly as the Python program does, operation by operation, so
-/// floating-point rounding matches too.
+/// Calculates the severance pay: days per year × years of service, prorated by months, up to the
+/// dismissal's cap, times the daily salary.
 pub fn calculate(input: Input) -> Result<Report, CalcError> {
     if !(input.annual_pay.is_finite() && input.annual_pay > 0.0) {
         return Err(CalcError::NonPositivePay);
@@ -113,15 +137,38 @@ pub fn calculate(input: Input) -> Result<Report, CalcError> {
     if input.current_date < input.initial_date {
         return Err(CalcError::DatesReversed);
     }
-    let daily_pay = input.annual_pay / DAYS_PER_YEAR * f64::from(input.dismissal.days_per_year())
-        / DAYS_PER_YEAR;
-    let days = (input.current_date - input.initial_date).num_days() + 1;
+    let daily_salary = input.annual_pay / DAYS_PER_YEAR;
+    let months = months_of_service(input.initial_date, input.current_date);
+    let severance_days = (f64::from(input.dismissal.days_per_year()) * f64::from(months)
+        / MONTHS_PER_YEAR)
+        .min(f64::from(input.dismissal.max_days()));
     Ok(Report {
         input,
-        daily_pay,
-        days,
-        total: days as f64 * daily_pay,
+        daily_salary,
+        months,
+        severance_days,
+        total: severance_days * daily_salary,
     })
+}
+
+/// The months of service from `initial` to `last`, both worked, counting the started month as a
+/// whole one, as the courts prorate "by months" the periods shorter than a year. Month `k` starts
+/// `k` months after `initial`, so the result is how many of those starts fall on or before `last`.
+/// `last` must not be before `initial`.
+pub fn months_of_service(initial: NaiveDate, last: NaiveDate) -> u32 {
+    let calendar_months = 12 * i64::from(last.year() - initial.year()) + i64::from(last.month())
+        - i64::from(initial.month());
+    // Not negative, because `last` is not before `initial`.
+    let calendar_months = u32::try_from(calendar_months).unwrap_or(0);
+    initial
+        .checked_add_months(Months::new(calendar_months))
+        .filter(|start| *start <= last)
+        .map_or(calendar_months, |_| calendar_months + 1)
+}
+
+/// Formats a number of months as years and months, such as `5y 1m`.
+pub fn years_and_months(months: u32) -> String {
+    format!("{}y {}m", months / 12, months % 12)
 }
 
 /// The reports for the current date and the next `years` anniversaries of the initial date after
@@ -180,9 +227,9 @@ pub mod fixtures {
         NaiveDate::from_ymd_opt(y, m, d).expect("valid test date")
     }
 
-    /// The input of the Python program on 2026-11-07, as in the screenshot. Written out instead
-    /// of using the defaults, so it also checks them.
-    pub fn python_input() -> Input {
+    /// The reference case: the default values on 2026-11-07. Written out instead of using the
+    /// defaults, so it also checks them.
+    pub fn reference_input() -> Input {
         Input {
             annual_pay: 53_000.0,
             dismissal: Dismissal::Unfair,
@@ -194,50 +241,130 @@ pub mod fixtures {
 
 #[cfg(test)]
 mod tests {
-    use super::fixtures::{date, python_input};
+    use super::fixtures::{date, reference_input};
     use super::*;
 
     #[test]
-    fn matches_the_python_report() {
-        let report = calculate(python_input()).expect("valid input");
-        assert_eq!(thousands(report.daily_pay, 3), "13.128");
-        assert_eq!(report.days, 1_854);
-        assert_eq!(thousands(report.total, 0), "24,340");
-        assert_eq!(report.input, python_input());
+    fn calculates_the_reference_case() {
+        let report = calculate(reference_input()).expect("valid input");
+        assert_eq!(thousands(report.daily_salary, 2), "145.21");
+        assert_eq!(report.months, 61, "5 years and a started month");
+        assert_eq!(report.severance_days, 167.75, "33 × 61 / 12");
+        assert_eq!(thousands(report.total, 0), "24,358");
+        assert!(!report.capped());
+        assert_eq!(report.input, reference_input());
     }
 
     #[test]
-    fn defaults_are_the_python_values() {
-        assert_eq!(Input::with_defaults(date(2026, 11, 7)), python_input());
+    fn defaults_are_the_reference_values() {
+        assert_eq!(Input::with_defaults(date(2026, 11, 7)), reference_input());
     }
 
     #[test]
-    fn counts_both_dates() {
-        let same_day = Input {
-            current_date: date(2021, 10, 11),
-            ..python_input()
-        };
-        assert_eq!(calculate(same_day).map(|r| r.days), Ok(1));
+    fn counts_started_months_as_whole_ones() {
+        [
+            ("the first day", date(2021, 10, 11), date(2021, 10, 11), 1),
+            (
+                "a day short of a month",
+                date(2021, 10, 11),
+                date(2021, 11, 10),
+                1,
+            ),
+            (
+                "the first day of the second month",
+                date(2021, 10, 11),
+                date(2021, 11, 11),
+                2,
+            ),
+            (
+                "the day before the anniversary",
+                date(2021, 10, 11),
+                date(2022, 10, 10),
+                12,
+            ),
+            (
+                "the anniversary",
+                date(2021, 10, 11),
+                date(2022, 10, 11),
+                13,
+            ),
+            (
+                "the reference case",
+                date(2021, 10, 11),
+                date(2026, 11, 7),
+                61,
+            ),
+            (
+                "a year from the 1st",
+                date(2025, 1, 1),
+                date(2025, 12, 31),
+                12,
+            ),
+            (
+                "a short month clamps the start",
+                date(2025, 1, 31),
+                date(2025, 2, 27),
+                1,
+            ),
+            (
+                "from the clamped start",
+                date(2025, 1, 31),
+                date(2025, 2, 28),
+                2,
+            ),
+        ]
+        .into_iter()
+        .for_each(|(case, initial, last, months)| {
+            assert_eq!(months_of_service(initial, last), months, "{case}");
+        });
     }
 
     #[test]
-    fn scales_with_the_dismissal_type() {
-        Dismissal::ALL.iter().for_each(|&dismissal| {
+    fn caps_the_severance_days() {
+        [
+            (Dismissal::Unfair, date(2005, 1, 1), 720.0, true),
+            (Dismissal::Objective, date(2005, 1, 1), 360.0, true),
+            (Dismissal::Objective, date(2009, 11, 8), 340.0, false),
+        ]
+        .into_iter()
+        .for_each(|(dismissal, initial_date, days, capped)| {
             let report = calculate(Input {
                 dismissal,
-                ..python_input()
+                initial_date,
+                ..reference_input()
             })
-            .expect("valid");
-            let expected = 53_000.0 / 365.0 * f64::from(dismissal.days_per_year()) / 365.0;
-            assert!((report.daily_pay - expected).abs() < 1e-12, "{dismissal}");
+            .expect("valid input");
+            assert_eq!(
+                report.severance_days, days,
+                "{dismissal} from {initial_date}"
+            );
+            assert_eq!(report.capped(), capped, "{dismissal} from {initial_date}");
+            assert_eq!(
+                report.total,
+                days * (53_000.0 / 365.0),
+                "{dismissal} from {initial_date}"
+            );
         });
+    }
+
+    #[test]
+    fn formats_years_and_months() {
+        [
+            (0, "0y 0m"),
+            (1, "0y 1m"),
+            (12, "1y 0m"),
+            (61, "5y 1m"),
+            (263, "21y 11m"),
+        ]
+        .into_iter()
+        .for_each(|(months, text)| assert_eq!(years_and_months(months), text, "{months}"));
     }
 
     #[test]
     fn rejects_invalid_input() {
         let with_pay = |annual_pay| Input {
             annual_pay,
-            ..python_input()
+            ..reference_input()
         };
         [
             (with_pay(0.0), CalcError::NonPositivePay),
@@ -247,7 +374,7 @@ mod tests {
             (
                 Input {
                     current_date: date(2021, 10, 10),
-                    ..python_input()
+                    ..reference_input()
                 },
                 CalcError::DatesReversed,
             ),
@@ -261,7 +388,6 @@ mod tests {
         [
             (Dismissal::Objective, "20 days · objective"),
             (Dismissal::Unfair, "33 days · unfair"),
-            (Dismissal::UnfairPre2012, "45 days · unfair, pre-2012"),
         ]
         .into_iter()
         .for_each(|(dismissal, text)| assert_eq!(dismissal.to_string(), text));
@@ -281,29 +407,29 @@ mod tests {
         .for_each(|(value, decimals, expected)| {
             assert_eq!(thousands(value, decimals), expected, "{value}");
         });
-        assert_eq!(group_digits(&1_854_i64.to_string()), "1,854");
+        assert_eq!(group_digits("-1854"), "-1,854");
     }
 
     #[test]
     fn forecasts_the_next_anniversaries_of_the_initial_date() {
-        let reports = forecast(python_input(), 5).expect("valid input");
+        let reports = forecast(reference_input(), 5).expect("valid input");
         let summary: Vec<_> = reports
             .iter()
             .map(|r| {
                 (
                     r.input.current_date.to_string(),
-                    r.days,
+                    r.months,
                     thousands(r.total, 0),
                 )
             })
             .collect();
         let expected = [
-            ("2026-11-07", 1_854, "24,340"),
-            ("2027-10-11", 2_192, "28,777"),
-            ("2028-10-11", 2_558, "33,582"),
-            ("2029-10-11", 2_923, "38,374"),
-            ("2030-10-11", 3_288, "43,165"),
-            ("2031-10-11", 3_653, "47,957"),
+            ("2026-11-07", 61, "24,358"),
+            ("2027-10-11", 73, "29,150"),
+            ("2028-10-11", 85, "33,942"),
+            ("2029-10-11", 97, "38,734"),
+            ("2030-10-11", 109, "43,525"),
+            ("2031-10-11", 121, "48,317"),
         ]
         .map(|(date, days, total)| (date.to_owned(), days, total.to_owned()));
         assert_eq!(summary, expected);
@@ -314,7 +440,7 @@ mod tests {
         let leap = Input {
             initial_date: date(2020, 2, 29),
             current_date: date(2027, 1, 1),
-            ..python_input()
+            ..reference_input()
         };
         let dates: Vec<_> = forecast(leap, 2)
             .expect("valid input")
@@ -327,7 +453,7 @@ mod tests {
         );
         let on_an_anniversary = Input {
             current_date: date(2026, 10, 11),
-            ..python_input()
+            ..reference_input()
         };
         let dates: Vec<_> = forecast(on_an_anniversary, 1)
             .expect("valid input")
@@ -341,7 +467,7 @@ mod tests {
         );
         let invalid = Input {
             annual_pay: 0.0,
-            ..python_input()
+            ..reference_input()
         };
         assert_eq!(forecast(invalid, 5), Err(CalcError::NonPositivePay));
     }

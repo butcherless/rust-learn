@@ -269,7 +269,7 @@ fn report_height() -> u16 {
 mod tests {
     use super::*;
     use crate::domain::Input;
-    use crate::domain::fixtures::python_input;
+    use crate::domain::fixtures::reference_input;
     use crate::tui::app::Message;
     use crate::tui::app::fixtures::{app, apply};
     use ratatui::Terminal;
@@ -294,22 +294,24 @@ mod tests {
     }
 
     #[test]
-    fn shows_the_python_report_grouped() {
+    fn shows_the_reference_report_grouped() {
         assert_shows(
             &screen(&app(), 80, 24),
             &[
                 "Concept",
                 "SALARY",
                 "53,000",
-                "33",
-                "13.128",
+                "145.21",
                 "PERIOD",
                 "2021-10-11",
                 "2026-11-07",
-                "Days worked",
-                "1,854",
+                "5y 1m",
+                "SEVERANCE",
+                "33",
+                "Days of salary",
+                "167.75",
                 "TOTAL SEVERANCE PAY",
-                "24,340",
+                "24,358",
                 GOOD_LUCK,
                 DISCLAIMER,
             ],
@@ -325,7 +327,7 @@ mod tests {
         assert!(titles_on_one_row(&screen(&app(), 80, 24)));
         let narrow = screen(&app(), 60, 40);
         assert!(!titles_on_one_row(&narrow), "{narrow}");
-        assert_shows(&narrow, &["24,340"]);
+        assert_shows(&narrow, &["24,358"]);
     }
 
     #[test]
@@ -339,7 +341,7 @@ mod tests {
         Dismissal::ALL.iter().for_each(|&dismissal| {
             let app = App::from(Input {
                 dismissal,
-                ..python_input()
+                ..reference_input()
             });
             assert_shows(&screen(&app, 80, 24), &[&choice_text(dismissal)]);
         });
@@ -361,33 +363,33 @@ mod tests {
                 report_height(),
                 forecast_height()
             ),
-            (38, 15, 17, 11)
+            (31, 15, 20, 11)
         );
     }
 
     #[test]
     fn forecast_shows_when_the_terminal_is_tall_enough() {
-        let tall = screen(&app(), 80, 30);
+        let tall = screen(&app(), 80, 33);
         assert_shows(
             &tall,
             &[
                 "Forecast · next 5 years",
                 "2026-11-07  now",
                 "2031-10-11  +5y",
-                "24,340",
-                "28,777",
-                "33,582",
-                "38,374",
-                "43,165",
-                "47,957",
+                "24,358",
+                "29,150",
+                "33,942",
+                "38,734",
+                "43,525",
+                "48,317",
                 "earned today",
                 "forecast growth",
                 DISCLAIMER,
             ],
         );
-        assert!(!screen(&app(), 80, 29).contains("Forecast"));
+        assert!(!screen(&app(), 80, 32).contains("Forecast"));
         let stacked = screen(&app(), 60, 50);
-        assert_shows(&stacked, &["Forecast", "47,957"]);
+        assert_shows(&stacked, &["Forecast", "48,317"]);
     }
 
     #[test]
@@ -407,7 +409,7 @@ mod tests {
                 (text.matches(EARNED).count(), text.matches(GROWTH).count())
             })
             .collect();
-        // 74 columns leave 43 for the bars; today's 24,340 of 47,957 is 22 of them.
+        // 74 columns leave 43 for the bars; today's 24,358 of 48,317 is 22 of them.
         assert_eq!(
             counts,
             [(22, 0), (22, 4), (22, 8), (22, 12), (22, 17), (22, 21)]

@@ -3,7 +3,7 @@
 
 use std::iter::once;
 
-use crate::domain::{Report, group_digits, thousands};
+use crate::domain::{Report, thousands, years_and_months};
 use crate::sequence::separated;
 
 /// The report's title.
@@ -11,16 +11,22 @@ pub const TITLE: &str = "SEVERANCE PAY CALCULATOR REPORT";
 pub const GOOD_LUCK: &str = "Good luck!";
 pub const DISCLAIMER: &str =
     "Disclaimer: Humans and AI can make mistakes. Check your data, please :-)";
+/// Marks severance days that reached the dismissal's cap.
+pub const CAPPED: &str = "max";
+
+/// Width of a label with its dot leaders in the plain report.
+const LEADER_WIDTH: usize = 24;
 
 /// A value the report shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Concept {
     AnnualPay,
-    DaysPerYear,
-    DailyPay,
+    DailySalary,
     InitialDate,
     CurrentDate,
-    DaysWorked,
+    Service,
+    DaysPerYear,
+    SeveranceDays,
     Total,
 }
 
@@ -32,58 +38,57 @@ pub struct Group {
 }
 
 /// The report's groups, in order. [`Concept::Total`] follows them.
-pub const GROUPS: [Group; 2] = [
+pub const GROUPS: [Group; 3] = [
     Group {
         title: "SALARY",
-        concepts: &[Concept::AnnualPay, Concept::DaysPerYear, Concept::DailyPay],
+        concepts: &[Concept::AnnualPay, Concept::DailySalary],
     },
     Group {
         title: "PERIOD",
-        concepts: &[
-            Concept::InitialDate,
-            Concept::CurrentDate,
-            Concept::DaysWorked,
-        ],
+        concepts: &[Concept::InitialDate, Concept::CurrentDate, Concept::Service],
+    },
+    Group {
+        title: "SEVERANCE",
+        concepts: &[Concept::DaysPerYear, Concept::SeveranceDays],
     },
 ];
 
 impl Concept {
-    /// The concept's name in the grouped table.
+    /// The concept's name.
     pub fn label(self) -> &'static str {
         match self {
             Self::AnnualPay => "Annual pay",
-            Self::DaysPerYear => "Days per year",
-            Self::DailyPay => "Severance per day",
+            Self::DailySalary => "Daily salary",
             Self::InitialDate => "Initial date",
             Self::CurrentDate => "Current date",
-            Self::DaysWorked => "Days worked",
+            Self::Service => "Service",
+            Self::DaysPerYear => "Days per year",
+            Self::SeveranceDays => "Days of salary",
             Self::Total => "TOTAL SEVERANCE PAY",
         }
     }
 
-    /// The concept's name in the Python program's output, with its dot leaders.
-    fn python_label(self) -> &'static str {
-        match self {
-            Self::AnnualPay => "Annual Pay ·············>",
-            Self::DaysPerYear => "Type of dismissal  ·····>",
-            Self::DailyPay => "Severance per day pay ··>",
-            Self::InitialDate => "Initial date  ··········>",
-            Self::CurrentDate => "Current date  ··········>",
-            Self::DaysWorked => "Days between dates  ····>",
-            Self::Total => "Total severance pay·····>",
-        }
+    /// The label followed by dot leaders up to [`LEADER_WIDTH`], such as `Service ·····>`.
+    fn leader(self) -> String {
+        let label = self.label();
+        let dots = LEADER_WIDTH.saturating_sub(label.chars().count() + 2);
+        format!("{label} {}>", "·".repeat(dots))
     }
 
-    /// The concept's value in `report`, formatted as the Python program does.
+    /// The concept's value in `report`, formatted.
     pub fn value(self, report: &Report) -> String {
         let input = &report.input;
         match self {
             Self::AnnualPay => thousands(input.annual_pay, 0),
-            Self::DaysPerYear => input.dismissal.days_per_year().to_string(),
-            Self::DailyPay => thousands(report.daily_pay, 3),
+            Self::DailySalary => thousands(report.daily_salary, 2),
             Self::InitialDate => input.initial_date.to_string(),
             Self::CurrentDate => input.current_date.to_string(),
-            Self::DaysWorked => group_digits(&report.days.to_string()),
+            Self::Service => years_and_months(report.months),
+            Self::DaysPerYear => input.dismissal.days_per_year().to_string(),
+            Self::SeveranceDays if report.capped() => {
+                format!("{} {CAPPED}", thousands(report.severance_days, 2))
+            }
+            Self::SeveranceDays => thousands(report.severance_days, 2),
             Self::Total => thousands(report.total, 0),
         }
     }
@@ -101,8 +106,8 @@ pub fn horizon(years: usize) -> String {
     }
 }
 
-/// The whole report as plain text, laid out like the Python program's output: a leading blank
-/// line, then the title, each group, the total and the closing notes, separated by blank lines.
+/// The whole report as plain text: a leading blank line, then the title, each group, the total and
+/// the closing notes, separated by blank lines.
 pub fn plain(report: &Report) -> String {
     let stars = "*".repeat(TITLE.len());
     let header = vec![stars.clone(), TITLE.to_owned(), stars];
@@ -113,7 +118,7 @@ pub fn plain(report: &Report) -> String {
         .map(|concepts| {
             concepts
                 .iter()
-                .map(|concept| format!("{} {}", concept.python_label(), concept.value(report)))
+                .map(|concept| format!("{} {}", concept.leader(), concept.value(report)))
                 .collect()
         });
     let notes = [GOOD_LUCK, DISCLAIMER].map(|note| vec![note.to_owned()]);
@@ -129,22 +134,21 @@ pub fn plain(report: &Report) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::calculate;
-    use crate::domain::fixtures::python_input;
+    use crate::domain::fixtures::{date, reference_input};
+    use crate::domain::{Input, calculate};
 
-    /// The Python program's output from the screenshot, character by character. Shared with
-    /// `tests/cli.rs`.
-    const PYTHON_OUTPUT: &str = include_str!("../tests/fixtures/python_output.txt");
+    /// The reference case's report, character by character. Shared with `tests/cli.rs`.
+    const REFERENCE_OUTPUT: &str = include_str!("../tests/fixtures/reference_output.txt");
 
     #[test]
-    fn plain_text_matches_the_python_output() {
-        let report = calculate(python_input()).expect("valid input");
-        assert_eq!(plain(&report), PYTHON_OUTPUT);
+    fn plain_text_matches_the_reference_output() {
+        let report = calculate(reference_input()).expect("valid input");
+        assert_eq!(plain(&report), REFERENCE_OUTPUT);
     }
 
     #[test]
-    fn groups_the_python_values() {
-        let report = calculate(python_input()).expect("valid input");
+    fn groups_the_reference_values() {
+        let report = calculate(reference_input()).expect("valid input");
         let values: Vec<Vec<String>> = GROUPS
             .iter()
             .map(|group| group.concepts.iter().map(|c| c.value(&report)).collect())
@@ -152,11 +156,26 @@ mod tests {
         assert_eq!(
             values,
             [
-                vec!["53,000", "33", "13.128"],
-                vec!["2021-10-11", "2026-11-07", "1,854"]
+                vec!["53,000", "145.21"],
+                vec!["2021-10-11", "2026-11-07", "5y 1m"],
+                vec!["33", "167.75"],
             ]
         );
-        assert_eq!(Concept::Total.value(&report), "24,340");
+        assert_eq!(Concept::Total.value(&report), "24,358");
+    }
+
+    #[test]
+    fn marks_capped_days() {
+        let report = calculate(Input {
+            initial_date: date(2000, 1, 1),
+            ..reference_input()
+        })
+        .expect("valid input");
+        assert_eq!(CAPPED, "max");
+        assert_eq!(
+            Concept::SeveranceDays.value(&report),
+            format!("720.00 {CAPPED}")
+        );
     }
 
     #[test]

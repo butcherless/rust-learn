@@ -1,0 +1,20 @@
+
+*******************************
+SEVERANCE PAY CALCULATOR REPORT
+*******************************
+
+Annual pay ············> 53,000
+Daily salary ··········> 145.21
+
+Initial date ··········> 2021-10-11
+Current date ··········> 2026-11-07
+Service ···············> 5y 1m
+
+Days per year ·········> 33
+Days of salary ········> 167.75
+
+TOTAL SEVERANCE PAY ···> 24,358
+
+Good luck!
+
+Disclaimer: Humans and AI can make mistakes. Check your data, please :-)

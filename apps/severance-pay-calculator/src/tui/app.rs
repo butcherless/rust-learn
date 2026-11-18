@@ -296,11 +296,11 @@ fn without_last_char(text: &str) -> String {
 #[cfg(test)]
 pub mod fixtures {
     use super::*;
-    use crate::domain::fixtures::python_input;
+    use crate::domain::fixtures::reference_input;
 
-    /// The form with the Python program's values on 2026-11-07.
+    /// The form with the reference case's values.
     pub fn app() -> App {
-        App::from(python_input())
+        App::from(reference_input())
     }
 
     /// Applies `messages` in order, ignoring effects.
@@ -318,7 +318,7 @@ pub mod fixtures {
 mod tests {
     use super::fixtures::{app, apply, typed};
     use super::*;
-    use crate::domain::fixtures::{date, python_input};
+    use crate::domain::fixtures::{date, reference_input};
     use Message::{
         Backspace, Clear, NextField, NextOption, PreviousField, PreviousOption, Quit, Type,
     };
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn starts_from_the_input() {
-        assert_eq!(app().input(), Ok(python_input()));
+        assert_eq!(app().input(), Ok(reference_input()));
         assert_eq!(app().focus(), Field::AnnualPay);
     }
 
@@ -384,7 +384,7 @@ mod tests {
                 [vec![Clear], typed("6x00.51"), vec![Backspace]].concat(),
                 Input {
                     annual_pay: 600.5,
-                    ..python_input()
+                    ..reference_input()
                 },
             ),
             (
@@ -392,7 +392,7 @@ mod tests {
                 [vec![NextField, NextField, Clear], typed("2020-x01/-15")].concat(),
                 Input {
                     initial_date: date(2020, 1, 15),
-                    ..python_input()
+                    ..reference_input()
                 },
             ),
             (
@@ -400,33 +400,33 @@ mod tests {
                 [vec![PreviousField, Clear], typed("2030-06-300")].concat(),
                 Input {
                     current_date: date(2030, 6, 30),
-                    ..python_input()
+                    ..reference_input()
                 },
             ),
             (
                 "the dismissal field ignores typing and editing",
                 [vec![NextField], typed("45"), vec![Backspace, Clear]].concat(),
-                python_input(),
+                reference_input(),
             ),
             (
                 "the dismissal changes only when focused",
                 vec![NextOption],
-                python_input(),
+                reference_input(),
             ),
             (
                 "left and right cycle the dismissal",
                 vec![NextField, PreviousOption],
                 Input {
                     dismissal: Dismissal::Objective,
-                    ..python_input()
+                    ..reference_input()
                 },
             ),
             (
                 "the dismissal wraps around",
-                vec![NextField, NextOption, NextOption],
+                vec![NextField, NextOption],
                 Input {
                     dismissal: Dismissal::Objective,
-                    ..python_input()
+                    ..reference_input()
                 },
             ),
         ]

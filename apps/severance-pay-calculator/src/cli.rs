@@ -18,7 +18,7 @@ pub struct Args {
     #[arg(long, value_name = "AMOUNT", default_value_t = DEFAULT_ANNUAL_PAY)]
     pub annual_pay: f64,
 
-    /// Type of dismissal: days of salary per year worked. 20, 33 and 45 are accepted too.
+    /// Type of dismissal: days of salary per year worked. 20 and 33 are accepted too.
     #[arg(long, value_enum, default_value_t = DismissalArg::Unfair)]
     pub dismissal: DismissalArg,
 
@@ -40,9 +40,6 @@ pub enum DismissalArg {
     /// 33 days per year.
     #[value(alias = "33")]
     Unfair,
-    /// 45 days per year, for service before 12 February 2012.
-    #[value(name = "unfair-pre2012", alias = "45")]
-    UnfairPre2012,
 }
 
 impl From<DismissalArg> for Dismissal {
@@ -50,7 +47,6 @@ impl From<DismissalArg> for Dismissal {
         match arg {
             DismissalArg::Objective => Self::Objective,
             DismissalArg::Unfair => Self::Unfair,
-            DismissalArg::UnfairPre2012 => Self::UnfairPre2012,
         }
     }
 }
@@ -70,7 +66,7 @@ impl Args {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::fixtures::{date, python_input};
+    use crate::domain::fixtures::{date, reference_input};
 
     fn input(args: &[&str]) -> Result<Input, clap::error::ErrorKind> {
         let today = date(2026, 11, 7);
@@ -100,30 +96,20 @@ mod tests {
             "2020-02-29",
         ];
         [
-            (&[][..], Ok(python_input())),
+            (&[][..], Ok(reference_input())),
             (&all[..], Ok(custom)),
             (
                 &["--dismissal", "45"][..],
-                Ok(Input {
-                    dismissal: Dismissal::UnfairPre2012,
-                    ..python_input()
-                }),
-            ),
-            (
-                &["--dismissal", "unfair-pre2012"][..],
-                Ok(Input {
-                    dismissal: Dismissal::UnfairPre2012,
-                    ..python_input()
-                }),
+                Err(clap::error::ErrorKind::InvalidValue),
             ),
             (
                 &["--dismissal", "20"][..],
                 Ok(Input {
                     dismissal: Dismissal::Objective,
-                    ..python_input()
+                    ..reference_input()
                 }),
             ),
-            (&["--dismissal", "33"][..], Ok(python_input())),
+            (&["--dismissal", "33"][..], Ok(reference_input())),
             (
                 &["--dismissal", "30"][..],
                 Err(clap::error::ErrorKind::InvalidValue),

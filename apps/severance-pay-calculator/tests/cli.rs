@@ -2,8 +2,8 @@
 
 use std::process::{Command, Output};
 
-const PYTHON_OUTPUT: &str = include_str!("fixtures/python_output.txt");
-const PYTHON_ARGS: [&str; 9] = [
+const REFERENCE_OUTPUT: &str = include_str!("fixtures/reference_output.txt");
+const REFERENCE_ARGS: [&str; 9] = [
     "--print",
     "--annual-pay",
     "53000",
@@ -27,10 +27,10 @@ fn stdout(output: &Output) -> String {
 }
 
 #[test]
-fn print_with_the_python_values_matches_the_python_output() {
-    let output = run(&PYTHON_ARGS);
+fn print_with_the_reference_values_matches_the_reference_output() {
+    let output = run(&REFERENCE_ARGS);
     assert!(output.status.success(), "{output:?}");
-    assert_eq!(stdout(&output), PYTHON_OUTPUT);
+    assert_eq!(stdout(&output), REFERENCE_OUTPUT);
 }
 
 #[test]
@@ -38,8 +38,8 @@ fn print_without_flags_uses_the_defaults_and_today() {
     let output = run(&["--print"]);
     assert!(output.status.success(), "{output:?}");
     [
-        "Annual Pay ·············> 53,000",
-        "Initial date  ··········> 2021-10-11",
+        "Annual pay ············> 53,000",
+        "Initial date ··········> 2021-10-11",
     ]
     .into_iter()
     .for_each(|line| assert!(stdout(&output).contains(line), "missing {line:?}"));
@@ -59,12 +59,13 @@ fn print_applies_the_flags() {
         "2025-12-31",
     ]);
     assert!(output.status.success(), "{output:?}");
-    // 36,500 / 365 × 20 / 365 = 5.479… per day, × 365 days = 2,000.
+    // 36,500 / 365 = 100 per day, × 20 days for 12 months = 2,000.
     [
-        "Type of dismissal  ·····> 20",
-        "Severance per day pay ··> 5.479",
-        "Days between dates  ····> 365",
-        "Total severance pay·····> 2,000",
+        "Daily salary ··········> 100.00",
+        "Service ···············> 1y 0m",
+        "Days per year ·········> 20",
+        "Days of salary ········> 20.00",
+        "TOTAL SEVERANCE PAY ···> 2,000",
     ]
     .into_iter()
     .for_each(|line| assert!(stdout(&output).contains(line), "missing {line:?}"));
