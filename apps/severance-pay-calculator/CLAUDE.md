@@ -58,7 +58,7 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
 - **`tui::view`** is the drawing. It only reads `App`.
   - Panels sit side by side from 76 columns, and the Forecast panel below them only from 33 rows. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
   - Panel sizes are computed from `GROUPS`, `Field::ALL`, `FORECAST_YEARS` and the widest dismissal text.
-  - Colors: cyan input border, orange group headings, cyan values, green total, red errors, gray help.
+  - Colors: cyan input border, green report border, orange forecast border, orange group headings, cyan values, green total, red errors, gray help.
 - **`tui::mod`** is the only code with side effects: the terminal and the synchronous `crossterm::event::read` loop.
 - **`cli`**: clap `Args`. The flags fill in both the UI's starting form and `--print`. `DismissalArg` keeps clap out of the domain and accepts 20 and 33 as aliases.
 - **`main.rs`**: the composition root. It reads the clock and passes today in.

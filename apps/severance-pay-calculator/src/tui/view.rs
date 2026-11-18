@@ -72,7 +72,7 @@ pub fn draw(app: &App, frame: &mut Frame) {
         Paragraph::new(input_lines(app)).block(panel(" Input ", Color::Cyan)),
         input_area,
     );
-    let report_block = panel(" Report ", Color::DarkGray)
+    let report_block = panel(" Report ", Color::Green)
         .title_bottom(Line::from(format!(" {GOOD_LUCK} ")).green().right_aligned());
     match app.report() {
         Ok(report) => frame.render_widget(report_table(&report).block(report_block), report_area),
@@ -157,7 +157,7 @@ fn value_cell(text: String) -> Cell<'static> {
 /// The forecast panel: one stacked bar per anniversary, or a hint when the input is invalid.
 fn draw_forecast(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
     let title = format!(" Forecast · next {FORECAST_YEARS} years ");
-    let block = panel(&title, Color::DarkGray);
+    let block = panel(&title, ORANGE);
     let width = usize::from(block.inner(area).width);
     let lines = app.forecast().map_or_else(
         |_| vec![Line::from("Fix the input to see the forecast").dark_gray()],
