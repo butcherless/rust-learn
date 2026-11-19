@@ -87,15 +87,17 @@ pub enum Light {
     Failed,
 }
 
-/// The switch of a pull request's merge column: off while open, moving while merging, on once
-/// merged.
+/// The switch of a pull request's merge column: off while open, confirming after the first merge
+/// key, moving while merging, on once merged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeSwitch {
-    /// Open: the knob on the left, over orange.
+    /// Open: an empty gray checkbox.
     Off,
-    /// Being merged: the knob in the middle.
+    /// Waiting for the second merge key: `[?]` in orange.
+    Confirming,
+    /// Being merged: `[~]` in orange.
     Moving,
-    /// Merged: the knob on the right, over green.
+    /// Merged: a green tick.
     On,
 }
 
@@ -192,15 +194,18 @@ impl App {
 
     /// The merge switch of `row`, or `None` when it is not a pull request.
     pub fn merge_switch(&self, row: &DisplayRow) -> Option<MergeSwitch> {
+        let is = |pull_request: &Option<PrRef>, url: &PrUrl| {
+            pull_request
+                .as_ref()
+                .is_some_and(|pull_request| &pull_request.url == url)
+        };
         row.url().map(|url| {
             if row.kind == RowKind::MergedPullRequest {
                 MergeSwitch::On
-            } else if self
-                .merging
-                .as_ref()
-                .is_some_and(|merging| &merging.url == url)
-            {
+            } else if is(&self.merging, url) {
                 MergeSwitch::Moving
+            } else if is(&self.confirming, url) {
+                MergeSwitch::Confirming
             } else {
                 MergeSwitch::Off
             }
@@ -818,7 +823,12 @@ mod tests {
         let (app, effect) = loaded().update(Message::MergeSelected);
         assert_eq!(effect, Effect::None);
         assert_eq!(app.status(), format!("{CONFIRM_MERGE} a/b#1"));
-        assert_eq!(first_switch(&app), Some(MergeSwitch::Off));
+        assert_eq!(first_switch(&app), Some(MergeSwitch::Confirming));
+        assert_eq!(
+            app.merge_switch(&app.rows()[1]),
+            Some(MergeSwitch::Off),
+            "only the pull request being confirmed asks"
+        );
 
         let (app, effect) = app.update(Message::MergeSelected);
         assert_eq!(effect, Effect::Merge(first_pull_request()));
@@ -837,6 +847,11 @@ mod tests {
         .for_each(|other| {
             let cancelled = run(loaded(), [Message::MergeSelected, other.clone()]).0;
             assert!(!cancelled.status().starts_with(CONFIRM_MERGE), "{other:?}");
+            assert_eq!(
+                first_switch(&cancelled),
+                Some(MergeSwitch::Off),
+                "{other:?}"
+            );
             // The next merge key asks again instead of merging.
             let (app, effect) = cancelled.update(Message::MergeSelected);
             assert_eq!(effect, Effect::None, "{other:?}");

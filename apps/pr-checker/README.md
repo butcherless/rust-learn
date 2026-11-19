@@ -54,11 +54,11 @@ shows a gray `loading…` row, or its previous rows when fetching again. The lig
 the status line blinks orange while fetching, with the progress (`Loading… 5/13`), and then stays
 green, or red if a repository failed. The keys work while fetching.
 
-A Merge column after Mergeable shows a switch on each pull request: off, with an orange track,
-while it is open, and on, with a green track, once you merge it from here. Merging asks first:
-`m` writes `Press m again to merge owner/repo#N` in the status line, a second `m` merges it with a
-merge commit, and any other key cancels. While GitHub merges it the knob sits in the middle, and
-only one merge runs at a time. Once merged, the whole row turns green, the selection included:
+A Merge column after Mergeable shows a checkbox on each pull request: empty and gray, `[ ]`, while
+it is open, and a green tick, `[✓]`, once you merge it from here. Merging asks first: `m` writes
+`Press m again to merge owner/repo#N` in the status line and turns the checkbox into an orange
+`[?]`, a second `m` merges it with a merge commit, and any other key cancels. While GitHub merges
+it the checkbox shows `[~]` in orange, and only one merge runs at a time. Once merged, the whole row turns green, the selection included:
 State says `merged`, Mergeable `—`, and the summary counts it as merged instead of open. It stays
 like that until a fetch no longer lists it. If GitHub refuses the merge (conflicts, a draft, a
 branch rule), the row stays orange and the status line says why.

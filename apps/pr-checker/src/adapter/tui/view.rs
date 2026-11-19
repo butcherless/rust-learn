@@ -22,12 +22,11 @@ const LIGHT_OFF: &str = "○";
 const MERGEABLE_WIDTH: u16 = 9;
 /// The title of the column after [`HEADER`], only in the terminal UI.
 const MERGE_TITLE: &str = "Merge";
-/// The switch's ends, which round off its track, and its knob.
-const SWITCH_LEFT: &str = "▐";
-const SWITCH_RIGHT: &str = "▌";
-const SWITCH_KNOB: char = '●';
-/// The track between the ends: three cells, one of them the knob.
-const SWITCH_TRACK: usize = 3;
+/// The merge checkbox while open, confirming, merging and merged, padded to [`MERGE_WIDTH`].
+const CHECKBOX_OFF: &str = " [ ] ";
+const CHECKBOX_CONFIRMING: &str = " [?] ";
+const CHECKBOX_MOVING: &str = " [~] ";
+const CHECKBOX_ON: &str = " [✓] ";
 const MERGE_WIDTH: u16 = 5;
 
 /// Draws the whole screen for `app`.
@@ -84,28 +83,16 @@ fn table(app: &App) -> Table<'static> {
         .highlight_symbol(HIGHLIGHT_SYMBOL)
 }
 
-/// A switch like a phone's: a white knob on an orange track while open, sliding to the right on
-/// green once merged.
+/// A checkbox: empty and gray while open, `?` in orange while it waits for the second merge key,
+/// `~` in orange while merging, and a green tick once merged. Its text tells the states apart even without color.
 fn switch(state: MergeSwitch) -> Cell<'static> {
-    let (knob_at, color) = match state {
-        MergeSwitch::Off => (0, orange()),
-        MergeSwitch::Moving => (1, orange()),
-        MergeSwitch::On => (SWITCH_TRACK - 1, Color::Green),
+    let (text, style) = match state {
+        MergeSwitch::Off => (CHECKBOX_OFF, Style::new().fg(Color::DarkGray)),
+        MergeSwitch::Confirming => (CHECKBOX_CONFIRMING, Style::new().fg(orange()).bold()),
+        MergeSwitch::Moving => (CHECKBOX_MOVING, Style::new().fg(orange()).bold()),
+        MergeSwitch::On => (CHECKBOX_ON, Style::new().fg(Color::Green).bold()),
     };
-    let track: String = (0..SWITCH_TRACK)
-        .map(|position| {
-            if position == knob_at {
-                SWITCH_KNOB
-            } else {
-                ' '
-            }
-        })
-        .collect();
-    Cell::from(Line::from(vec![
-        Span::styled(SWITCH_LEFT, Style::new().fg(color)),
-        Span::styled(track, Style::new().fg(Color::White).bg(color)),
-        Span::styled(SWITCH_RIGHT, Style::new().fg(color)),
-    ]))
+    Cell::from(Span::styled(text, style))
 }
 
 /// The project column fits its longest entry; the title takes the remaining space.
@@ -194,45 +181,61 @@ mod tests {
     /// The first table row on the 70×10 test screen, below the border and the header.
     const FIRST_ROW: u16 = 2;
 
-    /// The switch of the first row: its text and the color of its track.
+    /// The merge checkbox of the first row: its text and its color.
     fn first_switch(app: &App) -> (String, Color) {
         let buffer = buffer(app);
-        let start = (0..buffer.area.width)
-            .find(|&x| buffer[(x, FIRST_ROW)].symbol() == SWITCH_LEFT)
-            .unwrap();
+        let width = buffer.area.width;
+        let start = width - 1 - MERGE_WIDTH;
         let text = (start..start + MERGE_WIDTH)
             .map(|x| buffer[(x, FIRST_ROW)].symbol())
             .collect();
-        (text, buffer[(start + 1, FIRST_ROW)].bg)
+        (text, buffer[(start + 1, FIRST_ROW)].fg)
     }
 
-    /// The switch's colors are the check, so this test reads them. The selection moves off the
-    /// first row, whose highlight would reverse them.
+    /// The checkbox's colors are part of the check, so this test reads them. The selection
+    /// moves off the first row, whose highlight would reverse them, except while confirming,
+    /// which moving would cancel: there the highlight only adds `REVERSED` to the same color.
     #[test]
-    fn the_merge_switch_slides_and_turns_green() {
+    fn the_merge_checkbox_fills_and_turns_green() {
+        assert_eq!(
+            [
+                CHECKBOX_OFF,
+                CHECKBOX_CONFIRMING,
+                CHECKBOX_MOVING,
+                CHECKBOX_ON
+            ],
+            [" [ ] ", " [?] ", " [~] ", " [✓] "]
+        );
+        let away = Message::Move(Move::Last);
         [
-            ("open", Message::Tick, "▐●  ▌", orange()),
-            ("merging", Message::MergeSelected, "▐ ● ▌", orange()),
+            (
+                "open",
+                loaded(),
+                vec![away.clone()],
+                CHECKBOX_OFF,
+                Color::DarkGray,
+            ),
+            (
+                "confirming",
+                loaded(),
+                vec![Message::MergeSelected],
+                CHECKBOX_CONFIRMING,
+                orange(),
+            ),
+            (
+                "merging",
+                loaded(),
+                vec![Message::MergeSelected, Message::MergeSelected, away.clone()],
+                CHECKBOX_MOVING,
+                orange(),
+            ),
+            ("merged", merged(), vec![away], CHECKBOX_ON, Color::Green),
         ]
         .into_iter()
-        .for_each(|(case, second_key, text, color)| {
-            let app = run(
-                loaded(),
-                [
-                    Message::MergeSelected,
-                    second_key,
-                    Message::Move(Move::Last),
-                ],
-            )
-            .0;
+        .for_each(|(case, app, messages, text, color)| {
+            let app = run(app, messages).0;
             assert_eq!(first_switch(&app), (text.to_owned(), color), "{case}");
         });
-        let app = run(merged(), [Message::Move(Move::Last)]).0;
-        assert_eq!(
-            first_switch(&app),
-            ("▐  ●▌".to_owned(), Color::Green),
-            "merged"
-        );
     }
 
     /// The selected row is drawn in inverse video of its color, so it turns from orange to
