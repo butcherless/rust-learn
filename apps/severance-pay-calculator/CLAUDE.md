@@ -40,6 +40,7 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `calculate(Input) -> Result<Report, CalcError>`. `Report` carries its `Input`, and `capped()` says whether the days reached the dismissal's cap.
   - `months_of_service` counts the months whose start (`initial + k months`, which chrono clamps to the month's last day) falls on or before the last day, so a started month counts as a whole one. The arithmetic stays in `f64`.
   - `forecast(Input, years)` runs `calculate` on the current date and on the next `years` anniversaries of the initial date after it, with constant salary. Each anniversary is counted from the initial date, so a 29 February start falls on 28 February only in non-leap years.
+  - `milestones(Input, step, months)` gives the reports on the first month start (the only days the total grows) that reaches each next multiple of `step`, within `months`. `milestone` is the multiple a report reaches.
   - `thousands`, `group_digits` and `years_and_months` format numbers.
   - `Dismissal` is a closed set of presets (objective and unfair) with their days per year and cap (`max_days`), and implements `Display`.
   - The defaults live here, so the UI and `--print` agree.
@@ -49,14 +50,14 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `GROUPS` defines SALARY, PERIOD and SEVERANCE, and `Concept::Total` follows them.
   - `plain` builds the `--print` text from the same groups, with dot leaders generated from each label.
   - To add a value, add a `Concept` and list it in `GROUPS`. Both outputs and the panel sizes follow.
-  - `FORECAST_YEARS` (5) and `horizon` give the forecast's `now`, `+1y`… labels.
+  - `FORECAST_YEARS` (5) and `horizon` give the forecast's `now`, `+1y`… labels. `MILESTONE_STEP` (1,000) and `MILESTONE_MONTHS` (12) set the milestones.
 - **`tui::app`** is the state, following The Elm Architecture: `message(key)` gives a `Message`, and `App::update(self, Message) -> (App, Effect)` gives the next state.
   - Fields stay raw `String`s and are parsed on every draw, so invalid input shows an error and never blocks typing.
   - Per-field behavior is defined on `Field`: `label` and `text_rules` (max length and accepted characters).
   - `App::value(field)` is what the view reads.
   - `fixtures` has `app`, `apply` and `typed`.
 - **`tui::view`** is the drawing. It only reads `App`.
-  - Panels sit side by side from 76 columns, and the Forecast panel below them only from 33 rows. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
+  - Panels sit side by side from 76 columns, and the Forecast panel below them only from 33 rows; its milestones take 5 more rows (38 in all), whatever their count, and are left out first. The milestone timeline spans the panel's whole width for a year, independent of the bars' scale; `label_columns` drops labels that would overlap, keeping the last one. Each bar has a green part for what is earned today (`█`) and a cyan part for the growth (`░`), scaled to the largest total. Today's total is green and bold, like the report's total; the forecast totals are cyan.
   - Panel sizes are computed from `GROUPS`, `Field::ALL`, `FORECAST_YEARS` and the widest dismissal text.
   - Colors: cyan input border, green report border, orange forecast border, orange group headings, cyan values, green total, red errors, gray help.
 - **`tui::mod`** is the only code with side effects: the terminal and the synchronous `crossterm::event::read` loop.

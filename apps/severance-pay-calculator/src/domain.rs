@@ -195,6 +195,46 @@ pub fn forecast(input: Input, years: usize) -> Result<Vec<Report>, CalcError> {
         .collect()
 }
 
+/// The reports for the first day on which the total reaches each next multiple of `step`, until
+/// `months` months after the current date. The total only grows when a new month of service
+/// starts, so only those days are candidates. Empty once the severance is capped.
+pub fn milestones(input: Input, step: f64, months: u32) -> Result<Vec<Report>, CalcError> {
+    let today = calculate(input)?;
+    let level = |report: &Report| milestone(report, step);
+    let end = months_later(input.current_date, months);
+    (today.months..)
+        .map_while(|month| input.initial_date.checked_add_months(Months::new(month)))
+        .take_while(|start| end.is_some_and(|end| *start <= end))
+        .map(|current_date| {
+            calculate(Input {
+                current_date,
+                ..input
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|reports| {
+            reports
+                .into_iter()
+                .scan(level(&today), |reached, report| {
+                    let crossed = level(&report) > *reached;
+                    *reached = reached.max(level(&report));
+                    Some(crossed.then_some(report))
+                })
+                .flatten()
+                .collect()
+        })
+}
+
+/// The day `months` months after `date`, the last day [`milestones`] covers.
+pub fn months_later(date: NaiveDate, months: u32) -> Option<NaiveDate> {
+    date.checked_add_months(Months::new(months))
+}
+
+/// The largest multiple of `step` that the report's total reaches.
+pub fn milestone(report: &Report, step: f64) -> f64 {
+    (report.total / step).floor() * step
+}
+
 /// Formats `value` with `decimals` decimals and a comma every three digits, like Python's
 /// `f"{value:,.{decimals}f}"`.
 pub fn thousands(value: f64, decimals: usize) -> String {
@@ -470,5 +510,47 @@ mod tests {
             ..reference_input()
         };
         assert_eq!(forecast(invalid, 5), Err(CalcError::NonPositivePay));
+    }
+
+    #[test]
+    fn milestones_are_the_first_days_past_each_thousand() {
+        let summary: Vec<_> = milestones(reference_input(), 1_000.0, 12)
+            .expect("valid input")
+            .iter()
+            .map(|r| {
+                (
+                    r.input.current_date.to_string(),
+                    milestone(r, 1_000.0),
+                    thousands(r.total, 0),
+                )
+            })
+            .collect();
+        // A month of service adds 33 / 12 days, about 399, from the 11th of each month.
+        let expected = [
+            ("2026-12-11", 25_000.0, "25,157"),
+            ("2027-03-11", 26_000.0, "26,355"),
+            ("2027-05-11", 27_000.0, "27,153"),
+            ("2027-08-11", 28_000.0, "28,351"),
+            ("2027-10-11", 29_000.0, "29,150"),
+        ]
+        .map(|(date, level, total)| (date.to_owned(), level, total.to_owned()));
+        assert_eq!(summary, expected);
+    }
+
+    #[test]
+    fn milestones_stop_at_the_cap_and_propagate_errors() {
+        let capped = Input {
+            initial_date: date(2000, 1, 1),
+            ..reference_input()
+        };
+        assert_eq!(milestones(capped, 1_000.0, 12), Ok(vec![]));
+        let invalid = Input {
+            annual_pay: 0.0,
+            ..reference_input()
+        };
+        assert_eq!(
+            milestones(invalid, 1_000.0, 12),
+            Err(CalcError::NonPositivePay)
+        );
     }
 }

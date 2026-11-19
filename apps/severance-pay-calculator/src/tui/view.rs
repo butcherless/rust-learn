@@ -10,8 +10,11 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Cell, Padding, Paragraph, Row, Table, Wrap};
 
-use crate::domain::{Dismissal, Report};
-use crate::report::{Concept, DISCLAIMER, FORECAST_YEARS, GOOD_LUCK, GROUPS, horizon};
+use crate::domain::{Dismissal, Report, milestone, months_later, thousands};
+use crate::report::{
+    Concept, DISCLAIMER, FORECAST_YEARS, GOOD_LUCK, GROUPS, MILESTONE_MONTHS, MILESTONE_STEP,
+    horizon,
+};
 use crate::sequence::{Cycle, separated};
 use crate::tui::app::{App, Field, FieldValue};
 
@@ -30,6 +33,14 @@ const GROWTH: &str = "░";
 const GAP: &str = "  ";
 const DATE_WIDTH: usize = 10;
 const HORIZON_WIDTH: usize = 3;
+const TRACK: &str = "─";
+const TRACK_START: &str = "├";
+const TRACK_END: &str = "┤";
+const MARKER: &str = "●";
+/// Month name and day, such as `Dec-11`: the heading gives the year.
+const MILESTONE_DATE: &str = "%b-%d";
+/// A blank line, the heading, the timeline, the dates and the amounts.
+const MILESTONE_ROWS: usize = 5;
 const HELP: &str = "Tab/↓ next · Shift+Tab/↑ previous · ←/→ change type · Del clear · Esc/q quit";
 
 /// Draws `app` on the whole frame.
@@ -46,9 +57,17 @@ pub fn draw(app: &App, frame: &mut Frame) {
     } else {
         input_height() + report_height()
     };
-    // Shown only when it fits with the panels, the footer and the help line.
-    let forecast_rows = if area.height >= main_needed + forecast_height() + 2 {
-        forecast_height()
+    // Shown only when it fits with the panels, the footer and the help line, with the milestones
+    // if they fit too.
+    let fits = |milestone_rows| area.height >= main_needed + forecast_height(milestone_rows) + 2;
+    let milestone_rows = app.milestones().map_or(0, |_| MILESTONE_ROWS);
+    let milestone_rows = if fits(milestone_rows) {
+        milestone_rows
+    } else {
+        0
+    };
+    let forecast_rows = if fits(milestone_rows) {
+        forecast_height(milestone_rows)
     } else {
         0
     };
@@ -84,7 +103,7 @@ pub fn draw(app: &App, frame: &mut Frame) {
         ),
     }
     if forecast_rows > 0 {
-        draw_forecast(app, frame, forecast_area);
+        draw_forecast(app, frame, forecast_area, milestone_rows > 0);
     }
     [(DISCLAIMER, footer), (HELP, help)]
         .into_iter()
@@ -154,14 +173,28 @@ fn value_cell(text: String) -> Cell<'static> {
     Cell::from(Line::from(text).right_aligned())
 }
 
-/// The forecast panel: one stacked bar per anniversary, or a hint when the input is invalid.
-fn draw_forecast(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
+/// The forecast panel: one stacked bar per anniversary, then the milestones when
+/// `with_milestones`, or a hint when the input is invalid.
+fn draw_forecast(app: &App, frame: &mut Frame, area: ratatui::layout::Rect, with_milestones: bool) {
     let title = format!(" Forecast · next {FORECAST_YEARS} years ");
     let block = panel(&title, ORANGE);
     let width = usize::from(block.inner(area).width);
+    let milestones = || {
+        app.milestones()
+            .ok()
+            .filter(|_| with_milestones)
+            .unwrap_or_default()
+    };
     let lines = app.forecast().map_or_else(
         |_| vec![Line::from("Fix the input to see the forecast").dark_gray()],
-        |reports| forecast_lines(&reports, width),
+        |reports| {
+            let milestone_lines = reports
+                .first()
+                .filter(|_| with_milestones)
+                .map(|today| milestone_lines(today, &milestones(), width))
+                .unwrap_or_default();
+            [forecast_lines(&reports, width), milestone_lines].concat()
+        },
     );
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
@@ -170,7 +203,7 @@ fn draw_forecast(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
 /// total scaled to the largest one: the part earned today in solid green, the growth shaded cyan.
 fn forecast_lines(reports: &[Report], width: usize) -> Vec<Line<'static>> {
     let value_width = usize::from(VALUE_WIDTH);
-    let bar_width = width.saturating_sub(DATE_WIDTH + HORIZON_WIDTH + value_width + 3 * GAP.len());
+    let bar_width = bar_width(width);
     let max = reports.iter().map(|r| r.total).fold(0.0, f64::max);
     let earned = reports
         .first()
@@ -208,6 +241,111 @@ fn forecast_lines(reports: &[Report], width: usize) -> Vec<Line<'static>> {
         Span::from(" forecast growth").gray(),
     ]);
     bars.chain(once(legend)).collect()
+}
+
+/// A milestone on the timeline: its column and labels.
+struct Point {
+    column: usize,
+    date: String,
+    amount: String,
+}
+
+impl Point {
+    /// The columns its labels take, the wider of both.
+    fn width(&self) -> usize {
+        self.date.chars().count().max(self.amount.chars().count())
+    }
+}
+
+/// A blank line, a heading with the year covered, then a timeline of that year with a dot per
+/// milestone, and below each dot its date and the amount reached; or a note when there is none.
+/// A label that would overlap the previous one is left out, but its dot stays.
+fn milestone_lines(today: &Report, milestones: &[Report], width: usize) -> Vec<Line<'static>> {
+    let start = today.input.current_date;
+    let end = months_later(start, MILESTONE_MONTHS).unwrap_or(start);
+    let step = thousands(MILESTONE_STEP, 0);
+    let heading = Line::from(format!("Next {step} milestones · {start} → {end}"))
+        .style(Style::new().fg(ORANGE).bold());
+    if milestones.is_empty() {
+        let none = Line::from(format!("No new {step} within a year")).dark_gray();
+        return vec![Line::default(), heading, none];
+    }
+    let last = width.saturating_sub(1);
+    let span = (end - start).num_days().max(1) as f64;
+    let points: Vec<Point> = milestones
+        .iter()
+        .map(|report| Point {
+            column: bar_cells(
+                (report.input.current_date - start).num_days() as f64,
+                span,
+                last,
+            ),
+            date: report.input.current_date.format(MILESTONE_DATE).to_string(),
+            amount: thousands(milestone(report, MILESTONE_STEP), 0),
+        })
+        .collect();
+    let track = (0..width)
+        .map(|column| {
+            if points.iter().any(|point| point.column == column) {
+                Span::from(MARKER).cyan().bold()
+            } else if column == 0 {
+                Span::from(TRACK_START).dark_gray()
+            } else if column == last {
+                Span::from(TRACK_END).dark_gray()
+            } else {
+                Span::from(TRACK).dark_gray()
+            }
+        })
+        .collect::<Vec<_>>();
+    let labels = label_columns(&points, width);
+    let row = |text: fn(&Point) -> &str, style: Style| {
+        let spans = labels
+            .iter()
+            .scan(0, |cursor, &(point, column)| {
+                let text = text(point);
+                let gap = Span::raw(" ".repeat(column.saturating_sub(*cursor)));
+                *cursor = column + text.chars().count();
+                Some([gap, Span::styled(text.to_owned(), style)])
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        Line::from(spans)
+    };
+    vec![
+        Line::default(),
+        heading,
+        Line::from(track),
+        row(|point| &point.date, Style::new().gray()),
+        row(|point| &point.amount, Style::new().cyan()),
+    ]
+}
+
+/// Where each label that fits starts: under its dot, moved left if it would pass the right edge,
+/// and a column apart from the previous label. The last label always shows, so the first and the
+/// last milestones keep their dates.
+fn label_columns(points: &[Point], width: usize) -> Vec<(&Point, usize)> {
+    let start = |point: &Point| point.column.min(width.saturating_sub(point.width()));
+    let Some((last, rest)) = points.split_last() else {
+        return Vec::new();
+    };
+    let last_start = start(last);
+    rest.iter()
+        .scan(0, |free, point| {
+            let column = start(point);
+            let fits = column >= *free && column + point.width() < last_start;
+            if fits {
+                *free = column + point.width() + 1;
+            }
+            Some(fits.then_some((point, column)))
+        })
+        .flatten()
+        .chain(once((last, last_start)))
+        .collect()
+}
+
+/// The columns left for a bar or a track after the date, the horizon and the value.
+fn bar_width(width: usize) -> usize {
+    width.saturating_sub(DATE_WIDTH + HORIZON_WIDTH + usize::from(VALUE_WIDTH) + 3 * GAP.len())
 }
 
 /// How many of `width` cells show `value` on a scale where `max` fills them all.
@@ -253,9 +391,9 @@ fn input_height() -> u16 {
     panel_size(0, Field::ALL.len() * 3 - 1).1
 }
 
-/// A line per forecast point and the legend.
-fn forecast_height() -> u16 {
-    panel_size(0, FORECAST_YEARS + 2).1
+/// A line per forecast point, the legend, and `milestone_rows`.
+fn forecast_height(milestone_rows: usize) -> u16 {
+    panel_size(0, FORECAST_YEARS + 2 + milestone_rows).1
 }
 
 /// The table: header and rule, each group's heading and rows, spacers between groups, then a
@@ -361,9 +499,10 @@ mod tests {
                 input_width(),
                 input_height(),
                 report_height(),
-                forecast_height()
+                forecast_height(0),
+                forecast_height(MILESTONE_ROWS)
             ),
-            (31, 15, 20, 11)
+            (31, 15, 20, 11, 16)
         );
     }
 
@@ -390,6 +529,78 @@ mod tests {
         assert!(!screen(&app(), 80, 32).contains("Forecast"));
         let stacked = screen(&app(), 60, 50);
         assert_shows(&stacked, &["Forecast", "48,317"]);
+    }
+
+    #[test]
+    fn milestones_show_below_the_forecast_when_they_fit() {
+        let tall = screen(&app(), 80, 38);
+        assert_shows(
+            &tall,
+            &[
+                "Next 1,000 milestones · 2026-11-07 → 2027-11-07",
+                "Dec-11",
+                "25,000",
+                "Oct-11",
+                "29,000",
+            ],
+        );
+        let short = screen(&app(), 80, 37);
+        assert_shows(&short, &["Forecast", "48,317"]);
+        assert!(!short.contains("milestones"), "{short}");
+    }
+
+    #[test]
+    fn milestones_sit_on_one_timeline() {
+        let today = app().report().expect("valid input");
+        let milestones = app().milestones().expect("valid input");
+        let lines: Vec<_> = milestone_lines(&today, &milestones, 74)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        // 74 columns for 365 days: 2026-12-11 is 34 days after 2026-11-07, at column 7.
+        let expected = [
+            "",
+            "Next 1,000 milestones · 2026-11-07 → 2027-11-07",
+            "├──────●─────────────────●───────────●─────────────────●────────────●────┤",
+            "       Dec-11            Mar-11      May-11            Aug-11       Oct-11",
+            "       25,000            26,000      27,000            28,000       29,000",
+        ];
+        assert_eq!(lines, expected);
+    }
+
+    #[test]
+    fn milestone_labels_never_overlap() {
+        let point = |column: usize, date: &str| Point {
+            column,
+            date: date.to_owned(),
+            amount: "100,000".to_owned(),
+        };
+        let points = [
+            point(2, "01-01"),
+            point(5, "02-01"),
+            point(10, "03-01"),
+            point(14, "04-01"),
+            point(19, "05-01"),
+        ];
+        let columns: Vec<_> = label_columns(&points, 20)
+            .iter()
+            .map(|(point, column)| (point.date.as_str(), *column))
+            .collect();
+        assert_eq!(
+            columns,
+            [("01-01", 2), ("05-01", 13)],
+            "02-01 overlaps 01-01, and 03-01 the last label, which moves left to fit and wins"
+        );
+        assert!(label_columns(&[], 20).is_empty());
+    }
+
+    #[test]
+    fn milestones_note_when_there_is_none() {
+        let today = app().report().expect("valid input");
+        let lines = milestone_lines(&today, &[], 74);
+        let texts: Vec<_> = lines.iter().map(ToString::to_string).collect();
+        assert_eq!(texts[2], "No new 1,000 within a year");
+        assert_eq!(texts.len(), 3, "the note takes the timeline's place");
     }
 
     #[test]

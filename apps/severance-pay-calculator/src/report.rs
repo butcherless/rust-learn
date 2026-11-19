@@ -97,6 +97,12 @@ impl Concept {
 /// How many anniversaries the forecast covers.
 pub const FORECAST_YEARS: usize = 5;
 
+/// The forecast's milestones are the multiples of this amount.
+pub const MILESTONE_STEP: f64 = 1_000.0;
+
+/// How many months after the current date the milestones cover.
+pub const MILESTONE_MONTHS: u32 = 12;
+
 /// A forecast point's offset from the current date: `now`, `+1y`, `+2y`…
 pub fn horizon(years: usize) -> String {
     if years == 0 {

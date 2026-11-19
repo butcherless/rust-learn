@@ -6,8 +6,8 @@ use chrono::NaiveDate;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use thiserror::Error;
 
-use crate::domain::{CalcError, Dismissal, Input, Report, calculate, forecast};
-use crate::report::FORECAST_YEARS;
+use crate::domain::{CalcError, Dismissal, Input, Report, calculate, forecast, milestones};
+use crate::report::{FORECAST_YEARS, MILESTONE_MONTHS, MILESTONE_STEP};
 use crate::sequence::Cycle;
 
 const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -212,6 +212,14 @@ impl App {
     pub fn forecast(&self) -> Result<Vec<Report>, FormError> {
         self.input()
             .and_then(|input| forecast(input, FORECAST_YEARS).map_err(FormError::from))
+    }
+
+    /// The form's reports on the first day past each next [`MILESTONE_STEP`], within
+    /// [`MILESTONE_MONTHS`].
+    pub fn milestones(&self) -> Result<Vec<Report>, FormError> {
+        self.input().and_then(|input| {
+            milestones(input, MILESTONE_STEP, MILESTONE_MONTHS).map_err(FormError::from)
+        })
     }
 
     fn text(&self, field: Field) -> Option<&str> {

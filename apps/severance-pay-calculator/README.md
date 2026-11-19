@@ -58,6 +58,12 @@ It follows the [Estatuto de los Trabajadores](https://www.boe.es/buscar/act.php?
 The forecast repeats the calculation on each of the next five anniversaries of the initial date,
 with the same salary. On an anniversary a new month has started, so it counts too.
 
+Below it, a one-year timeline marks the first day on which the total reaches each next multiple
+of 1,000, with the date (such as `Dec-11`) and the multiple under each dot. The total only grows when a
+new month of service starts, so each date is the start of a month and the amount that day is
+somewhat above the multiple. When dots are too close for their labels, some labels are left out;
+the last one always shows.
+
 Not covered: the 45 days per year for service before 12 February 2012 (transitional provision 11
 ET), and the taxation of the severance.
 
@@ -72,7 +78,7 @@ ET), and the taxation of the severance.
 | `Esc` / `q` / `Ctrl+C` | Quit |
 
 Invalid input shows an error in place of the report and never blocks typing. The panels sit side
-by side from 76 columns, and the forecast appears when the terminal is tall enough.
+by side from 76 columns, and the forecast appears when the terminal is tall enough, with the milestones if there is room.
 
 | Exit code | Meaning |
 |---|---|
