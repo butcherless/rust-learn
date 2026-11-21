@@ -12,7 +12,7 @@ use futures::future::join_all;
 use pr_checker::adapter::github::{GithubClient, GithubToken};
 use pr_checker::domain::error::SourceError;
 use pr_checker::domain::model::{Mergeable, PrNumber, PrState, PullRequest};
-use pr_checker::domain::port::{PullRequestMerger, PullRequestSource};
+use pr_checker::domain::port::{PullRequestCloser, PullRequestMerger, PullRequestSource};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_json, header, header_exists, method, path, query_param};
 use wiremock::{Mock, MockBuilder, MockServer, ResponseTemplate};
@@ -242,4 +242,33 @@ async fn a_merge_github_refuses_is_not_mergeable() {
     );
 
     assert_eq!(merge_on(mock).await, Err(SourceError::NotMergeable));
+}
+
+/// Closes pull request #7 on a server that only knows `mock`.
+async fn close_on(mock: Mock) -> Result<(), SourceError> {
+    let server = MockServer::start().await;
+    mock.mount(&server).await;
+    GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
+        .unwrap()
+        .close(&project("acme/widgets"), PrNumber::from(7))
+        .await
+}
+
+#[tokio::test]
+async fn closes_by_updating_the_state() {
+    let mock = with_api_headers(Mock::given(method("PATCH")).and(path(format!("{PULLS_PATH}/7"))))
+        .and(body_json(json!({"state": "closed"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(pull_request_json(7, false)))
+        .expect(1);
+
+    assert_eq!(close_on(mock).await, Ok(()));
+}
+
+#[tokio::test]
+async fn a_close_without_permission_is_unauthorized() {
+    let mock = Mock::given(method("PATCH"))
+        .and(path(format!("{PULLS_PATH}/7")))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({"message": "Forbidden"})));
+
+    assert_eq!(close_on(mock).await, Err(SourceError::Unauthorized));
 }

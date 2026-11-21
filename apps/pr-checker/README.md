@@ -1,7 +1,7 @@
 # pr-checker
 
 A command-line tool that lists the open pull requests of a set of GitHub repositories, as a colored
-table or in an interactive terminal UI, where it can also merge them.
+table or in an interactive terminal UI, where it can also merge or close them.
 
 ```
 ╭────────────────┬───────┬──────────────────────────────┬───────┬───────────╮
@@ -54,14 +54,20 @@ shows a gray `loading…` row, or its previous rows when fetching again. The lig
 the status line blinks orange while fetching, with the progress (`Loading… 5/13`), and then stays
 green, or red if a repository failed. The keys work while fetching.
 
-A Merge column after Mergeable shows a checkbox on each pull request: empty and gray, `[ ]`, while
-it is open, and a green tick, `[✓]`, once you merge it from here. Merging asks first: `m` writes
-`Press m again to merge owner/repo#N` in the status line and turns the checkbox into an orange
-`[?]`, a second `m` merges it with a merge commit, and any other key cancels. While GitHub merges
-it the checkbox shows `[~]` in orange, and only one merge runs at a time. Once merged, the whole row turns green, the selection included:
-State says `merged`, Mergeable `—`, and the summary counts it as merged instead of open. It stays
-like that until a fetch no longer lists it. If GitHub refuses the merge (conflicts, a draft, a
-branch rule), the row stays orange and the status line says why.
+Merge and Close columns after Mergeable show a checkbox on each pull request: empty and gray,
+`[ ]`, while it is open, and a tick, `[✓]`, once you merge it (green) or close it (red) from here.
+Both ask first: `m` writes `Press m again to merge owner/repo#N` in the status line, and `c`
+writes `Press c again to close owner/repo#N`, turning that checkbox into an orange `[?]`. The same
+key again merges it with a merge commit, or closes it without merging; any other key cancels.
+While GitHub does it the checkbox shows `[~]` in orange, and only one merge or close runs at a
+time.
+
+Once merged, the whole row turns green, the selection included: State says `merged`, Mergeable
+`—`, and the summary counts it as merged instead of open. Once closed, the row turns gray, State
+says `closed`, and the summary counts it as closed. The other column's checkbox disappears. The row
+stays like that until a fetch no longer lists it. If GitHub refuses (conflicts, a draft or a branch
+rule for a merge, missing permission for either), the row stays orange and the status line says
+why.
 
 | Key | Action |
 |---|---|
@@ -69,6 +75,7 @@ branch rule), the row stays orange and the status line says why.
 | `g` `G` / `Home` `End` | Jump to the first or last row |
 | `Enter` / `o` | Open the selected pull request in your browser |
 | `m` `m` | Merge the selected pull request (the first `m` asks for confirmation) |
+| `c` `c` | Close the selected pull request without merging (the first `c` asks for confirmation) |
 | `r` | Fetch the pull requests again (ignored while fetching) |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
@@ -90,7 +97,9 @@ An invalid entry stops the program with a message naming it. An empty list shows
 needs [read access to pull requests](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
 if it is fine-grained, or the `repo` scope if it is classic. Merging from the interactive UI also
 needs [write access to contents](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
-for a fine-grained token; without it the merge fails with `unauthorized`.
+for a fine-grained token, and closing needs
+[write access to pull requests](https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request);
+without them the merge or close fails with `unauthorized`.
 
 ## Behavior
 

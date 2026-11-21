@@ -30,6 +30,7 @@ fn color(kind: RowKind) -> Color {
         }
         RowKind::Failed => Color::Red,
         RowKind::Loading => Color::DarkGrey,
+        RowKind::ClosedPullRequest => Color::Grey,
     }
 }
 
@@ -50,6 +51,7 @@ mod tests {
         [
             (RowKind::NoPullRequests, Color::Green),
             (RowKind::MergedPullRequest, Color::Green),
+            (RowKind::ClosedPullRequest, Color::Grey),
             (
                 RowKind::OpenPullRequest,
                 Color::Rgb {

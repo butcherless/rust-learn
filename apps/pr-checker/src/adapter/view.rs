@@ -17,6 +17,8 @@ pub const NO_PULL_REQUESTS: &str = "no open pull requests";
 pub const LOADING_PROJECT: &str = "loading…";
 /// The state of a pull request merged from the terminal UI (FR15).
 pub const MERGED: &str = "merged";
+/// The state of a pull request closed from the terminal UI (FR16).
+pub const CLOSED: &str = "closed";
 
 /// What a row represents, which decides its color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +29,8 @@ pub enum RowKind {
     OpenPullRequest,
     /// A pull request merged in this session, until a fetch no longer lists it.
     MergedPullRequest,
+    /// A pull request closed in this session, until a fetch no longer lists it.
+    ClosedPullRequest,
     /// A project whose fetch failed.
     Failed,
     /// A project whose first fetch has not finished yet.
@@ -57,8 +61,8 @@ pub struct DisplayRow {
     pub kind: RowKind,
     /// The text of each column, in [`HEADER`] order.
     pub cells: [String; 5],
-    /// The pull request shown. Only set for [`RowKind::OpenPullRequest`] and
-    /// [`RowKind::MergedPullRequest`].
+    /// The pull request shown. Only set for [`RowKind::OpenPullRequest`],
+    /// [`RowKind::MergedPullRequest`] and [`RowKind::ClosedPullRequest`].
     pub pull_request: Option<PrRef>,
 }
 
@@ -73,22 +77,34 @@ impl DisplayRow {
     /// The same pull request once merged: its state is `merged`, and whether it could be merged
     /// no longer applies. Other rows stay as they are.
     pub fn merged(self) -> Self {
+        self.finished(RowKind::MergedPullRequest, MERGED)
+    }
+
+    /// The same pull request once closed: its state is `closed`, and whether it could be merged
+    /// no longer applies. Other rows stay as they are.
+    pub fn closed(self) -> Self {
+        self.finished(RowKind::ClosedPullRequest, CLOSED)
+    }
+
+    /// An open pull request turned into `kind`, with `state` and no mergeability.
+    fn finished(self, kind: RowKind, state: &str) -> Self {
         match self.kind {
             RowKind::OpenPullRequest => {
                 let [project, number, title, _state, _mergeable] = self.cells;
                 Self {
-                    kind: RowKind::MergedPullRequest,
+                    kind,
                     cells: [
                         project,
                         number,
                         title,
-                        MERGED.to_owned(),
+                        state.to_owned(),
                         NO_VALUE.to_owned(),
                     ],
                     ..self
                 }
             }
             RowKind::MergedPullRequest
+            | RowKind::ClosedPullRequest
             | RowKind::NoPullRequests
             | RowKind::Failed
             | RowKind::Loading => self,
@@ -220,6 +236,7 @@ mod tests {
         assert_eq!(NO_PULL_REQUESTS, "no open pull requests");
         assert_eq!(LOADING_PROJECT, "loading…");
         assert_eq!(MERGED, "merged");
+        assert_eq!(CLOSED, "closed");
     }
 
     #[test]
@@ -330,28 +347,36 @@ mod tests {
     }
 
     #[test]
-    fn a_merged_pull_request_changes_its_kind_state_and_mergeable() {
+    fn a_merged_or_closed_pull_request_changes_its_kind_state_and_mergeable() {
         let reports = [
             report("a/b", Ok(vec![pull_request(1, PrState::Open, FIRST_URL)])),
             report("c/d", Ok(vec![])),
         ];
-        let merged: Vec<DisplayRow> = rows(&reports).into_iter().map(DisplayRow::merged).collect();
-        assert_eq!(
-            merged,
-            [
-                row(
-                    RowKind::MergedPullRequest,
-                    ["a/b", "1", "title 1", MERGED, "—"],
-                    Some(FIRST_URL)
-                ),
-                row(
-                    RowKind::NoPullRequests,
-                    ["c/d", "—", NO_PULL_REQUESTS, "—", "—"],
-                    None
-                ),
-            ]
-        );
-        assert_eq!(merged[0].clone().merged(), merged[0], "merging twice");
+        type Finish = fn(DisplayRow) -> DisplayRow;
+        let finish: [(Finish, RowKind, &str); 2] = [
+            (DisplayRow::merged, RowKind::MergedPullRequest, MERGED),
+            (DisplayRow::closed, RowKind::ClosedPullRequest, CLOSED),
+        ];
+        finish.into_iter().for_each(|(finish, kind, state)| {
+            let finished: Vec<DisplayRow> = rows(&reports).into_iter().map(finish).collect();
+            assert_eq!(
+                finished,
+                [
+                    row(kind, ["a/b", "1", "title 1", state, "—"], Some(FIRST_URL)),
+                    row(
+                        RowKind::NoPullRequests,
+                        ["c/d", "—", NO_PULL_REQUESTS, "—", "—"],
+                        None
+                    ),
+                ],
+                "{state}"
+            );
+            assert_eq!(
+                [DisplayRow::merged, DisplayRow::closed].map(|again| again(finished[0].clone())),
+                [finished[0].clone(), finished[0].clone()],
+                "a {state} pull request stays {state}"
+            );
+        });
     }
 
     #[test]

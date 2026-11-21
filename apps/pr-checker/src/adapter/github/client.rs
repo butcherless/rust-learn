@@ -9,11 +9,11 @@ use reqwest::{Client, Method, RequestBuilder, StatusCode, Url};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use crate::adapter::github::dto::{MergeRequestDto, PullRequestDto};
+use crate::adapter::github::dto::{MergeRequestDto, PullRequestDto, UpdateRequestDto};
 use crate::adapter::github::mapper::to_domain;
 use crate::domain::error::SourceError;
 use crate::domain::model::{PrNumber, Project, PullRequest};
-use crate::domain::port::{PullRequestMerger, PullRequestSource};
+use crate::domain::port::{PullRequestCloser, PullRequestMerger, PullRequestSource};
 
 /// The public GitHub API.
 pub const DEFAULT_BASE_URL: &str = "https://api.github.com";
@@ -28,6 +28,8 @@ const RATE_LIMIT_REMAINING_HEADER: &str = "x-ratelimit-remaining";
 const USER_AGENT_VALUE: &str = concat!("pr-checker/", env!("CARGO_PKG_VERSION"));
 /// How pull requests are merged: with a merge commit, GitHub's default.
 const MERGE_METHOD: &str = "merge";
+/// The state that closes a pull request.
+const CLOSED_STATE: &str = "closed";
 
 /// A GitHub API token. Its `Debug` output is redacted.
 #[derive(Clone)]
@@ -108,6 +110,10 @@ impl GithubClient {
         self.pulls_path(project, &[&number.to_string()])
     }
 
+    fn close_url(&self, project: &Project, number: PrNumber) -> Result<Url, SourceError> {
+        self.pulls_path(project, &[&number.to_string()])
+    }
+
     fn merge_url(&self, project: &Project, number: PrNumber) -> Result<Url, SourceError> {
         self.pulls_path(project, &[&number.to_string(), "merge"])
     }
@@ -158,6 +164,25 @@ impl GithubClient {
         }
     }
 
+    /// Closes the pull request. Any success status means it was closed, so the body is not read.
+    async fn patch_closed(&self, project: &Project, number: PrNumber) -> Result<(), SourceError> {
+        let response = self
+            .request(Method::PATCH, self.close_url(project, number)?)
+            .json(&UpdateRequestDto {
+                state: CLOSED_STATE,
+            })
+            .send()
+            .await
+            .map_err(transport_error)?;
+
+        let status = response.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(map_status(status, ratelimit_remaining(response.headers())))
+        }
+    }
+
     /// Lists the open pull requests, then gets each one, because only the single pull request
     /// endpoint says whether it is mergeable.
     async fn fetch(&self, project: &Project) -> Result<Vec<PullRequest>, SourceError> {
@@ -177,6 +202,16 @@ impl PullRequestSource for GithubClient {
         project: &Project,
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send {
         self.fetch(project)
+    }
+}
+
+impl PullRequestCloser for GithubClient {
+    fn close(
+        &self,
+        project: &Project,
+        number: PrNumber,
+    ) -> impl Future<Output = Result<(), SourceError>> + Send {
+        self.patch_closed(project, number)
     }
 }
 

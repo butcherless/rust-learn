@@ -12,6 +12,16 @@ pub trait PullRequestSource {
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send;
 }
 
+/// Something that closes pull requests without merging them.
+pub trait PullRequestCloser {
+    /// Closes pull request `number` of `project`.
+    fn close(
+        &self,
+        project: &Project,
+        number: PrNumber,
+    ) -> impl Future<Output = Result<(), SourceError>> + Send;
+}
+
 /// Something that merges pull requests.
 pub trait PullRequestMerger {
     /// Merges pull request `number` of `project` into its base branch.

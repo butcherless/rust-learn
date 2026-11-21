@@ -1,4 +1,5 @@
-//! Draws an [`App`]: the table of rows with a merge switch per pull request, the status line with
+//! Draws an [`App`]: the table of rows with a merge and a close checkbox per pull request, the
+//! status line with
 //! its light, and the help line. It only reads the state.
 
 use ratatui::Frame;
@@ -7,11 +8,11 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Cell, Row, Table, TableState};
 
-use crate::adapter::tui::app::{App, Light, MergeSwitch};
+use crate::adapter::tui::app::{Action, App, Checkbox, Light};
 use crate::adapter::view::{DisplayRow, HEADER, ORANGE, RowKind};
 
 const TITLE: &str = " Open pull requests ";
-const HELP: &str = "↑/↓ move · Enter open in browser · m m merge · r refresh · q quit";
+const HELP: &str = "↑/↓ move · Enter open in browser · m m merge · c c close · r refresh · q quit";
 const HIGHLIGHT_SYMBOL: &str = "▶ ";
 const NUMBER_WIDTH: u16 = 6;
 const STATE_WIDTH: u16 = 6;
@@ -20,14 +21,17 @@ const LIGHT_ON: &str = "●";
 /// The light in the dark half of the blink.
 const LIGHT_OFF: &str = "○";
 const MERGEABLE_WIDTH: u16 = 9;
-/// The title of the column after [`HEADER`], only in the terminal UI.
+/// The titles of the columns after [`HEADER`], only in the terminal UI.
 const MERGE_TITLE: &str = "Merge";
-/// The merge checkbox while open, confirming, merging and merged, padded to [`MERGE_WIDTH`].
+const CLOSE_TITLE: &str = "Close";
+/// A checkbox while open, confirming, in progress and done, padded to [`CHECKBOX_WIDTH`].
 const CHECKBOX_OFF: &str = " [ ] ";
 const CHECKBOX_CONFIRMING: &str = " [?] ";
 const CHECKBOX_MOVING: &str = " [~] ";
 const CHECKBOX_ON: &str = " [✓] ";
-const MERGE_WIDTH: u16 = 5;
+const CHECKBOX_WIDTH: u16 = 5;
+/// The actions, in the order of their columns.
+const ACTIONS: [Action; 2] = [Action::Merge, Action::Close];
 
 /// Draws the whole screen for `app`.
 pub fn draw(app: &App, frame: &mut Frame) {
@@ -68,10 +72,15 @@ fn orange() -> Color {
 fn table(app: &App) -> Table<'static> {
     let body = app.rows().iter().map(|row| {
         let cells = row.cells.iter().cloned().map(Cell::from);
-        let switch = app.merge_switch(row).map_or_else(Cell::default, switch);
-        Row::new(cells.chain([switch])).style(Style::new().fg(color(row.kind)))
+        let checkboxes = ACTIONS.map(|action| {
+            app.checkbox(row, action)
+                // An empty text, not `Cell::default()`: with a default cell before it, the
+                // Close checkbox of a closed row was drawn under Merge.
+                .map_or_else(|| Cell::from(""), |state| checkbox(state, action))
+        });
+        Row::new(cells.chain(checkboxes)).style(Style::new().fg(color(row.kind)))
     });
-    let header = HEADER.into_iter().chain([MERGE_TITLE]);
+    let header = HEADER.into_iter().chain([MERGE_TITLE, CLOSE_TITLE]);
     Table::new(body, column_widths(app.rows()))
         .header(Row::new(header).style(Style::new().bold()))
         .block(
@@ -83,20 +92,25 @@ fn table(app: &App) -> Table<'static> {
         .highlight_symbol(HIGHLIGHT_SYMBOL)
 }
 
-/// A checkbox: empty and gray while open, `?` in orange while it waits for the second merge key,
-/// `~` in orange while merging, and a green tick once merged. Its text tells the states apart even without color.
-fn switch(state: MergeSwitch) -> Cell<'static> {
+/// A checkbox: empty and gray while open, `?` in orange while it waits for the second key, `~`
+/// in orange while GitHub does it, and a tick once done: green once merged, red once closed. Its
+/// text tells the states apart even without color.
+fn checkbox(state: Checkbox, action: Action) -> Cell<'static> {
+    let done = match action {
+        Action::Merge => Color::Green,
+        Action::Close => Color::Red,
+    };
     let (text, style) = match state {
-        MergeSwitch::Off => (CHECKBOX_OFF, Style::new().fg(Color::DarkGray)),
-        MergeSwitch::Confirming => (CHECKBOX_CONFIRMING, Style::new().fg(orange()).bold()),
-        MergeSwitch::Moving => (CHECKBOX_MOVING, Style::new().fg(orange()).bold()),
-        MergeSwitch::On => (CHECKBOX_ON, Style::new().fg(Color::Green).bold()),
+        Checkbox::Off => (CHECKBOX_OFF, Style::new().fg(Color::DarkGray)),
+        Checkbox::Confirming => (CHECKBOX_CONFIRMING, Style::new().fg(orange()).bold()),
+        Checkbox::Moving => (CHECKBOX_MOVING, Style::new().fg(orange()).bold()),
+        Checkbox::On => (CHECKBOX_ON, Style::new().fg(done).bold()),
     };
     Cell::from(Span::styled(text, style))
 }
 
 /// The project column fits its longest entry; the title takes the remaining space.
-fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 6] {
+fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 7] {
     let project_width = display_rows
         .iter()
         .map(|row| row.cells[0].chars().count())
@@ -110,7 +124,8 @@ fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 6] {
         Constraint::Fill(1),
         Constraint::Length(STATE_WIDTH),
         Constraint::Length(MERGEABLE_WIDTH),
-        Constraint::Length(MERGE_WIDTH),
+        Constraint::Length(CHECKBOX_WIDTH),
+        Constraint::Length(CHECKBOX_WIDTH),
     ]
 }
 
@@ -120,6 +135,7 @@ fn color(kind: RowKind) -> Color {
         RowKind::OpenPullRequest => orange(),
         RowKind::Failed => Color::Red,
         RowKind::Loading => Color::DarkGray,
+        RowKind::ClosedPullRequest => Color::Gray,
     }
 }
 
@@ -130,16 +146,16 @@ mod tests {
     use ratatui::buffer::Buffer;
 
     use super::*;
-    use crate::adapter::tui::app::fixtures::{loaded, loaded_with, loading, merged, run};
+    use crate::adapter::tui::app::fixtures::{closed, loaded, loaded_with, loading, merged, run};
     use crate::adapter::tui::app::{Message, Move};
     use crate::adapter::view::fixtures::report;
-    use crate::adapter::view::{LOADING_PROJECT, MERGED, NO_PULL_REQUESTS};
+    use crate::adapter::view::{CLOSED, LOADING_PROJECT, MERGED, NO_PULL_REQUESTS};
 
-    /// The status line's row on the 70×10 test screen.
+    /// The status line's row on the 80×10 test screen.
     const STATUS_ROW: u16 = 8;
 
     fn buffer(app: &App) -> Buffer {
-        let mut terminal = Terminal::new(TestBackend::new(70, 10)).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 10)).unwrap();
         terminal.draw(|frame| draw(app, frame)).unwrap();
         terminal.backend().buffer().clone()
     }
@@ -178,25 +194,35 @@ mod tests {
         });
     }
 
-    /// The first table row on the 70×10 test screen, below the border and the header.
+    /// The first table row on the 80×10 test screen, below the border and the header.
     const FIRST_ROW: u16 = 2;
 
-    /// The merge checkbox of the first row: its text and its color.
-    fn first_switch(app: &App) -> (String, Color) {
+    /// The checkbox of the first row in the column titled `title`: its text and its color.
+    fn first_checkbox(app: &App, title: &str) -> (String, Color) {
         let buffer = buffer(app);
-        let width = buffer.area.width;
-        let start = width - 1 - MERGE_WIDTH;
-        let text = (start..start + MERGE_WIDTH)
+        let header: Vec<&str> = (0..buffer.area.width)
+            .map(|x| buffer[(x, FIRST_ROW - 1)].symbol())
+            .collect();
+        // The whole title, so `Merge` does not match the start of `Mergeable`.
+        let len = title.chars().count();
+        let start = (0..header.len().saturating_sub(len))
+            .find(|&x| {
+                header[x..x + len].concat() == title
+                    && !header[x + len].chars().all(char::is_alphabetic)
+            })
+            .and_then(|x| u16::try_from(x).ok())
+            .unwrap();
+        let text = (start..start + CHECKBOX_WIDTH)
             .map(|x| buffer[(x, FIRST_ROW)].symbol())
             .collect();
         (text, buffer[(start + 1, FIRST_ROW)].fg)
     }
 
-    /// The checkbox's colors are part of the check, so this test reads them. The selection
+    /// The checkboxes' colors are part of the check, so this test reads them. The selection
     /// moves off the first row, whose highlight would reverse them, except while confirming,
     /// which moving would cancel: there the highlight only adds `REVERSED` to the same color.
     #[test]
-    fn the_merge_checkbox_fills_and_turns_green() {
+    fn the_checkboxes_fill_and_turn_green_or_red() {
         assert_eq!(
             [
                 CHECKBOX_OFF,
@@ -207,34 +233,64 @@ mod tests {
             [" [ ] ", " [?] ", " [~] ", " [✓] "]
         );
         let away = Message::Move(Move::Last);
+        let twice = |action| vec![Message::Act(action), Message::Act(action), away.clone()];
+        let off = (CHECKBOX_OFF.to_owned(), Color::DarkGray);
+        let empty = (" ".repeat(usize::from(CHECKBOX_WIDTH)), Color::Gray);
         [
             (
                 "open",
                 loaded(),
                 vec![away.clone()],
-                CHECKBOX_OFF,
-                Color::DarkGray,
+                [off.clone(), off.clone()],
             ),
             (
-                "confirming",
+                "confirming a merge",
                 loaded(),
-                vec![Message::MergeSelected],
-                CHECKBOX_CONFIRMING,
-                orange(),
+                vec![Message::Act(Action::Merge)],
+                [(CHECKBOX_CONFIRMING.to_owned(), orange()), off.clone()],
+            ),
+            (
+                "confirming a close",
+                loaded(),
+                vec![Message::Act(Action::Close)],
+                [off.clone(), (CHECKBOX_CONFIRMING.to_owned(), orange())],
             ),
             (
                 "merging",
                 loaded(),
-                vec![Message::MergeSelected, Message::MergeSelected, away.clone()],
-                CHECKBOX_MOVING,
-                orange(),
+                twice(Action::Merge),
+                [(CHECKBOX_MOVING.to_owned(), orange()), off.clone()],
             ),
-            ("merged", merged(), vec![away], CHECKBOX_ON, Color::Green),
+            (
+                "closing",
+                loaded(),
+                twice(Action::Close),
+                [off.clone(), (CHECKBOX_MOVING.to_owned(), orange())],
+            ),
+            (
+                "merged",
+                merged(),
+                vec![away.clone()],
+                [
+                    (CHECKBOX_ON.to_owned(), Color::Green),
+                    (empty.0.clone(), Color::Green),
+                ],
+            ),
+            (
+                "closed",
+                closed(),
+                vec![away],
+                [empty, (CHECKBOX_ON.to_owned(), Color::Red)],
+            ),
         ]
         .into_iter()
-        .for_each(|(case, app, messages, text, color)| {
+        .for_each(|(case, app, messages, expected)| {
             let app = run(app, messages).0;
-            assert_eq!(first_switch(&app), (text.to_owned(), color), "{case}");
+            assert_eq!(
+                [MERGE_TITLE, CLOSE_TITLE].map(|title| first_checkbox(&app, title)),
+                expected,
+                "{case}"
+            );
         });
     }
 
@@ -245,6 +301,7 @@ mod tests {
         [
             ("open", loaded(), orange()),
             ("merged", merged(), Color::Green),
+            ("closed", closed(), Color::Gray),
         ]
         .into_iter()
         .for_each(|(case, app, color)| {
@@ -256,9 +313,13 @@ mod tests {
     }
 
     #[test]
-    fn a_merged_row_shows_its_new_state() {
-        let screen = screen(&merged());
-        assert!(screen.contains(MERGED), "missing {MERGED:?} in {screen}");
+    fn a_merged_or_closed_row_shows_its_new_state() {
+        [(merged(), MERGED), (closed(), CLOSED)]
+            .into_iter()
+            .for_each(|(app, state)| {
+                let screen = screen(&app);
+                assert!(screen.contains(state), "missing {state:?} in {screen}");
+            });
     }
 
     #[test]
@@ -277,10 +338,12 @@ mod tests {
             "Project",
             "Mergeable",
             MERGE_TITLE,
+            CLOSE_TITLE,
             "title 1",
             NO_PULL_REQUESTS,
             "error: repository not found",
             "2 open pull requests",
+            "c c close",
             "q quit",
         ]
         .into_iter()

@@ -21,6 +21,13 @@ pub struct PullRequestDto {
     pub mergeable: Option<bool>,
 }
 
+/// The body of `PATCH /repos/{owner}/{repo}/pulls/{number}` that closes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UpdateRequestDto {
+    /// `open` or `closed`.
+    pub state: &'static str,
+}
+
 /// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MergeRequestDto {

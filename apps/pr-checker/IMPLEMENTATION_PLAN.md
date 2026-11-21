@@ -3,7 +3,7 @@
 Requirements and design behind the tool. For setup and usage, see [README.md](README.md). For
 commands, code rules and library constraints, see [CLAUDE.md](CLAUDE.md).
 
-**Status (2026-11-13):** FR1-FR15 are implemented on `main` and CI passes. The table mode was run
+**Status (2026-11-21):** FR1-FR16 are implemented on `main` and CI passes. The table mode was run
 against the real GitHub API with the 13 repositories in `projects.toml` (exit `0`; one open pull
 request, mergeable). The terminal UI has only been checked with a dummy token, not by hand against real
 data.
@@ -27,6 +27,7 @@ data.
 | FR13 | In `--tui`, a light (`●`) starts the status line. While fetching it blinks orange (half a second lit, half a second dark) and the status shows the progress (`Loading… 5/13`). When the fetch ends it stays green, or red if a repository failed. |
 | FR14 | In `--tui`, each repository's rows appear as soon as it finishes, in config order. On the first fetch a repository not yet finished shows a gray `loading…` row; on a refresh it keeps its previous rows until the new ones arrive. The selection stays on the same pull request when it is still listed, and otherwise on the same line. |
 | FR15 | In `--tui`, a Merge column after Mergeable shows a checkbox per pull request: empty and gray (`[ ]`) while open, a green tick (`[✓]`) once merged in this session, and `[~]` in orange while merging. `m` asks for confirmation in the status line, with `[?]` in orange on that pull request, and a second `m` on the same pull request merges it (`merge_method: merge`); any other command cancels. One merge at a time. A merged pull request's row turns green (its inverse-video selection too), with State `merged` and Mergeable `—`, and the summary counts it as merged, not open (`1 open pull requests in 3 projects, 1 merged, 1 failed`), until a fetch drops it. A refused merge (405, 409, 422) is `not mergeable` and leaves the checkbox empty. The table mode has no Merge column. |
+| FR16 | In `--tui`, a Close column after Merge shows a checkbox per pull request, like FR15's: `c` asks for confirmation (`Press c again to close owner/repo#N`, `[?]`), a second `c` on the same pull request closes it without merging (`PATCH` with `state: closed`), and `[~]` shows while closing. Merges and closes share the one-at-a-time rule, and the second key must repeat the first one's action. A closed pull request's row turns gray with State `closed`, a red tick in Close and no Merge checkbox (a merged one has no Close checkbox), and the summary counts it as closed, until a fetch drops it. The table mode has no Close column. |
 
 **Out of scope:** pagination, GitHub Enterprise, listing closed or merged PRs, merge methods other than a merge commit, review or CI status, JSON
 output, caching, retries, release packaging.
@@ -39,7 +40,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | Module | Responsibility |
 |---|---|
 | `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `Mergeable`, `PrUrl` |
-| `domain::port` | `PullRequestSource` and `PullRequestMerger`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
+| `domain::port` | `PullRequestSource`, `PullRequestMerger` and `PullRequestCloser`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
 | `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`, `NotMergeable`) |
 | `service::list_open_prs` | `stream_open_prs` yields each report with its position as soon as it is ready (`buffer_unordered`); `list_open_prs` collects it back into config order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
 | `adapter::config` | `load_projects` (reads the file) and `parse_projects` (pure) |
@@ -54,7 +55,10 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 - Endpoints: [List pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests),
   [Get a pull request](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request) and
   [Merge a pull request](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
-  (`PUT …/pulls/{number}/merge` with `{"merge_method": "merge"}`; any 2xx means merged).
+  (`PUT …/pulls/{number}/merge` with `{"merge_method": "merge"}`; any 2xx means merged) and
+  [Update a pull request](https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request)
+  (`PATCH …/pulls/{number}` with `{"state": "closed"}`; any 2xx means closed, and errors map as
+  in the table below).
 - One `reqwest::Client` is reused, with a 10-second timeout.
 - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
   `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: pr-checker/<crate version>`.
