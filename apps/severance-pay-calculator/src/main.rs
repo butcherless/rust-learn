@@ -9,7 +9,7 @@ use severance_pay_calculator::{report, tui};
 /// Exits with 1 when the calculation fails; clap exits with 2 on invalid arguments.
 fn main() -> ExitCode {
     let args = Args::parse();
-    let input = args.input(chrono::Local::now().date_naive());
+    let input = args.input(jiff::ZonedDateTime::now().date());
     run(args.print, input).map_or_else(
         |error| {
             eprintln!("error: {error}");

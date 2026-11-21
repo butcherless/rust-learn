@@ -271,16 +271,20 @@ fn milestone_lines(today: &Report, milestones: &[Report], width: usize) -> Vec<L
         return vec![Line::default(), heading, none];
     }
     let last = width.saturating_sub(1);
-    let span = (end - start).num_days().max(1) as f64;
+    let span = f64::from((end - start).get_days().max(1));
     let points: Vec<Point> = milestones
         .iter()
         .map(|report| Point {
             column: bar_cells(
-                (report.input.current_date - start).num_days() as f64,
+                f64::from((report.input.current_date - start).get_days()),
                 span,
                 last,
             ),
-            date: report.input.current_date.format(MILESTONE_DATE).to_string(),
+            date: report
+                .input
+                .current_date
+                .strftime(MILESTONE_DATE)
+                .to_string(),
             amount: thousands(milestone(report, MILESTONE_STEP), 0),
         })
         .collect();

@@ -2,7 +2,7 @@
 //! [`Message`], and [`App::update`] turns the current state and a message into the next state and
 //! an [`Effect`]. Drawing lives in [`super::view`]. Nothing here does I/O.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use thiserror::Error;
 
@@ -10,7 +10,6 @@ use crate::domain::{CalcError, Dismissal, Input, Report, calculate, forecast, mi
 use crate::report::{FORECAST_YEARS, MILESTONE_MONTHS, MILESTONE_STEP};
 use crate::sequence::Cycle;
 
-const DATE_FORMAT: &str = "%Y-%m-%d";
 const MAX_PAY_LEN: usize = 12;
 const MAX_DATE_LEN: usize = 10;
 
@@ -150,8 +149,8 @@ impl From<Input> for App {
             focus: Field::default(),
             annual_pay: input.annual_pay.to_string(),
             dismissal: input.dismissal,
-            initial_date: input.initial_date.format(DATE_FORMAT).to_string(),
-            current_date: input.current_date.format(DATE_FORMAT).to_string(),
+            initial_date: input.initial_date.to_string(),
+            current_date: input.current_date.to_string(),
         }
     }
 }
@@ -191,7 +190,8 @@ impl App {
     pub fn input(&self) -> Result<Input, FormError> {
         let date = |field| {
             self.text(field)
-                .and_then(|text| NaiveDate::parse_from_str(text, DATE_FORMAT).ok())
+                // ISO 8601, as on the command line: `2021-10-1` is not a date.
+                .and_then(|text| text.parse::<Date>().ok())
                 .ok_or(FormError::InvalidDate(field))
         };
         Ok(Input {
@@ -463,6 +463,11 @@ mod tests {
             ),
             (
                 vec![NextField, NextField, Backspace, Backspace, Backspace],
+                FormError::InvalidDate(Field::InitialDate),
+            ),
+            // `2021-10-1`: ISO 8601 needs two digits for the day.
+            (
+                vec![NextField, NextField, Backspace],
                 FormError::InvalidDate(Field::InitialDate),
             ),
             (

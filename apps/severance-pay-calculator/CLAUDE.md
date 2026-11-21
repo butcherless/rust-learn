@@ -38,7 +38,7 @@ Dependencies point inward: `main → cli, tui → report → domain`, and all of
   - `separated` chains groups with a separator between them, standing in for the unstable `Iterator::intersperse`.
 - **`domain`**:
   - `calculate(Input) -> Result<Report, CalcError>`. `Report` carries its `Input`, and `capped()` says whether the days reached the dismissal's cap.
-  - `months_of_service` counts the months whose start (`initial + k months`, which chrono clamps to the month's last day) falls on or before the last day, so a started month counts as a whole one. The arithmetic stays in `f64`.
+  - `months_of_service` counts the months whose start (`initial + k months`, which jiff clamps to the month's last day) falls on or before the last day, so a started month counts as a whole one. The arithmetic stays in `f64`.
   - `forecast(Input, years)` runs `calculate` on the current date and on the next `years` anniversaries of the initial date after it, with constant salary. Each anniversary is counted from the initial date, so a 29 February start falls on 28 February only in non-leap years.
   - `milestones(Input, step, months)` gives the reports on the first month start (the only days the total grows) that reaches each next multiple of `step`, within `months`. `milestone` is the multiple a report reaches.
   - `thousands`, `group_digits` and `years_and_months` format numbers.
@@ -77,4 +77,4 @@ The shared rules are in the root `CLAUDE.md`. In this project:
 
 - **ratatui 0.30**: use `try_init` and `try_restore`; `init` panics.
 - Import crossterm through `ratatui::crossterm`. There is no direct crossterm dependency, which avoids compiling two copies.
-- **chrono**: `%d` in `parse_from_str` accepts one-digit days, so `2021-10-1` is a valid date.
+- **jiff 1.0** (`civil::Date`): dates are parsed with its `FromStr`, strict ISO 8601 in both the flags and the form, so `2021-10-1` is not a date. `checked_add(n.months())` clamps to the month's last day like chrono's `checked_add_months`, and `a - b` is a `Span` whose `get_days()` never fails.

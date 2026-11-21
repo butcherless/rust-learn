@@ -1,8 +1,8 @@
 //! Command-line arguments. They fill in the UI's starting values, or the report printed with
 //! `--print`.
 
-use chrono::NaiveDate;
 use clap::{Parser, ValueEnum};
+use jiff::civil::Date;
 
 use crate::domain::{DEFAULT_ANNUAL_PAY, DEFAULT_INITIAL_DATE, Dismissal, Input};
 
@@ -24,11 +24,11 @@ pub struct Args {
 
     /// First day of work.
     #[arg(long, value_name = "YYYY-MM-DD", default_value_t = DEFAULT_INITIAL_DATE)]
-    pub from: NaiveDate,
+    pub from: Date,
 
     /// Last day counted [default: today].
     #[arg(long, value_name = "YYYY-MM-DD")]
-    pub to: Option<NaiveDate>,
+    pub to: Option<Date>,
 }
 
 /// [`Dismissal`] as a command-line value. It lives here so the domain does not depend on clap.
@@ -53,7 +53,7 @@ impl From<DismissalArg> for Dismissal {
 
 impl Args {
     /// The calculation's input, with `today` as the last day when `--to` is not given.
-    pub fn input(&self, today: NaiveDate) -> Input {
+    pub fn input(&self, today: Date) -> Input {
         Input {
             annual_pay: self.annual_pay,
             dismissal: self.dismissal.into(),
@@ -120,6 +120,10 @@ mod tests {
             ),
             (
                 &["--from", "2021-13-01"][..],
+                Err(clap::error::ErrorKind::ValueValidation),
+            ),
+            (
+                &["--from", "2021-10-1"][..],
                 Err(clap::error::ErrorKind::ValueValidation),
             ),
             (

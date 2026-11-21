@@ -4,7 +4,8 @@
 
 use std::fmt;
 
-use chrono::{Datelike, Months, NaiveDate};
+use jiff::ToSpan;
+use jiff::civil::Date;
 use thiserror::Error;
 
 use crate::sequence::Cycle;
@@ -21,11 +22,8 @@ const DAYS_PER_MONTHLY_PAYMENT: u32 = 30;
 /// The default annual pay.
 pub const DEFAULT_ANNUAL_PAY: f64 = 53_000.0;
 
-/// The default initial date. The fallback is unreachable: the date is valid.
-pub const DEFAULT_INITIAL_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2021, 10, 11) {
-    Some(date) => date,
-    None => NaiveDate::MIN,
-};
+/// The default initial date, checked when compiling.
+pub const DEFAULT_INITIAL_DATE: Date = Date::constant(2021, 10, 11);
 
 /// The type of dismissal, which sets how many days of salary are paid per year worked and the cap.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -81,14 +79,14 @@ impl fmt::Display for Dismissal {
 pub struct Input {
     pub annual_pay: f64,
     pub dismissal: Dismissal,
-    pub initial_date: NaiveDate,
+    pub initial_date: Date,
     /// The last day worked.
-    pub current_date: NaiveDate,
+    pub current_date: Date,
 }
 
 impl Input {
     /// The default values, with `today` as the current date.
-    pub fn with_defaults(today: NaiveDate) -> Self {
+    pub fn with_defaults(today: Date) -> Self {
         Self {
             annual_pay: DEFAULT_ANNUAL_PAY,
             dismissal: Dismissal::default(),
@@ -155,13 +153,12 @@ pub fn calculate(input: Input) -> Result<Report, CalcError> {
 /// whole one, as the courts prorate "by months" the periods shorter than a year. Month `k` starts
 /// `k` months after `initial`, so the result is how many of those starts fall on or before `last`.
 /// `last` must not be before `initial`.
-pub fn months_of_service(initial: NaiveDate, last: NaiveDate) -> u32 {
+pub fn months_of_service(initial: Date, last: Date) -> u32 {
     let calendar_months = 12 * i64::from(last.year() - initial.year()) + i64::from(last.month())
         - i64::from(initial.month());
     // Not negative, because `last` is not before `initial`.
     let calendar_months = u32::try_from(calendar_months).unwrap_or(0);
-    initial
-        .checked_add_months(Months::new(calendar_months))
+    months_later(initial, calendar_months)
         .filter(|start| *start <= last)
         .map_or(calendar_months, |_| calendar_months + 1)
 }
@@ -177,11 +174,7 @@ pub fn years_and_months(months: u32) -> String {
 /// years.
 pub fn forecast(input: Input, years: usize) -> Result<Vec<Report>, CalcError> {
     let anniversaries = (1..)
-        .map_while(|year| {
-            input
-                .initial_date
-                .checked_add_months(Months::new(12 * year))
-        })
+        .map_while(|year| months_later(input.initial_date, 12 * year))
         .skip_while(|anniversary| *anniversary <= input.current_date)
         .take(years);
     std::iter::once(input.current_date)
@@ -203,7 +196,7 @@ pub fn milestones(input: Input, step: f64, months: u32) -> Result<Vec<Report>, C
     let level = |report: &Report| milestone(report, step);
     let end = months_later(input.current_date, months);
     (today.months..)
-        .map_while(|month| input.initial_date.checked_add_months(Months::new(month)))
+        .map_while(|month| months_later(input.initial_date, month))
         .take_while(|start| end.is_some_and(|end| *start <= end))
         .map(|current_date| {
             calculate(Input {
@@ -225,9 +218,11 @@ pub fn milestones(input: Input, step: f64, months: u32) -> Result<Vec<Report>, C
         })
 }
 
-/// The day `months` months after `date`, the last day [`milestones`] covers.
-pub fn months_later(date: NaiveDate, months: u32) -> Option<NaiveDate> {
-    date.checked_add_months(Months::new(months))
+/// The day `months` months after `date`, on the same day of the month or the month's last day
+/// when it is shorter. [`milestones`] covers up to it, and every month start and anniversary is
+/// counted with it from the initial date.
+pub fn months_later(date: Date, months: u32) -> Option<Date> {
+    date.checked_add(i64::from(months).months()).ok()
 }
 
 /// The largest multiple of `step` that the report's total reaches.
@@ -263,8 +258,8 @@ pub fn group_digits(number: &str) -> String {
 pub mod fixtures {
     use super::*;
 
-    pub fn date(y: i32, m: u32, d: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, d).expect("valid test date")
+    pub fn date(y: i16, m: i8, d: i8) -> Date {
+        Date::new(y, m, d).expect("valid test date")
     }
 
     /// The reference case: the default values on 2026-11-07. Written out instead of using the
