@@ -191,15 +191,8 @@ fn runs_panel(app: &App, runs: &[RunRow], height: u16) -> Table<'static> {
 
 /// The project column fits its longest entry; workflow and branch share the rest.
 fn run_widths(runs: &[RunRow]) -> [Constraint; 5] {
-    let project_width = runs
-        .iter()
-        .map(|row| row.cells[0].chars().count())
-        .chain([RUN_HEADER[0].len()])
-        .max()
-        .and_then(|width| u16::try_from(width).ok())
-        .unwrap_or(u16::MAX);
     [
-        Constraint::Length(project_width),
+        fit(RUN_HEADER[0], runs.iter().map(|row| row.cells[0].as_str())),
         Constraint::Fill(2),
         Constraint::Fill(1),
         Constraint::Length(EVENT_WIDTH),
@@ -209,15 +202,11 @@ fn run_widths(runs: &[RunRow]) -> [Constraint; 5] {
 
 /// The project column fits its longest entry; the title takes the remaining space.
 fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 7] {
-    let project_width = display_rows
-        .iter()
-        .map(|row| row.cells[0].chars().count())
-        .chain([HEADER[0].len()])
-        .max()
-        .and_then(|width| u16::try_from(width).ok())
-        .unwrap_or(u16::MAX);
     [
-        Constraint::Length(project_width),
+        fit(
+            HEADER[0],
+            display_rows.iter().map(|row| row.cells[0].as_str()),
+        ),
         Constraint::Length(NUMBER_WIDTH),
         Constraint::Fill(1),
         Constraint::Length(STATE_WIDTH),
@@ -225,6 +214,17 @@ fn column_widths(display_rows: &[DisplayRow]) -> [Constraint; 7] {
         Constraint::Length(CHECKBOX_WIDTH),
         Constraint::Length(CHECKBOX_WIDTH),
     ]
+}
+
+/// A column as wide as the longest of its `title` and its `cells`.
+fn fit<'a>(title: &'a str, cells: impl Iterator<Item = &'a str>) -> Constraint {
+    let width = cells
+        .chain([title])
+        .map(|text| text.chars().count())
+        .max()
+        .and_then(|width| u16::try_from(width).ok())
+        .unwrap_or(u16::MAX);
+    Constraint::Length(width)
 }
 
 fn color(kind: RowKind) -> Color {
