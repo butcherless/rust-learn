@@ -1,0 +1,9 @@
+[package]
+name = "escrutinio"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+clap.workspace = true
+ratatui.workspace = true

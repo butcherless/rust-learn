@@ -13,6 +13,7 @@ README; they share one `Cargo.lock`, one `target/`, the toolchain and CI.
 | [pr-checker](apps/pr-checker) | Lists the open pull requests of GitHub repositories, as a table or a terminal UI | `cargo pr` |
 | [severance-pay-calculator](apps/severance-pay-calculator) | Calculates Spanish severance pay, in a terminal UI or as a printed report | `cargo sev` |
 | [calendario-laboral](apps/calendario-laboral) | A console work calendar (holidays, vacation, shifts, hours) stored in JSON, with year and month views | `cargo cal` |
+| [escrutinio](apps/escrutinio) | A mock of the Spanish 2026 general election count by province, in a terminal UI | `cargo esc` |
 
 Each project's README explains its usage.
 
@@ -93,7 +94,7 @@ With the Rust plugin (or RustRover), **File → Open** this folder (the workspac
   environment).
 - **Tests:** the gutter icons run a test or module; **Run with Coverage** shows coverage in the
   editor.
-- **Terminal UIs:** `cargo pr --tui`, `cargo sev` and `cargo cal` `month`, `year` and `summary`
+- **Terminal UIs:** `cargo pr --tui`, `cargo sev`, `cargo esc` and `cargo cal` `month`, `year` and `summary`
   need a real terminal: use the built-in **Terminal**, not the Run console.
 
 ## Layout

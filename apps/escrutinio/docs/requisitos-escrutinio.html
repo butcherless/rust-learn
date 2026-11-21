@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Requisitos del escrutinio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Archivo:wght@600;800&display=swap">
+<style>
+/* Diseño: una hoja de acta electoral. Columna de lectura estrecha, códigos de regla en mono como
+   en un expediente, y los colores de la barra del programa como única nota de color. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2230;
+  --muted: #5b6577;
+  --line: #dde1e8;
+  --accent: #1f4fa3;
+  --census: #9aa3b2;
+  --estimated: #d9a400;
+  --counted: #2e9a4a;
+  --above: #1aa6b7;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #181e28; --fg: #e4e8ef; --muted: #98a2b3; --line: #2a3240;
+    --accent: #7fa8f0; --census: #5c6676; --estimated: #e8b923; --counted: #46b864; --above: #35c3d4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #181e28; --fg: #e4e8ef; --muted: #98a2b3; --line: #2a3240;
+  --accent: #7fa8f0; --census: #5c6676; --estimated: #e8b923; --counted: #46b864; --above: #35c3d4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 1rem/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 46rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.5rem; }
+header { display: grid; gap: .5rem; border-bottom: 2px solid var(--fg); padding-bottom: 1.25rem; }
+.eyebrow { font: 500 .75rem/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 800 clamp(1.8rem, 5vw, 2.6rem)/1.1 var(--font-display); margin: 0; text-wrap: balance; }
+h2 { font: 600 1.3rem/1.2 var(--font-display); margin: 0; text-wrap: balance; }
+p { margin: 0; }
+section { display: grid; gap: 1rem; min-width: 0; }
+a { color: var(--accent); }
+code { font: .88em var(--font-mono); }
+.lead { color: var(--muted); max-width: 62ch; }
+
+/* La barra de ejemplo: las mismas zonas que la interfaz. */
+.sample { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1rem; display: grid; gap: .75rem; }
+.sample-row { display: grid; grid-template-columns: 9rem 1fr; gap: .75rem; align-items: center; font: .85rem var(--font-mono); }
+.bar { display: flex; height: 1.1rem; border-radius: 2px; overflow: hidden; }
+.bar span { display: block; }
+.z-counted { background: var(--counted); }
+.z-above { background: var(--above); }
+.z-estimated { background: repeating-linear-gradient(45deg, var(--estimated) 0 3px, transparent 3px 6px); background-color: color-mix(in srgb, var(--estimated) 35%, transparent); }
+.z-census { background: repeating-linear-gradient(90deg, var(--census) 0 1px, transparent 1px 4px); background-color: color-mix(in srgb, var(--census) 25%, transparent); }
+.legend { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; font-size: .85rem; color: var(--muted); }
+.legend i { display: inline-block; width: .9rem; height: .9rem; border-radius: 2px; vertical-align: -2px; margin-right: .35rem; }
+
+dl { margin: 0; display: grid; gap: .75rem; }
+dl div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; }
+dt { font-weight: 600; }
+dd { margin: 0; color: var(--fg); }
+
+.rules { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
+.rules li { display: grid; grid-template-columns: 4.5rem 1fr; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid var(--line); }
+.rules .code { font: 500 .85rem/1.6 var(--font-mono); color: var(--accent); }
+.rules strong { display: block; }
+.rules p { color: var(--muted); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+th { font: 500 .75rem var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+kbd { font: .8rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 .35rem; background: var(--surface); }
+
+.pending { border-left: 3px solid var(--estimated); padding: .25rem 0 .25rem 1rem; display: grid; gap: .5rem; }
+.pending ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
+footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; }
+
+@media (max-width: 34rem) {
+  dl div, .rules li, .sample-row { grid-template-columns: 1fr; gap: .25rem; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <span class="eyebrow">apps/escrutinio · requisitos</span>
+  <h1>Escrutinio de las Elecciones generales España 2026</h1>
+  <p class="lead">Una vista de terminal con los votos de cada provincia y ciudad autónoma. Ahora es una maqueta: los votos escrutados se simulan hasta que exista el backend.</p>
+</header>
+
+<section aria-labelledby="barra">
+  <h2 id="barra">La barra de votos</h2>
+  <p>Cada circunscripción tiene una barra con tres zonas superpuestas. Es el ejemplo del enunciado: 2 millones de censo y 1,4 millones estimados.</p>
+  <div class="sample">
+    <div class="sample-row"><span>Sin escrutar</span><div class="bar"><span class="z-estimated" style="width:70%"></span><span class="z-census" style="width:30%"></span></div></div>
+    <div class="sample-row"><span>400.000 votos</span><div class="bar"><span class="z-counted" style="width:20%"></span><span class="z-estimated" style="width:50%"></span><span class="z-census" style="width:30%"></span></div></div>
+    <div class="sample-row"><span>1.600.000 votos</span><div class="bar"><span class="z-counted" style="width:70%"></span><span class="z-above" style="width:10%"></span><span class="z-census" style="width:20%"></span></div></div>
+    <div class="legend">
+      <span><i class="z-census"></i>Censo ░</span>
+      <span><i class="z-estimated"></i>Estimado ▒</span>
+      <span><i class="z-counted"></i>Escrutado █</span>
+      <span><i class="z-above"></i>Escrutado sobre lo estimado █</span>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="conceptos">
+  <h2 id="conceptos">Conceptos</h2>
+  <dl>
+    <div><dt>Circunscripción</dt><dd>Una provincia o ciudad autónoma (<code>District</code>). Hay 52.</dd></div>
+    <div><dt>Censo</dt><dd>Los electores que pueden votar en la circunscripción (<code>census</code>).</dd></div>
+    <div><dt>Estimado</dt><dd>Los votos que se esperan según las encuestas (<code>estimated</code>).</dd></div>
+    <div><dt>Escrutado</dt><dd>Los votos ya contados. Crece el día de la votación, según informan las mesas (<code>counted</code>).</dd></div>
+    <div><dt>Participación</dt><dd>El escrutado en % del censo.</dd></div>
+    <div><dt>Escala</dt><dd>Contra qué se dibuja una barra: su propio censo, o el mayor de todos.</dd></div>
+  </dl>
+</section>
+
+<section aria-labelledby="reglas">
+  <h2 id="reglas">Reglas de negocio</h2>
+  <ul class="rules">
+    <li><span class="code">RN-01</span><div><strong>El censo es el CER del INE</strong><p>Los electores españoles residentes en España de las listas de votación de las Generales del 29 de noviembre de 2026 (tabla <code>elecgral_2026_lv_tab3_mod.xlsx</code> de la Oficina del Censo Electoral). Total: 35.953.542. No incluye a los residentes en el extranjero (CERA).</p></div></li>
+    <li><span class="code">RN-02</span><div><strong>52 circunscripciones</strong><p>50 provincias y las ciudades autónomas de Ceuta y Melilla, con su nombre oficial: <em>A Coruña</em>, <em>Illes Balears</em>, <em>Valencia / València</em>…</p></div></li>
+    <li><span class="code">RN-03</span><div><strong>Orden alfabético, y las ciudades al final</strong><p>Primero las provincias por orden alfabético, sin distinguir tildes ni mayúsculas y con la ñ detrás de la n. Después, Ceuta y Melilla.</p></div></li>
+    <li><span class="code">RN-04</span><div><strong>Estimado = participación × censo</strong><p>La participación estimada es del 70 % por defecto (unos 25,2 millones de votos). Se redondea hacia abajo.</p></div></li>
+    <li><span class="code">RN-05</span><div><strong>El escrutado solo crece</strong><p>Nunca pasa del censo. Sí puede pasar del estimado, y ese tramo tiene su propio color.</p></div></li>
+    <li><span class="code">RN-06</span><div><strong>Maqueta: escrutinio simulado</strong><p>Cada circunscripción acaba entre el 85 % y el 115 % de su estimado, y en cada paso suma hasta el 6 % de ese final. Con la misma semilla sale el mismo escrutinio.</p></div></li>
+    <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de todas las circunscripciones. Siempre se ve, debajo de la tabla.</p></div></li>
+    <li><span class="code">RN-08</span><div><strong>Cómo se muestra</strong><p>Cifras con punto de millar (<code>35.953.542</code>) y porcentajes con coma y un decimal (<code>70,0 %</code>). Cada zona de la barra tiene textura y color propios.</p></div></li>
+    <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
+  </ul>
+</section>
+
+<section aria-labelledby="pantalla">
+  <h2 id="pantalla">Pantalla y teclas</h2>
+  <p>Arriba, la barra con el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> · <kbd>k</kbd> <kbd>j</kbd></td><td>Desplazar una fila</td></tr>
+        <tr><td><kbd>RePág</kbd> <kbd>AvPág</kbd></td><td>Desplazar 10 filas</td></tr>
+        <tr><td><kbd>espacio</kbd> · <kbd>p</kbd></td><td>Pausar o seguir</td></tr>
+        <tr><td><kbd>r</kbd></td><td>Reiniciar el escrutinio</td></tr>
+        <tr><td><kbd>e</kbd></td><td>Cambiar de escala</td></tr>
+        <tr><td><kbd>q</kbd> · <kbd>Esc</kbd></td><td>Salir</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="pendiente">
+  <h2 id="pendiente">Pendiente de decidir</h2>
+  <div class="pending">
+    <ul>
+      <li>De dónde llegará el escrutado real (backend) y cada cuánto.</li>
+      <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
+      <li>Si se muestra el % de mesas informadas.</li>
+      <li>Si la participación estimada puede variar por provincia según las encuestas.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>Fuente del censo: INE, Oficina del Censo Electoral, consultado el 21-11-2026. Este documento es la fuente de las reglas; el código las cita por su código (RN-xx).</footer>
+
+</main>
+</body>
+</html>

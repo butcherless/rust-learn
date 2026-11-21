@@ -640,6 +640,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "escrutinio"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
