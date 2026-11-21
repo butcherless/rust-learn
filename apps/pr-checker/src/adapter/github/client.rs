@@ -1,6 +1,7 @@
 //! HTTP client implementing [`PullRequestSource`] against GitHub.
 
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
@@ -8,18 +9,27 @@ use reqwest::header::{ACCEPT, HeaderMap, USER_AGENT};
 use reqwest::{Client, Method, RequestBuilder, StatusCode, Url};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
+use tokio::sync::{Semaphore, SemaphorePermit};
 
-use crate::adapter::github::dto::{MergeRequestDto, PullRequestDto, UpdateRequestDto};
-use crate::adapter::github::mapper::to_domain;
+use crate::adapter::github::dto::{
+    MergeRequestDto, PullRequestDto, UpdateRequestDto, WorkflowRunsDto,
+};
+use crate::adapter::github::mapper::{to_domain, to_running};
 use crate::domain::error::SourceError;
-use crate::domain::model::{PrNumber, Project, PullRequest};
-use crate::domain::port::{PullRequestCloser, PullRequestMerger, PullRequestSource};
+use crate::domain::model::{PrNumber, Project, PullRequest, WorkflowRun};
+use crate::domain::port::{
+    PullRequestCloser, PullRequestMerger, PullRequestSource, WorkflowRunSource,
+};
 
 /// The public GitHub API.
 pub const DEFAULT_BASE_URL: &str = "https://api.github.com";
 
 /// How many pull requests of one repository are fetched at the same time, for their mergeability.
 const DETAIL_CONCURRENCY: usize = 4;
+/// How many requests one client has in flight at most, whatever asks for them: GitHub advises
+/// against concurrent requests to stay clear of its secondary rate limits, so the rest wait in a
+/// queue. See <https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api>.
+pub const MAX_IN_FLIGHT: usize = 4;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const API_VERSION_HEADER: &str = "x-github-api-version";
 const API_VERSION: &str = "2022-11-28";
@@ -28,6 +38,9 @@ const RATE_LIMIT_REMAINING_HEADER: &str = "x-ratelimit-remaining";
 const USER_AGENT_VALUE: &str = concat!("pr-checker/", env!("CARGO_PKG_VERSION"));
 /// How pull requests are merged: with a merge commit, GitHub's default.
 const MERGE_METHOD: &str = "merge";
+/// How many of the newest workflow runs are checked for unfinished ones: one page, which covers
+/// what is running now in all but the busiest repositories.
+const RUNS_PAGE: &str = "30";
 /// The state that closes a pull request.
 const CLOSED_STATE: &str = "closed";
 
@@ -59,12 +72,14 @@ pub enum GithubClientError {
     Build(#[from] reqwest::Error),
 }
 
-/// GitHub-backed source of pull requests.
+/// GitHub-backed source of pull requests. Its clones share the queue of [`MAX_IN_FLIGHT`]
+/// requests.
 #[derive(Debug, Clone)]
 pub struct GithubClient {
     http: Client,
     base_url: Url,
     token: GithubToken,
+    in_flight: Arc<Semaphore>,
 }
 
 impl GithubClient {
@@ -79,23 +94,24 @@ impl GithubClient {
             http,
             base_url,
             token,
+            in_flight: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
         })
     }
 
-    /// The address of `/repos/{owner}/{repo}/pulls` followed by the segments of `tail`.
-    fn pulls_path(&self, project: &Project, tail: &[&str]) -> Result<Url, SourceError> {
+    /// The address of `/repos/{owner}/{repo}` followed by the segments of `tail`.
+    fn repo_path(&self, project: &Project, tail: &[&str]) -> Result<Url, SourceError> {
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .map_err(|()| SourceError::Unavailable("invalid base URL".to_owned()))?
             .pop_if_empty()
-            .extend([
-                "repos",
-                project.owner().as_str(),
-                project.repo().as_str(),
-                "pulls",
-            ])
+            .extend(["repos", project.owner().as_str(), project.repo().as_str()])
             .extend(tail);
         Ok(url)
+    }
+
+    /// The address of `/repos/{owner}/{repo}/pulls` followed by the segments of `tail`.
+    fn pulls_path(&self, project: &Project, tail: &[&str]) -> Result<Url, SourceError> {
+        self.repo_path(project, &[&["pulls"], tail].concat())
     }
 
     fn pulls_url(&self, project: &Project) -> Result<Url, SourceError> {
@@ -103,6 +119,16 @@ impl GithubClient {
         url.query_pairs_mut()
             .append_pair("state", "open")
             .append_pair("per_page", "100");
+        Ok(url)
+    }
+
+    /// The address of `/repos/{owner}/{repo}/actions/runs` with the newest page of runs, without
+    /// their pull requests.
+    fn runs_url(&self, project: &Project) -> Result<Url, SourceError> {
+        let mut url = self.repo_path(project, &["actions", "runs"])?;
+        url.query_pairs_mut()
+            .append_pair("per_page", RUNS_PAGE)
+            .append_pair("exclude_pull_requests", "true");
         Ok(url)
     }
 
@@ -128,7 +154,17 @@ impl GithubClient {
             .header(USER_AGENT, USER_AGENT_VALUE)
     }
 
+    /// Waits for a free place among the [`MAX_IN_FLIGHT`] requests. It is held until the response
+    /// is read.
+    async fn queue(&self) -> Result<SemaphorePermit<'_>, SourceError> {
+        self.in_flight
+            .acquire()
+            .await
+            .map_err(|_| SourceError::Unavailable("request queue closed".to_owned()))
+    }
+
     async fn get<T: DeserializeOwned>(&self, url: Url) -> Result<T, SourceError> {
+        let _permit = self.queue().await?;
         let response = self
             .request(Method::GET, url)
             .send()
@@ -144,6 +180,7 @@ impl GithubClient {
 
     /// Merges the pull request. Any success status means it was merged, so the body is not read.
     async fn put_merge(&self, project: &Project, number: PrNumber) -> Result<(), SourceError> {
+        let _permit = self.queue().await?;
         let response = self
             .request(Method::PUT, self.merge_url(project, number)?)
             .json(&MergeRequestDto {
@@ -166,6 +203,7 @@ impl GithubClient {
 
     /// Closes the pull request. Any success status means it was closed, so the body is not read.
     async fn patch_closed(&self, project: &Project, number: PrNumber) -> Result<(), SourceError> {
+        let _permit = self.queue().await?;
         let response = self
             .request(Method::PATCH, self.close_url(project, number)?)
             .json(&UpdateRequestDto {
@@ -202,6 +240,17 @@ impl PullRequestSource for GithubClient {
         project: &Project,
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send {
         self.fetch(project)
+    }
+}
+
+impl WorkflowRunSource for GithubClient {
+    async fn running_workflows(&self, project: &Project) -> Result<Vec<WorkflowRun>, SourceError> {
+        let page: WorkflowRunsDto = self.get(self.runs_url(project)?).await?;
+        Ok(page
+            .workflow_runs
+            .into_iter()
+            .filter_map(to_running)
+            .collect())
     }
 }
 

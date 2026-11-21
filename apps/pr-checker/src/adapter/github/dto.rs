@@ -21,6 +21,26 @@ pub struct PullRequestDto {
     pub mergeable: Option<bool>,
 }
 
+/// The page returned by `GET /repos/{owner}/{repo}/actions/runs`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct WorkflowRunsDto {
+    /// The runs, newest first.
+    pub workflow_runs: Vec<WorkflowRunDto>,
+}
+
+/// A workflow run, with the fields shown.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct WorkflowRunDto {
+    /// The workflow's name.
+    pub name: Option<String>,
+    /// The branch it runs on.
+    pub head_branch: Option<String>,
+    /// What triggered it.
+    pub event: String,
+    /// `queued`, `in_progress`, `requested`, `waiting`, `pending` or `completed`.
+    pub status: Option<String>,
+}
+
 /// The body of `PATCH /repos/{owner}/{repo}/pulls/{number}` that closes it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UpdateRequestDto {

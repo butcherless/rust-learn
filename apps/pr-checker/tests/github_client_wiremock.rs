@@ -6,13 +6,16 @@
 mod common;
 
 use std::net::TcpListener;
+use std::time::{Duration, Instant};
 
-use common::{project, pull_request};
+use common::{project, pull_request, workflow_run};
 use futures::future::join_all;
-use pr_checker::adapter::github::{GithubClient, GithubToken};
+use pr_checker::adapter::github::{GithubClient, GithubToken, MAX_IN_FLIGHT};
 use pr_checker::domain::error::SourceError;
-use pr_checker::domain::model::{Mergeable, PrNumber, PrState, PullRequest};
-use pr_checker::domain::port::{PullRequestCloser, PullRequestMerger, PullRequestSource};
+use pr_checker::domain::model::{Mergeable, PrNumber, PrState, PullRequest, RunStatus};
+use pr_checker::domain::port::{
+    PullRequestCloser, PullRequestMerger, PullRequestSource, WorkflowRunSource,
+};
 use serde_json::{Value, json};
 use wiremock::matchers::{body_json, header, header_exists, method, path, query_param};
 use wiremock::{Mock, MockBuilder, MockServer, ResponseTemplate};
@@ -271,4 +274,88 @@ async fn a_close_without_permission_is_unauthorized() {
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({"message": "Forbidden"})));
 
     assert_eq!(close_on(mock).await, Err(SourceError::Unauthorized));
+}
+
+/// A workflow run as the API returns it, with only the fields that are read.
+fn run_json(name: &str, status: &str) -> Value {
+    json!({"name": name, "head_branch": "main", "event": "push", "status": status})
+}
+
+#[tokio::test]
+async fn lists_the_unfinished_workflow_runs_of_the_newest_page() {
+    let server = MockServer::start().await;
+    with_api_headers(Mock::given(method("GET")).and(path("/repos/acme/widgets/actions/runs")))
+        .and(query_param("per_page", "30"))
+        .and(query_param("exclude_pull_requests", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "total_count": 3,
+            "workflow_runs": [
+                run_json("CI", "in_progress"),
+                run_json("Deploy", "queued"),
+                run_json("Old", "completed"),
+            ],
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let runs = GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
+        .unwrap()
+        .running_workflows(&project("acme/widgets"))
+        .await;
+
+    assert_eq!(
+        runs,
+        Ok(vec![
+            workflow_run("CI", RunStatus::InProgress),
+            workflow_run("Deploy", RunStatus::Queued),
+        ])
+    );
+}
+
+#[tokio::test]
+async fn workflow_runs_map_error_statuses() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/widgets/actions/runs"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+
+    let runs = GithubClient::new(&server.uri(), GithubToken::new(TOKEN))
+        .unwrap()
+        .running_workflows(&project("acme/widgets"))
+        .await;
+
+    assert_eq!(runs, Err(SourceError::NotFound));
+}
+
+/// GitHub advises against concurrent requests, so a client never has more than
+/// [`MAX_IN_FLIGHT`] at a time: three times as many slow requests take three rounds.
+#[tokio::test]
+async fn requests_wait_in_a_queue_beyond_the_in_flight_limit() {
+    const DELAY: Duration = Duration::from_millis(150);
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/acme/widgets/actions/runs"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"total_count": 0, "workflow_runs": []}))
+                .set_delay(DELAY),
+        )
+        .mount(&server)
+        .await;
+    let client = GithubClient::new(&server.uri(), GithubToken::new(TOKEN)).unwrap();
+    let widgets = project("acme/widgets");
+
+    let started = Instant::now();
+    let results =
+        join_all((0..3 * MAX_IN_FLIGHT).map(|_| client.running_workflows(&widgets))).await;
+
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert!(
+        started.elapsed() >= 3 * DELAY,
+        "took {:?}, less than three rounds",
+        started.elapsed()
+    );
 }

@@ -3,8 +3,8 @@
 
 use std::fmt;
 
-use crate::domain::model::{PrNumber, PrUrl, Project, PullRequest};
-use crate::service::ProjectReport;
+use crate::domain::model::{PrNumber, PrUrl, Project, PullRequest, RunStatus};
+use crate::service::{ProjectReport, RunsReport};
 
 /// The column titles.
 pub const HEADER: [&str; 5] = ["Project", "PR #", "Title", "State", "Mergeable"];
@@ -19,6 +19,63 @@ pub const LOADING_PROJECT: &str = "loading…";
 pub const MERGED: &str = "merged";
 /// The state of a pull request closed from the terminal UI (FR16).
 pub const CLOSED: &str = "closed";
+
+/// The column titles of the workflow runs panel.
+pub const RUN_HEADER: [&str; 5] = ["Project", "Workflow", "Branch", "Event", "Status"];
+
+/// What a workflow run row represents, which decides its color.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunRowKind {
+    /// A run with this status.
+    Run(RunStatus),
+    /// A project whose runs could not be fetched.
+    Failed,
+}
+
+/// One row of the workflow runs panel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunRow {
+    /// What the row represents.
+    pub kind: RunRowKind,
+    /// The text of each column, in [`RUN_HEADER`] order.
+    pub cells: [String; 5],
+}
+
+/// The rows of the workflow runs panel, in report order: one per unfinished run, and one per
+/// project whose runs failed. Projects without unfinished runs have none.
+pub fn run_rows<'a>(reports: impl IntoIterator<Item = &'a RunsReport>) -> Vec<RunRow> {
+    reports
+        .into_iter()
+        .flat_map(|report| {
+            let project = report.project.to_string();
+            match &report.outcome {
+                Ok(runs) => runs
+                    .iter()
+                    .map(|run| RunRow {
+                        kind: RunRowKind::Run(run.status),
+                        cells: [
+                            project.clone(),
+                            run.name.clone(),
+                            run.branch.clone(),
+                            run.event.clone(),
+                            run.status.to_string(),
+                        ],
+                    })
+                    .collect(),
+                Err(error) => vec![RunRow {
+                    kind: RunRowKind::Failed,
+                    cells: [
+                        project,
+                        format!("error: {error}"),
+                        NO_VALUE.to_owned(),
+                        NO_VALUE.to_owned(),
+                        NO_VALUE.to_owned(),
+                    ],
+                }],
+            }
+        })
+        .collect()
+}
 
 /// What a row represents, which decides its color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,8 +240,10 @@ fn pull_request_row(project: &Project, pull_request: &PullRequest) -> DisplayRow
 #[cfg(test)]
 pub(crate) mod fixtures {
     use crate::domain::error::SourceError;
-    use crate::domain::model::{Mergeable, PrNumber, PrState, PrTitle, PrUrl, PullRequest};
-    use crate::service::ProjectReport;
+    use crate::domain::model::{
+        Mergeable, PrNumber, PrState, PrTitle, PrUrl, PullRequest, RunStatus, WorkflowRun,
+    };
+    use crate::service::{ProjectReport, RunsReport};
 
     /// The address of the first sample pull request, `a/b` #1.
     pub const FIRST_URL: &str = "https://github.com/a/b/pull/1";
@@ -194,6 +253,24 @@ pub(crate) mod fixtures {
         ProjectReport {
             project: project.parse().unwrap(),
             outcome,
+        }
+    }
+
+    /// The runs report of `project`.
+    pub fn runs(project: &str, outcome: Result<Vec<WorkflowRun>, SourceError>) -> RunsReport {
+        RunsReport {
+            project: project.parse().unwrap(),
+            outcome,
+        }
+    }
+
+    /// The workflow run `name` on `main`, triggered by a push.
+    pub fn run(name: &str, status: RunStatus) -> WorkflowRun {
+        WorkflowRun {
+            name: name.to_owned(),
+            branch: "main".to_owned(),
+            event: "push".to_owned(),
+            status,
         }
     }
 
@@ -382,5 +459,42 @@ mod tests {
     #[test]
     fn empty_reports_give_no_rows() {
         assert!(rows(&[]).is_empty());
+    }
+
+    #[test]
+    fn run_rows_list_unfinished_runs_and_failures() {
+        use super::fixtures::{run, runs};
+        let reports = [
+            runs(
+                "a/b",
+                Ok(vec![
+                    run("CI", RunStatus::InProgress),
+                    run("Deploy", RunStatus::Queued),
+                ]),
+            ),
+            runs("c/d", Ok(vec![])),
+            runs("e/f", Err(SourceError::Unauthorized)),
+        ];
+        assert_eq!(
+            RUN_HEADER,
+            ["Project", "Workflow", "Branch", "Event", "Status"]
+        );
+        assert_eq!(
+            run_rows(&reports),
+            [
+                RunRow {
+                    kind: RunRowKind::Run(RunStatus::InProgress),
+                    cells: ["a/b", "CI", "main", "push", "in progress"].map(str::to_owned),
+                },
+                RunRow {
+                    kind: RunRowKind::Run(RunStatus::Queued),
+                    cells: ["a/b", "Deploy", "main", "push", "queued"].map(str::to_owned),
+                },
+                RunRow {
+                    kind: RunRowKind::Failed,
+                    cells: ["e/f", "error: unauthorized", "—", "—", "—"].map(str::to_owned),
+                },
+            ]
+        );
     }
 }

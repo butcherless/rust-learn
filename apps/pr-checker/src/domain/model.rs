@@ -187,6 +187,40 @@ pub struct PullRequest {
     pub url: PrUrl,
 }
 
+/// Where an unfinished workflow run is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunStatus {
+    /// Waiting for a runner.
+    Queued,
+    /// Running.
+    InProgress,
+    /// Waiting for an approval, a concurrency group or another dependency.
+    Waiting,
+}
+
+impl fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            RunStatus::Queued => "queued",
+            RunStatus::InProgress => "in progress",
+            RunStatus::Waiting => "waiting",
+        })
+    }
+}
+
+/// A workflow run that has not finished yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowRun {
+    /// The workflow's name.
+    pub name: String,
+    /// The branch it runs on.
+    pub branch: String,
+    /// What triggered it, such as `push` or `pull_request`.
+    pub event: String,
+    /// Where it is.
+    pub status: RunStatus,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +255,14 @@ mod tests {
     fn display_round_trips() {
         let project: Project = "seanmonstar/reqwest".parse().unwrap();
         assert_eq!(project.to_string().parse::<Project>(), Ok(project));
+    }
+
+    #[test]
+    fn run_status_displays_lowercase() {
+        assert_eq!(
+            [RunStatus::Queued, RunStatus::InProgress, RunStatus::Waiting].map(|s| s.to_string()),
+            ["queued", "in progress", "waiting"]
+        );
     }
 
     #[test]

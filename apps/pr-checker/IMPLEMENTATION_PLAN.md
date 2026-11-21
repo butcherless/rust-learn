@@ -3,7 +3,7 @@
 Requirements and design behind the tool. For setup and usage, see [README.md](README.md). For
 commands, code rules and library constraints, see [CLAUDE.md](CLAUDE.md).
 
-**Status (2026-11-21):** FR1-FR16 are implemented on `main` and CI passes. The table mode was run
+**Status (2026-11-21):** FR1-FR17 are implemented on `main` and CI passes. The table mode was run
 against the real GitHub API with the 13 repositories in `projects.toml` (exit `0`; one open pull
 request, mergeable). The terminal UI has only been checked with a dummy token, not by hand against real
 data.
@@ -28,6 +28,7 @@ data.
 | FR14 | In `--tui`, each repository's rows appear as soon as it finishes, in config order. On the first fetch a repository not yet finished shows a gray `loading…` row; on a refresh it keeps its previous rows until the new ones arrive. The selection stays on the same pull request when it is still listed, and otherwise on the same line. |
 | FR15 | In `--tui`, a Merge column after Mergeable shows a checkbox per pull request: empty and gray (`[ ]`) while open, a green tick (`[✓]`) once merged in this session, and `[~]` in orange while merging. `m` asks for confirmation in the status line, with `[?]` in orange on that pull request, and a second `m` on the same pull request merges it (`merge_method: merge`); any other command cancels. One merge at a time. A merged pull request's row turns green (its inverse-video selection too), with State `merged` and Mergeable `—`, and the summary counts it as merged, not open (`1 open pull requests in 3 projects, 1 merged, 1 failed`), until a fetch drops it. A refused merge (405, 409, 422) is `not mergeable` and leaves the checkbox empty. The table mode has no Merge column. |
 | FR16 | In `--tui`, a Close column after Merge shows a checkbox per pull request, like FR15's: `c` asks for confirmation (`Press c again to close owner/repo#N`, `[?]`), a second `c` on the same pull request closes it without merging (`PATCH` with `state: closed`), and `[~]` shows while closing. Merges and closes share the one-at-a-time rule, and the second key must repeat the first one's action. A closed pull request's row turns gray with State `closed`, a red tick in Close and no Merge checkbox (a merged one has no Close checkbox), and the summary counts it as closed, until a fetch drops it. The table mode has no Close column. |
+| FR17 | In `--tui`, a Running workflows panel below the pull requests lists the unfinished GitHub Actions runs of each repository (`queued`, `in progress`, or `waiting` for `requested`, `waiting` and `pending`) among its 30 newest, with Project, Workflow, Branch, Event and Status, in config order. In progress is orange, queued and waiting gray, and a repository whose runs fail shows a red error row. Its title counts the runs. It shows `loading…` until the first runs arrive and `No workflows running` when there are none. It takes what the pull requests leave free and at least a third of the screen, and the rows that don't fit are counted in `… N more`. The fetch (and `r`) gets the runs beside the pull requests, each repository's as they arrive, keeping the previous ones until then. |
 
 **Out of scope:** pagination, GitHub Enterprise, listing closed or merged PRs, merge methods other than a merge commit, review or CI status, JSON
 output, caching, retries, release packaging.
@@ -40,8 +41,9 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 | Module | Responsibility |
 |---|---|
 | `domain::model` | `Project` (validated by `FromStr`), `PullRequest`, `PrNumber`, `PrTitle`, `PrState`, `Mergeable`, `PrUrl` |
-| `domain::port` | `PullRequestSource`, `PullRequestMerger` and `PullRequestCloser`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
+| `domain::port` | `PullRequestSource`, `PullRequestMerger`, `PullRequestCloser` and `WorkflowRunSource`: return-position `impl Future`, static dispatch, no `dyn` or `async-trait` |
 | `domain::error` | `ProjectParseError`, and `SourceError` (`NotFound`, `Unauthorized`, `RateLimited`, `Unavailable`, `InvalidResponse`, `NotMergeable`) |
+| `service::running_workflows` | `stream_running_workflows`, like `stream_open_prs` for each project's unfinished workflow runs (`RunsReport`) |
 | `service::list_open_prs` | `stream_open_prs` yields each report with its position as soon as it is ready (`buffer_unordered`); `list_open_prs` collects it back into config order. Also `ProjectReport`, `has_failures`, `MAX_CONCURRENCY` |
 | `adapter::config` | `load_projects` (reads the file) and `parse_projects` (pure) |
 | `adapter::github` | `GithubClient`, `GithubToken` (redacted `Debug`), wire DTO, pure mapper and status mapping |
@@ -58,7 +60,15 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
   (`PUT …/pulls/{number}/merge` with `{"merge_method": "merge"}`; any 2xx means merged) and
   [Update a pull request](https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request)
   (`PATCH …/pulls/{number}` with `{"state": "closed"}`; any 2xx means closed, and errors map as
-  in the table below).
+  in the table below), and
+  [List workflow runs for a repository](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository)
+  (`GET …/actions/runs?per_page=30&exclude_pull_requests=true`, keeping the runs whose status is
+  not `completed`).
+- At most `MAX_IN_FLIGHT` (4) requests per client are in flight, through a `tokio` semaphore that
+  every request waits on, because GitHub
+  [advises](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api)
+  serial requests to avoid secondary rate limits. A fetch of 13 repositories makes about 30
+  requests, far below the 900 points per minute and 5,000 requests per hour.
 - One `reqwest::Client` is reused, with a 10-second timeout.
 - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
   `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: pr-checker/<crate version>`.

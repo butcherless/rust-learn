@@ -2,7 +2,7 @@
 //! module with `mod common;`.
 
 use pr_checker::domain::model::{
-    Mergeable, PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest,
+    Mergeable, PrNumber, PrState, PrTitle, PrUrl, Project, PullRequest, RunStatus, WorkflowRun,
 };
 
 /// Parses an `owner/repo` project.
@@ -18,5 +18,15 @@ pub fn pull_request(number: u64, state: PrState, mergeable: Mergeable) -> PullRe
         state,
         mergeable,
         url: PrUrl::from(format!("https://github.com/o/r/pull/{number}")),
+    }
+}
+
+/// The workflow run `name` on `main`, triggered by a push.
+pub fn workflow_run(name: &str, status: RunStatus) -> WorkflowRun {
+    WorkflowRun {
+        name: name.to_owned(),
+        branch: "main".to_owned(),
+        event: "push".to_owned(),
+        status,
     }
 }

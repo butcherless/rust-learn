@@ -11,15 +11,17 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::event::EventStream;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, stream};
 use ratatui::DefaultTerminal;
 use tokio::time::{Interval, MissedTickBehavior};
 
 use crate::adapter::tui::app::{Action, App, Effect, Message, message};
 use crate::adapter::view::PrRef;
 use crate::domain::model::{PrUrl, Project};
-use crate::domain::port::{PullRequestCloser, PullRequestMerger, PullRequestSource};
-use crate::service::{MAX_CONCURRENCY, ProjectReport, stream_open_prs};
+use crate::domain::port::{
+    PullRequestCloser, PullRequestMerger, PullRequestSource, WorkflowRunSource,
+};
+use crate::service::{MAX_CONCURRENCY, ProjectReport, stream_open_prs, stream_running_workflows};
 
 /// Half of the light's blink: lit, then dark (FR13).
 const BLINK: Duration = Duration::from_millis(500);
@@ -27,21 +29,24 @@ const BLINK: Duration = Duration::from_millis(500);
 /// Runs the UI until the user quits, and returns the last reports shown.
 ///
 /// The terminal is restored before returning, also when the loop fails.
-pub async fn run<S: PullRequestSource + PullRequestMerger + PullRequestCloser>(
-    source: &S,
-    projects: Vec<Project>,
-) -> io::Result<Vec<ProjectReport>> {
+pub async fn run<S>(source: &S, projects: Vec<Project>) -> io::Result<Vec<ProjectReport>>
+where
+    S: PullRequestSource + PullRequestMerger + PullRequestCloser + WorkflowRunSource,
+{
     let mut terminal = ratatui::try_init()?;
     let result = event_loop(&mut terminal, source, projects).await;
     let restored = ratatui::try_restore();
     result.and_then(|reports| restored.map(|()| reports))
 }
 
-async fn event_loop<S: PullRequestSource + PullRequestMerger + PullRequestCloser>(
+async fn event_loop<S>(
     terminal: &mut DefaultTerminal,
     source: &S,
     projects: Vec<Project>,
-) -> io::Result<Vec<ProjectReport>> {
+) -> io::Result<Vec<ProjectReport>>
+where
+    S: PullRequestSource + PullRequestMerger + PullRequestCloser + WorkflowRunSource,
+{
     let mut events = EventStream::new();
     let mut blink = tokio::time::interval(BLINK);
     blink.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -53,11 +58,12 @@ async fn event_loop<S: PullRequestSource + PullRequestMerger + PullRequestCloser
             Effect::Quit => return Ok(app.into_reports()),
             Effect::Open(url) => Some(open_in_browser(url)),
             Effect::Fetch => {
-                fetch = Some(Box::pin(stream_open_prs(
-                    source,
-                    projects.clone(),
-                    MAX_CONCURRENCY,
-                )));
+                // Pull requests and workflow runs, each project's as soon as they arrive.
+                let pull_requests = stream_open_prs(source, projects.clone(), MAX_CONCURRENCY)
+                    .map(|(index, report)| Message::Fetched(index, report));
+                let runs = stream_running_workflows(source, projects.clone(), MAX_CONCURRENCY)
+                    .map(|(index, report)| Message::RunsFetched(index, report));
+                fetch = Some(Box::pin(stream::select(pull_requests, runs)));
                 blink.reset();
                 next_message(
                     terminal,
@@ -131,7 +137,7 @@ async fn next_message<F, M>(
     acting: &mut Option<M>,
 ) -> io::Result<Option<Message>>
 where
-    F: Stream<Item = (usize, ProjectReport)> + Unpin,
+    F: Stream<Item = Message> + Unpin,
     M: Future<Output = Message> + Unpin,
 {
     terminal.draw(|frame| view::draw(app, frame))?;
@@ -162,12 +168,10 @@ async fn action_result<M: Future<Output = Message> + Unpin>(acting: &mut Option<
 
 /// The next report of the fetch, or [`Message::Finished`] when there are no more, which also
 /// ends the fetch.
-async fn next_report<F: Stream<Item = (usize, ProjectReport)> + Unpin>(
-    fetch: &mut Option<F>,
-) -> Message {
+async fn next_report<F: Stream<Item = Message> + Unpin>(fetch: &mut Option<F>) -> Message {
     match fetch.as_mut() {
         Some(reports) => match reports.next().await {
-            Some((index, report)) => Message::Fetched(index, report),
+            Some(report) => report,
             None => {
                 *fetch = None;
                 Message::Finished

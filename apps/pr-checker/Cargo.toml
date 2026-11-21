@@ -15,7 +15,7 @@ ratatui.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 toml = "1.2.1"
 
 [dev-dependencies]

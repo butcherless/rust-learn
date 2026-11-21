@@ -10,7 +10,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::adapter::view::{DisplayRow, PrRef, RowKind, loading_row, report_rows};
 use crate::domain::error::SourceError;
 use crate::domain::model::{PrUrl, Project};
-use crate::service::ProjectReport;
+use crate::service::{ProjectReport, RunsReport};
 
 /// The status line while fetching, before the progress.
 pub const LOADING: &str = "Loading…";
@@ -100,7 +100,9 @@ pub enum Message {
     Tick,
     /// The project at this position of the list finished fetching (FR14).
     Fetched(usize, ProjectReport),
-    /// Every project finished fetching.
+    /// The workflow runs of the project at this position of the list arrived.
+    RunsFetched(usize, RunsReport),
+    /// Every project finished fetching, pull requests and workflow runs.
     Finished,
     /// The browser was launched for this address, or could not be.
     Opened(PrUrl, Result<(), String>),
@@ -113,8 +115,8 @@ pub enum Message {
 pub enum Effect {
     /// Nothing: draw and wait for the next message.
     None,
-    /// Fetch every project, sending [`Message::Fetched`] for each one and then
-    /// [`Message::Finished`], and [`Message::Tick`] every half second meanwhile.
+    /// Fetch every project, sending [`Message::Fetched`] and [`Message::RunsFetched`] for each one
+    /// and then [`Message::Finished`], and [`Message::Tick`] every half second meanwhile.
     Fetch,
     /// Launch the browser, then send [`Message::Opened`].
     Open(PrUrl),
@@ -193,6 +195,9 @@ pub struct App {
     confirming: Option<(Action, PrRef)>,
     /// The pull request being merged or closed. Only one at a time.
     acting: Option<(Action, PrRef)>,
+    /// The latest unfinished workflow runs of each project, in the order of the configuration:
+    /// `None` until its first ones arrive. A refresh keeps them until the new ones arrive.
+    runs: Vec<Option<RunsReport>>,
     /// The pull requests merged or closed in this session. Their rows stay, shown as merged or
     /// closed, until a fetch no longer lists them.
     done: Vec<(Action, PrUrl)>,
@@ -227,6 +232,7 @@ impl App {
             fetch: None,
             confirming: None,
             acting: None,
+            runs: vec![None; projects.len()],
             done: Vec::new(),
         };
         let slots = projects.into_iter().map(Slot::Pending).collect();
@@ -236,6 +242,16 @@ impl App {
     /// The rows shown: one per pull request, or one per project without any, failed or loading.
     pub fn rows(&self) -> &[DisplayRow] {
         &self.rows
+    }
+
+    /// The latest workflow runs of each project that has them, in the order of the configuration.
+    pub fn runs(&self) -> impl Iterator<Item = &RunsReport> {
+        self.runs.iter().flatten()
+    }
+
+    /// Whether some project's first workflow runs have not arrived yet.
+    pub fn runs_pending(&self) -> bool {
+        self.runs.iter().any(Option::is_none)
     }
 
     /// The index of the selected row.
@@ -324,6 +340,7 @@ impl App {
             }
             Message::Tick => (self.ticked(), Effect::None),
             Message::Fetched(index, report) => (self.fetched(index, report), Effect::None),
+            Message::RunsFetched(index, report) => (self.runs_fetched(index, report), Effect::None),
             Message::Finished => (self.finished(), Effect::None),
             Message::Opened(url, Ok(())) => (self.with_status(Status::Opened(url)), Effect::None),
             Message::Opened(_, Err(error)) => {
@@ -398,6 +415,23 @@ impl App {
             ..self
         }
         .with_slots(slots)
+    }
+
+    fn runs_fetched(self, index: usize, report: RunsReport) -> Self {
+        let mut report = Some(report);
+        let runs = self
+            .runs
+            .into_iter()
+            .enumerate()
+            .map(|(position, runs)| {
+                if position == index {
+                    report.take()
+                } else {
+                    runs
+                }
+            })
+            .collect();
+        Self { runs, ..self }
     }
 
     fn finished(self) -> Self {
@@ -1147,5 +1181,38 @@ mod tests {
             app.checkbox(&app.rows()[1], Action::Close),
             Some(Checkbox::Off)
         );
+    }
+
+    #[test]
+    fn workflow_runs_arrive_per_project_and_stay_until_replaced() {
+        use crate::adapter::view::fixtures::{run as workflow, runs};
+        use crate::domain::model::RunStatus;
+        let busy = runs("e/f", Ok(vec![workflow("CI", RunStatus::InProgress)]));
+        let app = loading();
+        assert!(app.runs_pending());
+        assert_eq!(app.runs().count(), 0);
+
+        let app = run(app, [Message::RunsFetched(2, busy.clone())]).0;
+        assert!(app.runs_pending(), "two projects still pending");
+        assert_eq!(app.runs().collect::<Vec<_>>(), [&busy]);
+
+        let all = run(
+            app,
+            [
+                Message::RunsFetched(0, runs("a/b", Ok(vec![]))),
+                Message::RunsFetched(1, runs("c/d", Ok(vec![]))),
+            ],
+        )
+        .0;
+        assert!(!all.runs_pending());
+        let refreshing = run(all, [Message::Refresh]).0;
+        assert_eq!(
+            refreshing.runs().count(),
+            3,
+            "a refresh keeps the last runs"
+        );
+        let idle = runs("e/f", Ok(vec![]));
+        let replaced = run(refreshing, [Message::RunsFetched(2, idle.clone())]).0;
+        assert_eq!(replaced.runs().last(), Some(&idle));
     }
 }

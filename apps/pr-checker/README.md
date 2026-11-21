@@ -69,6 +69,14 @@ stays like that until a fetch no longer lists it. If GitHub refuses (conflicts, 
 rule for a merge, missing permission for either), the row stays orange and the status line says
 why.
 
+Below the pull requests, a **Running workflows** panel lists the GitHub Actions runs of every
+repository that have not finished: project, workflow, branch, event and status, in orange while in
+progress and gray while queued or waiting. A repository whose runs cannot be read shows a red row.
+Only the 30 newest runs of each repository are checked. The panel takes the room the pull requests
+leave free, and at least a third of the screen when they scroll; runs that don't fit are counted
+in a last `… N more` row. `r` fetches the pull requests and the runs again, and the runs of each
+repository replace the old ones as they arrive.
+
 | Key | Action |
 |---|---|
 | `↑` `↓` / `j` `k` | Move the selection |
@@ -76,7 +84,7 @@ why.
 | `Enter` / `o` | Open the selected pull request in your browser |
 | `m` `m` | Merge the selected pull request (the first `m` asks for confirmation) |
 | `c` `c` | Close the selected pull request without merging (the first `c` asks for confirmation) |
-| `r` | Fetch the pull requests again (ignored while fetching) |
+| `r` | Fetch the pull requests and the workflow runs again (ignored while fetching) |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
 ## Configuration
@@ -99,7 +107,9 @@ if it is fine-grained, or the `repo` scope if it is classic. Merging from the in
 needs [write access to contents](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
 for a fine-grained token, and closing needs
 [write access to pull requests](https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request);
-without them the merge or close fails with `unauthorized`.
+without them the merge or close fails with `unauthorized`. The workflow runs panel needs
+[read access to actions](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository)
+for a fine-grained token on private repositories.
 
 ## Behavior
 
@@ -108,7 +118,11 @@ without them the merge or close fails with `unauthorized`.
 - Mergeable is `no` when the pull request has conflicts with its base branch. It is `unknown`
   while GitHub is still computing it, usually on the first fetch after a change; fetch again
   (`r` in the interactive UI) to see it.
-- Each pull request costs one more API request, to get its Mergeable value.
+- Each pull request costs one more API request, to get its Mergeable value, and the interactive UI
+  makes one more per repository for its workflow runs.
+- At most 4 requests are in flight at a time, and the rest wait their turn, as GitHub
+  [advises](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api)
+  to stay clear of its secondary rate limits.
 
 | Exit code | Meaning |
 |---|---|

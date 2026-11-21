@@ -4,4 +4,4 @@ pub mod client;
 pub mod dto;
 pub mod mapper;
 
-pub use client::{DEFAULT_BASE_URL, GithubClient, GithubClientError, GithubToken};
+pub use client::{DEFAULT_BASE_URL, GithubClient, GithubClientError, GithubToken, MAX_IN_FLIGHT};

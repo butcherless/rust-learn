@@ -1,7 +1,7 @@
 //! Outbound port.
 
 use crate::domain::error::SourceError;
-use crate::domain::model::{PrNumber, Project, PullRequest};
+use crate::domain::model::{PrNumber, Project, PullRequest, WorkflowRun};
 
 /// A source of pull request data.
 pub trait PullRequestSource {
@@ -10,6 +10,15 @@ pub trait PullRequestSource {
         &self,
         project: &Project,
     ) -> impl Future<Output = Result<Vec<PullRequest>, SourceError>> + Send;
+}
+
+/// A source of the workflow runs of a project's continuous integration.
+pub trait WorkflowRunSource {
+    /// Retrieves the workflow runs of `project` that have not finished.
+    fn running_workflows(
+        &self,
+        project: &Project,
+    ) -> impl Future<Output = Result<Vec<WorkflowRun>, SourceError>> + Send;
 }
 
 /// Something that closes pull requests without merging them.
