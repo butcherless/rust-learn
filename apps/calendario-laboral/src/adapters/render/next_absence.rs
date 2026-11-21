@@ -1,23 +1,23 @@
 //! La próxima ausencia, debajo de la cuadrícula de vacaciones de las vistas de mes y de año
 //! (RN-30).
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 use super::style::styled;
 use super::*;
-use crate::domain::{Absence, DateRange, MonthExt};
+use crate::domain::{Absence, DateRange};
 
 /// El título de la sección.
 pub const ABSENCE_TITLE: &str = "Próxima ausencia";
 /// El texto cuando no quedan ausencias marcadas en el año `year`.
-pub fn no_absence(year: i32) -> String {
+pub fn no_absence(year: i16) -> String {
     format!("No quedan ausencias marcadas en {year}")
 }
 
 /// Las líneas de la sección: el título y una por cada parte de la ausencia, con la barra de su
 /// tipo, su etiqueta, alineada con la más larga, y sus fechas; o el aviso de que no quedan en
 /// `year`, el año que se muestra.
-pub(super) fn next_absence(absence: Option<&Absence>, year: i32, marker: Marker) -> Vec<String> {
+pub(super) fn next_absence(absence: Option<&Absence>, year: i16, marker: Marker) -> Vec<String> {
     let title = styled(Style::new().bold(), ABSENCE_TITLE);
     let parts: Vec<String> = match absence {
         None => vec![no_absence(year)],
@@ -46,7 +46,7 @@ pub(super) fn next_absence(absence: Option<&Absence>, year: i32, marker: Marker)
 }
 
 /// `8 diciembre`.
-fn day_of_month(date: NaiveDate) -> String {
+fn day_of_month(date: Date) -> String {
     format!(
         "{} {}",
         date.day(),
@@ -72,7 +72,7 @@ mod tests {
     use crate::domain::AbsencePart;
     use crate::domain::fixtures::{date, range};
 
-    fn absence(parts: &[(DayKind, NaiveDate, NaiveDate)]) -> Absence {
+    fn absence(parts: &[(DayKind, Date, Date)]) -> Absence {
         Absence {
             parts: parts
                 .iter()

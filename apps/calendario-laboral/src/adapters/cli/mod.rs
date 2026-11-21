@@ -12,12 +12,12 @@ mod values;
 
 use std::path::PathBuf;
 
-use chrono::{Datelike, NaiveDate, Weekday};
 use clap::{ArgAction, Parser, Subcommand};
+use jiff::civil::{Date, Weekday};
 
 use crate::adapters::viewer::Output;
 use crate::application::Command;
-use crate::domain::{MarkId, MarkKind, Month, MonthExt, Shift};
+use crate::domain::{MarkId, MarkKind, Month, Shift};
 
 pub use errors::error_text;
 use values::{date_arg, hours_arg, mark_kind_arg, month_arg, shift_arg, weekday_arg};
@@ -103,17 +103,17 @@ pub enum CommandArg {
     AddYear {
         /// Año, por ejemplo 2027.
         #[arg(value_name = "AÑO")]
-        year: i32,
+        year: i16,
         /// Copia los festivos de este año, con la misma fecha.
         #[arg(long = "festivos-de", value_name = "AÑO", help_heading = "Opciones")]
-        holidays_from: Option<i32>,
+        holidays_from: Option<i16>,
     },
     /// Elimina un año con sus marcas; si tiene marcas, hay que confirmarlo.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     RemoveYear {
         /// Año.
         #[arg(value_name = "AÑO")]
-        year: i32,
+        year: i16,
         /// Confirma que se eliminan también sus marcas.
         #[arg(long = "confirmar", help_heading = "Opciones")]
         confirmed: bool,
@@ -126,10 +126,10 @@ pub enum CommandArg {
         kind: MarkKind,
         /// Día, o primer día del rango (AAAA-MM-DD).
         #[arg(value_name = "FECHA", value_parser = date_arg, display_order = 2)]
-        from: NaiveDate,
+        from: Date,
         /// Último día del rango (AAAA-MM-DD).
         #[arg(value_name = "HASTA", value_parser = date_arg, display_order = 3)]
-        to: Option<NaiveDate>,
+        to: Option<Date>,
         /// Descripción de la marca.
         #[arg(long = "desc", value_name = "TEXTO", help_heading = "Opciones")]
         description: Option<String>,
@@ -154,10 +154,10 @@ pub enum CommandArg {
         kind: Option<MarkKind>,
         /// Primer día nuevo (AAAA-MM-DD).
         #[arg(long = "desde", value_name = "FECHA", value_parser = date_arg, help_heading = "Opciones")]
-        from: Option<NaiveDate>,
+        from: Option<Date>,
         /// Último día nuevo (AAAA-MM-DD).
         #[arg(long = "hasta", value_name = "FECHA", value_parser = date_arg, help_heading = "Opciones")]
-        to: Option<NaiveDate>,
+        to: Option<Date>,
         /// Descripción nueva; "" la quita.
         #[arg(long = "desc", value_name = "TEXTO", help_heading = "Opciones")]
         description: Option<String>,
@@ -174,14 +174,14 @@ pub enum CommandArg {
     List {
         /// Solo las marcas de este año.
         #[arg(value_name = "AÑO")]
-        year: Option<i32>,
+        year: Option<i16>,
     },
     /// Muestra el tipo y las horas de un día.
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Day {
         /// Fecha (AAAA-MM-DD) [por defecto: hoy].
         #[arg(value_name = "FECHA", value_parser = date_arg)]
-        date: Option<NaiveDate>,
+        date: Option<Date>,
     },
     /// Muestra un mes [por defecto: el actual; con solo el mes, del año actual].
     #[command(
@@ -192,7 +192,7 @@ pub enum CommandArg {
     Month {
         /// Año. Con un solo argumento, ese argumento es el mes.
         #[arg(value_name = "AÑO", requires = "month", display_order = 1)]
-        year: Option<i32>,
+        year: Option<i16>,
         /// Mes, por nombre o número: junio o 6.
         #[arg(
             value_name = "MES",
@@ -207,14 +207,14 @@ pub enum CommandArg {
     Year {
         /// Año.
         #[arg(value_name = "AÑO")]
-        year: Option<i32>,
+        year: Option<i16>,
     },
     /// Resume un año [por defecto: el actual].
     #[command(help_template = HELP, next_help_heading = "Argumentos")]
     Summary {
         /// Año.
         #[arg(value_name = "AÑO")]
-        year: Option<i32>,
+        year: Option<i16>,
     },
     /// Muestra la configuración: fin de semana, jornada reducida, y cupo y horas de cada año.
     #[command(help_template = HELP)]
@@ -236,7 +236,7 @@ pub enum CommandArg {
     Hours {
         /// Año, con sus propias horas (RN-25).
         #[arg(value_name = "AÑO", display_order = 1)]
-        year: i32,
+        year: i16,
         /// Jornada.
         #[arg(value_name = "JORNADA", value_parser = shift_arg(), display_order = 2)]
         shift: Shift,
@@ -249,7 +249,7 @@ pub enum CommandArg {
     Quota {
         /// Año.
         #[arg(value_name = "AÑO", display_order = 1)]
-        year: i32,
+        year: i16,
         /// Días de vacaciones.
         #[arg(value_name = "DÍAS", display_order = 2)]
         days: u32,
@@ -258,7 +258,7 @@ pub enum CommandArg {
 
 impl CommandArg {
     /// El [`Command`] de la aplicación; `today` da el año y el mes que falten.
-    pub fn into_command(self, today: NaiveDate) -> Command {
+    pub fn into_command(self, today: Date) -> Command {
         match self {
             Self::AddYear {
                 year,
@@ -463,11 +463,15 @@ mod tests {
             (&["config"][..], Command::Config),
             (
                 &["reduced-days", "viernes", "lunes"][..],
-                Command::ReducedDays(vec![Weekday::Fri, Weekday::Mon]),
+                Command::ReducedDays(vec![Weekday::Friday, Weekday::Monday]),
             ),
             (
                 &["reduced-days", "miercoles", "miércoles", "sabado"][..],
-                Command::ReducedDays(vec![Weekday::Wed, Weekday::Wed, Weekday::Sat]),
+                Command::ReducedDays(vec![
+                    Weekday::Wednesday,
+                    Weekday::Wednesday,
+                    Weekday::Saturday,
+                ]),
             ),
             (
                 &["reduced-days", "--ninguno"][..],
@@ -475,7 +479,7 @@ mod tests {
             ),
             (
                 &["weekend", "viernes", "sábado"][..],
-                Command::Weekend(vec![Weekday::Fri, Weekday::Sat]),
+                Command::Weekend(vec![Weekday::Friday, Weekday::Saturday]),
             ),
             (&["weekend", "--ninguno"][..], Command::Weekend(Vec::new())),
             (&["list", "2026"][..], Command::List(Some(2026))),

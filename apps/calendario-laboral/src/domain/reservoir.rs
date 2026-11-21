@@ -1,7 +1,7 @@
 //! Los embalses de la Comunidad de Madrid y su nivel (RN-31): el último dato semanal y la media
 //! de la misma semana en los 10 años anteriores. Los datos llegan de `adapters::reservoirs`.
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 /// Un embalse: su clave en la API y el nombre que se muestra.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,13 +34,13 @@ const fn reservoir(slug: &'static str, name: &'static str) -> Reservoir {
 }
 
 /// Los años anteriores que entran en la media.
-pub const AVERAGE_YEARS: i32 = 10;
+pub const AVERAGE_YEARS: i16 = 10;
 
 /// Un dato semanal: la fecha, la capacidad y el volumen en hm³, y el porcentaje de llenado.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WeeklyLevel {
     /// El día del dato.
-    pub date: NaiveDate,
+    pub date: Date,
     /// La capacidad, en hm³.
     pub capacity_hm3: f64,
     /// El volumen, en hm³.
@@ -61,12 +61,12 @@ pub struct ReservoirLevel {
 /// El nivel a partir del histórico, en cualquier orden, o nada si está vacío.
 pub fn reservoir_level(history: &[WeeklyLevel]) -> Option<ReservoirLevel> {
     let latest = *history.iter().max_by_key(|level| level.date)?;
-    let week = latest.date.iso_week();
+    let week = latest.date.iso_week_date();
     let years = week.year() - AVERAGE_YEARS..week.year();
     let (sum, count) = history
         .iter()
         .filter(|level| {
-            let other = level.date.iso_week();
+            let other = level.date.iso_week_date();
             other.week() == week.week() && years.contains(&other.year())
         })
         .fold((0.0, 0_u32), |(sum, count), level| {
@@ -83,7 +83,7 @@ mod tests {
     use super::*;
     use crate::domain::fixtures::date;
 
-    fn level(date: NaiveDate, percent: f64) -> WeeklyLevel {
+    fn level(date: Date, percent: f64) -> WeeklyLevel {
         WeeklyLevel {
             date,
             capacity_hm3: 100.0,

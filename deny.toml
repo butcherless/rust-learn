@@ -5,9 +5,7 @@
 [advisories]
 yanked = "deny"
 # Pending advisories, each with its entry in docs/recurring-tasks.md (Pending issues).
-ignore = [
-    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained; migration to jiff or time pending (DEP-1)" },
-]
+ignore = []
 
 [licenses]
 # Permissive licenses only, the ones the dependency graph uses today. A new one fails the check, so

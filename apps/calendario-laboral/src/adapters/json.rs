@@ -19,7 +19,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use chrono::Weekday;
+use jiff::civil::Weekday;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -133,7 +133,7 @@ impl HoursDto {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct YearDto {
-    year: i32,
+    year: i16,
     #[serde(default = "default_quota")]
     vacation_quota: u32,
     #[serde(default)]
@@ -207,13 +207,13 @@ const fn default_quota() -> u32 {
 
 const fn weekday_name(day: Weekday) -> &'static str {
     match day {
-        Weekday::Mon => "monday",
-        Weekday::Tue => "tuesday",
-        Weekday::Wed => "wednesday",
-        Weekday::Thu => "thursday",
-        Weekday::Fri => "friday",
-        Weekday::Sat => "saturday",
-        Weekday::Sun => "sunday",
+        Weekday::Monday => "monday",
+        Weekday::Tuesday => "tuesday",
+        Weekday::Wednesday => "wednesday",
+        Weekday::Thursday => "thursday",
+        Weekday::Friday => "friday",
+        Weekday::Saturday => "saturday",
+        Weekday::Sunday => "sunday",
     }
 }
 
@@ -370,8 +370,8 @@ mod tests {
     fn rf_11_reads_the_example_of_the_requirements() {
         let calendar = decode(example()).expect("valid example");
         let marks: Vec<Mark> = calendar.marks().cloned().collect();
-        assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
-        assert_eq!(calendar.reduced_days(), [Weekday::Fri]);
+        assert_eq!(calendar.weekend(), [Weekday::Saturday, Weekday::Sunday]);
+        assert_eq!(calendar.reduced_days(), [Weekday::Friday]);
         assert_eq!(
             calendar
                 .year(2026)
@@ -404,8 +404,8 @@ mod tests {
             (MarkKind::Reduced, "2026-12-24", "2026-12-24"),
             (MarkKind::Working, "2026-12-18", "2026-12-18"),
         ])
-        .with_weekend(&[Weekday::Fri, Weekday::Sat])
-        .with_reduced_days(&[Weekday::Mon, Weekday::Thu])
+        .with_weekend(&[Weekday::Friday, Weekday::Saturday])
+        .with_reduced_days(&[Weekday::Monday, Weekday::Thursday])
         .with_shift_hours(2026, Shift::SummerReduced, 5.5)
         .and_then(|calendar| calendar.with_quota(2026, 23))
         .and_then(|calendar| calendar.with_year(2027))
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn rf_11_missing_fields_take_the_defaults() {
         let calendar = decode(r#"{ "version": 2, "years": [{ "year": 2026 }] }"#).expect("valid");
-        assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
+        assert_eq!(calendar.weekend(), [Weekday::Saturday, Weekday::Sunday]);
         assert_eq!(calendar.year(2026).map(Year::hours), Ok(Hours::default()));
         assert_eq!(
             calendar.year(2026).map(|year| year.vacation_quota()),

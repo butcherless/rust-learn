@@ -5,11 +5,11 @@
 //! así el dominio no depende de clap y los nombres no se repiten. El mes acepta también el número
 //! (`6`, `06`) como alias, y los días de la semana el nombre con o sin tilde (`weekday_arg`).
 
-use chrono::{NaiveDate, Weekday};
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
+use jiff::civil::{Date, Weekday};
 
 use crate::adapters::render::{month_name, weekday_name};
-use crate::domain::{DomainError, MarkKind, Month, MonthExt, Shift, WEEK, parse_date};
+use crate::domain::{DomainError, MarkKind, Month, Shift, WEEK, parse_date};
 
 /// Un valor de una lista cerrada: clap comprueba el texto (`possible_values`) y lo convierte en su
 /// valor del dominio. Así los enums del dominio no dependen de clap y sus nombres no se repiten.
@@ -69,7 +69,7 @@ pub(super) fn weekday_arg() -> impl TypedValueParser<Value = Weekday> {
 /// El nombre del mes en minúsculas, o su número con o sin cero (`6`, `06`); también `setiembre`.
 pub(super) fn month_arg() -> impl TypedValueParser<Value = Month> {
     choice(Month::ALL.map(|month| {
-        let number = month.number_from_month();
+        let number = month.number();
         let value = PossibleValue::new(month_name(month).to_lowercase())
             .aliases([number.to_string(), format!("{number:02}")]);
         let value = if month == Month::September {
@@ -81,7 +81,7 @@ pub(super) fn month_arg() -> impl TypedValueParser<Value = Month> {
     }))
 }
 
-pub(super) fn date_arg(text: &str) -> Result<NaiveDate, DomainError> {
+pub(super) fn date_arg(text: &str) -> Result<Date, DomainError> {
     parse_date(text)
 }
 

@@ -39,7 +39,7 @@ fn main() -> ExitCode {
         Err(error) => return argument_error(&error),
     };
     let output = args.output(std::io::stdout().is_terminal());
-    let command = args.command.into_command(chrono::Local::now().date_naive());
+    let command = args.command.into_command(jiff::ZonedDateTime::now().date());
     run(&args.file, command, output).map_or_else(
         |error| {
             anstream::eprintln!("error: {error}");

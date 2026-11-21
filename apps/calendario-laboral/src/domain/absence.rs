@@ -4,7 +4,7 @@
 //! `AbsencePart` (tipo y `DateRange`). Solo empiezan y siguen el tramo los días con `Origin::Mark`;
 //! los de `DefaultVacation` lo cortan. Sin ausencia, la vista usa `render::no_absence`.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 use crate::domain::{
     Calendar, Category, DateRange, DayKind, DomainError, Origin, ResolvedDay, resolve_year,
@@ -32,8 +32,8 @@ pub struct Absence {
 /// su primer día. Las vacaciones por defecto (RN-14) no cuentan y cortan el tramo.
 pub fn next_absence(
     calendar: &Calendar,
-    number: i32,
-    today: NaiveDate,
+    number: i16,
+    today: Date,
 ) -> Result<Option<Absence>, DomainError> {
     let days: Vec<ResolvedDay> = resolve_year(calendar, number)?
         .into_iter()
@@ -83,7 +83,7 @@ mod tests {
     use crate::domain::fixtures::{calendar, date, marked, range};
 
     /// Lo esperado: cada parte con su tipo, desde y hasta.
-    fn absence(parts: &[(DayKind, NaiveDate, NaiveDate)]) -> Option<Absence> {
+    fn absence(parts: &[(DayKind, Date, Date)]) -> Option<Absence> {
         Some(Absence {
             parts: parts
                 .iter()

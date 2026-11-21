@@ -17,7 +17,7 @@
 use std::fmt;
 use std::iter;
 
-use chrono::{Datelike, NaiveDate, Weekday};
+use jiff::civil::{Date, Weekday};
 
 use crate::domain::{DateRange, DomainError, Hours, MarkKind, Shift, check_year};
 
@@ -26,13 +26,13 @@ pub const DEFAULT_VACATION_QUOTA: u32 = 25;
 
 /// Los días de la semana, desde el lunes (RN-12).
 pub const WEEK: [Weekday; 7] = [
-    Weekday::Mon,
-    Weekday::Tue,
-    Weekday::Wed,
-    Weekday::Thu,
-    Weekday::Fri,
-    Weekday::Sat,
-    Weekday::Sun,
+    Weekday::Monday,
+    Weekday::Tuesday,
+    Weekday::Wednesday,
+    Weekday::Thursday,
+    Weekday::Friday,
+    Weekday::Saturday,
+    Weekday::Sunday,
 ];
 
 /// El id de un `Mark`, único en el fichero.
@@ -61,14 +61,14 @@ pub struct Mark {
 /// Un año del calendario con su cupo de vacaciones, sus `Hours` y sus `Mark`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Year {
-    number: i32,
+    number: i16,
     vacation_quota: u32,
     hours: Hours,
     marks: Vec<Mark>,
 }
 
 impl Year {
-    const fn new(number: i32, hours: Hours) -> Self {
+    const fn new(number: i16, hours: Hours) -> Self {
         Self {
             number,
             vacation_quota: DEFAULT_VACATION_QUOTA,
@@ -83,7 +83,7 @@ impl Year {
     }
 
     /// El número del año.
-    pub const fn number(&self) -> i32 {
+    pub const fn number(&self) -> i16 {
         self.number
     }
 
@@ -150,8 +150,8 @@ impl Default for Calendar {
     /// año.
     fn default() -> Self {
         Self {
-            weekend: vec![Weekday::Sat, Weekday::Sun],
-            reduced_days: vec![Weekday::Fri],
+            weekend: vec![Weekday::Saturday, Weekday::Sunday],
+            reduced_days: vec![Weekday::Friday],
             years: Vec::new(),
         }
     }
@@ -179,7 +179,7 @@ impl Calendar {
     }
 
     /// El año `number`, que debe estar en el calendario (RN-02).
-    pub fn year(&self, number: i32) -> Result<&Year, DomainError> {
+    pub fn year(&self, number: i16) -> Result<&Year, DomainError> {
         self.years
             .iter()
             .find(|year| year.number == number)
@@ -187,12 +187,12 @@ impl Calendar {
     }
 
     /// Si `date` cae en fin de semana (RN-04).
-    pub fn is_weekend(&self, date: NaiveDate) -> bool {
+    pub fn is_weekend(&self, date: Date) -> bool {
         self.weekend.contains(&date.weekday())
     }
 
     /// Si `date` es un día de la regla `ReducedWeekday` (RN-18).
-    pub fn is_reduced_day(&self, date: NaiveDate) -> bool {
+    pub fn is_reduced_day(&self, date: Date) -> bool {
         self.reduced_days.contains(&date.weekday())
     }
 
@@ -216,7 +216,7 @@ impl Calendar {
     }
 
     /// El mismo calendario sin el año `number`, y ese año con sus `Mark` (RF-20).
-    pub fn without_year(self, number: i32) -> Result<(Self, Year), DomainError> {
+    pub fn without_year(self, number: i16) -> Result<(Self, Year), DomainError> {
         let year = self.year(number)?.clone();
         Ok((
             Self {
@@ -233,14 +233,14 @@ impl Calendar {
 
     /// El mismo calendario con `hours` para todos los `Shift` del año `number`, sin tocar las
     /// de los demás años (RN-25).
-    pub fn with_year_hours(self, number: i32, hours: Hours) -> Result<Self, DomainError> {
+    pub fn with_year_hours(self, number: i16, hours: Hours) -> Result<Self, DomainError> {
         self.update_year(number, |year| Year { hours, ..year })
     }
 
     /// El mismo calendario con `hours` para `shift` en el año `number` (RF-09, RN-25).
     pub fn with_shift_hours(
         self,
-        number: i32,
+        number: i16,
         shift: Shift,
         hours: f64,
     ) -> Result<Self, DomainError> {
@@ -250,14 +250,14 @@ impl Calendar {
 
     /// Las `Hours` que hereda un `Year` nuevo: las del anterior más cercano; si no hay, las del
     /// siguiente; y sin años, las de por defecto (RN-25).
-    fn inherited_hours(&self, number: i32) -> Hours {
+    fn inherited_hours(&self, number: i16) -> Hours {
         let previous = self.years.iter().rev().find(|year| year.number < number);
         let next = self.years.iter().find(|year| year.number > number);
         previous.or(next).map_or_else(Hours::default, Year::hours)
     }
 
     /// El mismo calendario con el año `number`, el cupo por defecto y sin `Mark` (RF-01).
-    pub fn with_year(self, number: i32) -> Result<Self, DomainError> {
+    pub fn with_year(self, number: i16) -> Result<Self, DomainError> {
         let number = check_year(number)?;
         if self.year(number).is_ok() {
             return Err(DomainError::DuplicateYear(number));
@@ -278,7 +278,7 @@ impl Calendar {
     }
 
     /// El mismo calendario con `days` como cupo de vacaciones del año `number` (RF-10).
-    pub fn with_quota(self, number: i32, days: u32) -> Result<Self, DomainError> {
+    pub fn with_quota(self, number: i16, days: u32) -> Result<Self, DomainError> {
         self.update_year(number, |year| Year {
             vacation_quota: days,
             ..year
@@ -369,7 +369,7 @@ impl Calendar {
         )
     }
 
-    fn update_year(self, number: i32, update: impl Fn(Year) -> Year) -> Result<Self, DomainError> {
+    fn update_year(self, number: i16, update: impl Fn(Year) -> Year) -> Result<Self, DomainError> {
         self.year(number)?;
         Ok(Self {
             years: self
@@ -396,8 +396,8 @@ mod tests {
     fn add(
         calendar: Calendar,
         kind: MarkKind,
-        from: NaiveDate,
-        to: NaiveDate,
+        from: Date,
+        to: Date,
     ) -> Result<(Calendar, Marking), DomainError> {
         DateRange::new(from, to).and_then(|range| calendar.with_mark(kind, range, None))
     }
@@ -792,7 +792,7 @@ mod tests {
     #[test]
     fn rn_04_the_weekend_is_computed_from_the_weekday() {
         let calendar = Calendar::default();
-        assert_eq!(calendar.weekend(), [Weekday::Sat, Weekday::Sun]);
+        assert_eq!(calendar.weekend(), [Weekday::Saturday, Weekday::Sunday]);
         [
             (date(2026, 6, 5), false),
             (date(2026, 6, 6), true),
@@ -800,14 +800,14 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(day, weekend)| assert_eq!(calendar.is_weekend(day), weekend, "{day}"));
-        let friday = calendar.with_weekend(&[Weekday::Sun, Weekday::Fri, Weekday::Sun]);
-        assert_eq!(friday.weekend(), [Weekday::Fri, Weekday::Sun]);
+        let friday = calendar.with_weekend(&[Weekday::Sunday, Weekday::Friday, Weekday::Sunday]);
+        assert_eq!(friday.weekend(), [Weekday::Friday, Weekday::Sunday]);
     }
 
     #[test]
     fn rn_18_fridays_are_the_default_reduced_days() {
         let calendar = Calendar::default();
-        assert_eq!(calendar.reduced_days(), [Weekday::Fri]);
+        assert_eq!(calendar.reduced_days(), [Weekday::Friday]);
         [
             (date(2026, 6, 4), false),
             (date(2026, 6, 5), true),
@@ -815,8 +815,9 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(day, reduced)| assert_eq!(calendar.is_reduced_day(day), reduced, "{day}"));
-        let custom = calendar.with_reduced_days(&[Weekday::Fri, Weekday::Mon, Weekday::Fri]);
-        assert_eq!(custom.reduced_days(), [Weekday::Mon, Weekday::Fri]);
+        let custom =
+            calendar.with_reduced_days(&[Weekday::Friday, Weekday::Monday, Weekday::Friday]);
+        assert_eq!(custom.reduced_days(), [Weekday::Monday, Weekday::Friday]);
         assert!(custom.with_reduced_days(&[]).reduced_days().is_empty());
     }
 

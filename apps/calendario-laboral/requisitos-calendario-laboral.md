@@ -37,7 +37,7 @@ Los conceptos se nombran en inglés, igual que en el código. Lo que ve el usuar
 | `quota` | Días de vacaciones de un `Year` | «cupo», `quota` |
 | `Weekend` | Regla que calcula el fin de semana a partir del día de la semana (RN-04) | «fin de semana», `weekend` |
 | `ReducedWeekday` | Regla que hace `Reduced` ciertos días de la semana, el viernes por defecto (RN-18) | «jornada reducida de los viernes», `reduced-days` |
-| `Month` | Un mes del año, de `January` a `December` (`chrono::Month`) | «junio» o «6» en `month` |
+| `Month` | Un mes del año, de `January` a `December` (enumeración propia) | «junio» o «6» en `month` |
 | `Summer` | Periodo fijo formado por `Month::July` y `Month::August` | «verano» |
 | `DefaultVacation` | Vacaciones calculadas de un `Year` sin `Vacation` marcadas (RN-14) | «vacaciones por defecto» |
 | `ResolvedDay` | Fecha con su `DayKind`, horas, `Origin` y descripción | `day` |
@@ -242,7 +242,7 @@ En el fichero JSON solo se guardan la configuración y los `Mark`. El `Weekend`,
 | RNF-05 | Organizar el código por capas: `domain` (tipos, reglas, resolución), `application` (casos de uso), `adapters` (CLI, consola y JSON). |
 | RNF-06 | Tener tests para cada regla RN y cada caso de uso RF, con una cobertura de líneas **≥ 90 %** medida con `cargo llvm-cov -p calendario-laboral --fail-under-lines 90`. |
 | RNF-07 | **Idiomas.** En inglés: los conceptos y el código (identificadores, nombres de tests). En español: la documentación (este documento, `CLAUDE.md`, rustdoc `///`/`//!` y comentarios) y todo lo que ve el usuario (mensajes, ayuda y valores de la CLI y del JSON). Los subcomandos se llaman como en §5. |
-| RNF-08 | **Enumeraciones de negocio.** Siempre que sea posible, el código usa enumeraciones en lugar de códigos numéricos: `Month` en lugar de 1–12, `DayKind`, `MarkKind`, `Shift`, `Category`, `Origin` o `Weekday`. Los números solo aparecen en los bordes (la entrada de la CLI y las fechas de chrono). |
+| RNF-08 | **Enumeraciones de negocio.** Siempre que sea posible, el código usa enumeraciones en lugar de códigos numéricos: `Month` en lugar de 1–12, `DayKind`, `MarkKind`, `Shift`, `Category`, `Origin` o `Weekday`. Los números solo aparecen en los bordes (la entrada de la CLI y las fechas de jiff). |
 
 ## 8. Verificación y trazabilidad
 
@@ -273,7 +273,7 @@ Las decisiones vigentes que no se deducen de las reglas, con su motivo.
 | Documentación y textos en español; conceptos y código en inglés (RNF-07). Los errores y la ayuda de clap se traducen sobre su texto, y los errores poco habituales quedan con el de clap. | clap no se puede traducir. |
 | Los `DateRange` que cruzan de año se rechazan, no se dividen (RN-02). | Cada `Mark` pertenece a un solo `Year`. |
 | **RF-12** y **RF-13** quedan fuera de la v1. | |
-| El mes es `chrono::Month` (RNF-08), con `MonthExt` para `ALL`, `of` e `is_summer`. | Ya es una enumeración ordenada, como `Weekday`. |
+| El mes es una enumeración propia, `Month` (RNF-08), con `ALL`, `of`, `number`, `succ` e `is_summer`. | jiff, que sustituye a chrono por estar sin mantenimiento (RUSTSEC-2026-0543), representa el mes como un número. |
 | La CLI construye sus valores (`MarkKind`, `Shift` y el mes) a partir del dominio con un único parser; el DTO JSON los repite a propósito. | Los nombres no se repiten en la CLI; los del JSON son el formato del fichero. |
 | **RN-20**: barra `▌` del color del tipo, separada del número por un espacio, y dos espacios entre días. | Media celda de color basta para distinguir el rojo de `Holiday` del naranja de `Vacation`; el número se lee sin color. |
 | Colores: `Working` azul y `Reduced` cian; en verano, `SummerWorking` verde y `SummerReduced` verde pálido (151 de la paleta de 256); `Weekend` gris, `Holiday` rojo y `Vacation` naranja en negrita (208). | Cada tipo tiene su color, y la jornada completa es más oscura que la reducida. No hay naranja entre los 16 colores básicos. |

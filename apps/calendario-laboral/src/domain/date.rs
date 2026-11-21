@@ -1,31 +1,32 @@
 //! Fechas, rangos y la aritmética de calendario que necesitan las reglas.
 //!
-//! `parse_date` es ISO estricto (RN-01), porque chrono por sí solo acepta días de un dígito.
+//! `parse_date` es ISO estricto (RN-01): exactamente cuatro, dos y dos dígitos.
 //! `DateRange` garantiza `from ≤ to`, y `year()` rechaza los rangos que cruzan de año.
 
 use std::fmt;
 
-use chrono::{Datelike, Months, NaiveDate};
+use jiff::ToSpan;
+use jiff::civil::Date;
 
 use crate::domain::{DomainError, Month};
 
 /// Lee una fecha ISO `YYYY-MM-DD` que exista (RN-01).
 ///
-/// A diferencia del `%Y-%m-%d` de chrono, exige exactamente cuatro, dos y dos dígitos.
-pub fn parse_date(text: &str) -> Result<NaiveDate, DomainError> {
+/// Exige exactamente cuatro, dos y dos dígitos, también si la biblioteca de fechas admitiera menos.
+pub fn parse_date(text: &str) -> Result<Date, DomainError> {
     let well_formed = text.len() == 10
         && text.char_indices().all(|(index, character)| match index {
             4 | 7 => character == '-',
             _ => character.is_ascii_digit(),
         });
     well_formed
-        .then(|| NaiveDate::parse_from_str(text, "%Y-%m-%d").ok())
+        .then(|| text.parse::<Date>().ok())
         .flatten()
         .ok_or_else(|| DomainError::InvalidDate(text.to_owned()))
 }
 
 /// Comprueba que el año se puede escribir como año ISO de cuatro dígitos.
-pub fn check_year(year: i32) -> Result<i32, DomainError> {
+pub fn check_year(year: i16) -> Result<i16, DomainError> {
     (1..=9999)
         .contains(&year)
         .then_some(year)
@@ -33,10 +34,10 @@ pub fn check_year(year: i32) -> Result<i32, DomainError> {
 }
 
 /// Todos los días del año, 365 o 366 (RN-07).
-pub fn days_of_year(year: i32) -> impl Iterator<Item = NaiveDate> {
-    NaiveDate::from_ymd_opt(year, 1, 1)
+pub fn days_of_year(year: i16) -> impl Iterator<Item = Date> {
+    Date::new(year, 1, 1)
         .into_iter()
-        .flat_map(|first| first.iter_days())
+        .flat_map(|first| first.series(1.day()))
         .take_while(move |date| date.year() == year)
 }
 
@@ -45,20 +46,20 @@ pub fn days_of_year(year: i32) -> impl Iterator<Item = NaiveDate> {
 /// Un día suelto tiene `from` = `to`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DateRange {
-    from: NaiveDate,
-    to: NaiveDate,
+    from: Date,
+    to: Date,
 }
 
 impl DateRange {
     /// El rango de `from` a `to`, ambos incluidos.
-    pub fn new(from: NaiveDate, to: NaiveDate) -> Result<Self, DomainError> {
+    pub fn new(from: Date, to: Date) -> Result<Self, DomainError> {
         (from <= to)
             .then_some(Self { from, to })
             .ok_or(DomainError::ReversedRange { from, to })
     }
 
     /// El rango de un solo día.
-    pub const fn day(date: NaiveDate) -> Self {
+    pub const fn day(date: Date) -> Self {
         Self {
             from: date,
             to: date,
@@ -66,27 +67,27 @@ impl DateRange {
     }
 
     /// Todos los días de `month` en `year`.
-    pub fn month(year: i32, month: Month) -> Result<Self, DomainError> {
-        let from = NaiveDate::from_ymd_opt(year, month.number_from_month(), 1)
-            .ok_or(DomainError::InvalidYear(year))?;
-        from.checked_add_months(Months::new(1))
-            .and_then(|next| next.pred_opt())
-            .map(|to| Self { from, to })
-            .ok_or(DomainError::InvalidYear(year))
+    pub fn month(year: i16, month: Month) -> Result<Self, DomainError> {
+        Date::new(year, month.number(), 1)
+            .map(|from| Self {
+                from,
+                to: from.last_of_month(),
+            })
+            .map_err(|_| DomainError::InvalidYear(year))
     }
 
     /// Primer día.
-    pub const fn from(self) -> NaiveDate {
+    pub const fn from(self) -> Date {
         self.from
     }
 
     /// Último día.
-    pub const fn to(self) -> NaiveDate {
+    pub const fn to(self) -> Date {
         self.to
     }
 
     /// Si el rango cubre `date`.
-    pub fn contains(self, date: NaiveDate) -> bool {
+    pub fn contains(self, date: Date) -> bool {
         (self.from..=self.to).contains(&date)
     }
 
@@ -96,7 +97,7 @@ impl DateRange {
     }
 
     /// El año del rango, que no puede abarcar dos años (RN-02).
-    pub fn year(self) -> Result<i32, DomainError> {
+    pub fn year(self) -> Result<i16, DomainError> {
         (self.from.year() == self.to.year())
             .then_some(self.from.year())
             .ok_or(DomainError::CrossesYear {
@@ -119,7 +120,7 @@ impl fmt::Display for DateRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::MonthExt;
+
     use crate::domain::fixtures::{date, range};
 
     #[test]
@@ -212,8 +213,8 @@ mod tests {
             DateRange::new(date(2026, 12, 1), date(2026, 12, 31))
         );
         assert_eq!(
-            DateRange::month(262_142, Month::December),
-            Err(DomainError::InvalidYear(262_142))
+            DateRange::month(32_000, Month::December),
+            Err(DomainError::InvalidYear(32_000))
         );
         assert_eq!(check_year(2026), Ok(2026));
         assert_eq!(check_year(0), Err(DomainError::InvalidYear(0)));

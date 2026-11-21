@@ -75,10 +75,9 @@ fn cell(day: &ResolvedDay, marker: Marker) -> String {
 
 /// Las líneas de un mes, de [`MONTH_WIDTH`] caracteres, completadas hasta `weeks` semanas.
 fn month_grid(view: &MonthView, title: &str, weeks: usize, marker: Marker) -> Vec<String> {
-    let leading = view
-        .days
-        .first()
-        .map_or(0, |day| day.date.weekday().num_days_from_monday() as usize);
+    let leading = view.days.first().map_or(0, |day| {
+        usize::try_from(day.date.weekday().to_monday_zero_offset()).unwrap_or(0)
+    });
     let cells: Vec<String> = iter::repeat_n(BLANK_CELL.to_owned(), leading)
         .chain(view.days.iter().map(|day| cell(day, marker)))
         .collect();

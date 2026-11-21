@@ -27,7 +27,7 @@ pub(super) fn edit(
     calendar: Calendar,
     id: MarkId,
     kind: Option<MarkKind>,
-    (from, to): (Option<NaiveDate>, Option<NaiveDate>),
+    (from, to): (Option<Date>, Option<Date>),
     description: Option<String>,
 ) -> Result<Outcome, DomainError> {
     let old = calendar.mark(id)?.clone();
@@ -72,7 +72,7 @@ pub(super) fn unmark(calendar: Calendar, ids: &[MarkId]) -> Result<Outcome, Doma
     })
 }
 
-pub(super) fn list(calendar: &Calendar, year: Option<i32>) -> Result<Vec<Mark>, DomainError> {
+pub(super) fn list(calendar: &Calendar, year: Option<i16>) -> Result<Vec<Mark>, DomainError> {
     match year {
         Some(year) => calendar
             .year(year)

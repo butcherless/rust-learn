@@ -58,7 +58,7 @@ Fechas de referencia para los casos de test:
 Las dependencias apuntan hacia dentro: `main → adapters → application → domain`. El detalle de cada módulo (tipos, decisiones de implementación, qué regla cumple cada función) está en su rustdoc `//!`: léelo antes de cambiarlo, o míralo con `cargo doc -p calendario-laboral --no-deps --open`. Al cambiar un módulo, actualiza su `//!`; este mapa solo cambia si se añade, quita o mueve un módulo.
 
 - **`domain`**, puro: sin E/S y sin mutación; cada cambio recibe el `Calendar` por valor y devuelve uno nuevo.
-  - `month` (`MonthExt` sobre `chrono::Month`), `kind` (`MarkKind`, `DayKind`, `Category`, `Shift`), `date` (`parse_date`, `DateRange`), `hours`, `calendar` (`Calendar`, `Year`, `Mark`), `error`.
+  - `month` (`Month`, la enumeración propia), `kind` (`MarkKind`, `DayKind`, `Category`, `Shift`), `date` (`parse_date`, `DateRange`), `hours`, `calendar` (`Calendar`, `Year`, `Mark`), `error`.
   - `resolve`: el `DayKind` de cada día por prioridad de reglas, `DefaultVacation` (RN-14) y el `Summary`.
   - `absence` (RN-30), `reservoir` (RN-31) y `market` (RN-32).
   - `fixtures` (`#[cfg(test)]`): `date`, `range`, `today` (el 2026-06-01, para las vistas), `calendar` (solo 2026) y `marked`.
@@ -75,7 +75,7 @@ Las dependencias apuntan hacia dentro: `main → adapters → application → do
 
 Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror`, tests con tabla de casos…) están en el `CLAUDE.md` raíz. En este proyecto, además:
 
-- **Enumeraciones antes que números (RNF-08):** modela los conceptos de negocio con enums (`Month`, `DayKind`, `Shift`…), nunca con códigos numéricos. Los números solo aparecen en los bordes: los alias `6`/`06` del mes en la CLI y `number_from_month` para construir fechas con chrono.
+- **Enumeraciones antes que números (RNF-08):** modela los conceptos de negocio con enums (`Month`, `DayKind`, `Shift`…), nunca con códigos numéricos. Los números solo aparecen en los bordes: los alias `6`/`06` del mes en la CLI y `Month::number` para construir fechas con jiff.
 - Sin `unsafe`, y sin comodín `_` al hacer `match` sobre enums de la aplicación tampoco.
 - La única mutación aceptada es ordenar un `Vec` local y propio.
 - Los `Display` usan `f.pad`, para que funcionen anchos como `{:<10}`.
@@ -86,7 +86,7 @@ Las reglas comunes (sin `unwrap`/`expect`/`panic!`, estilo funcional, `thiserror
 - **clap 4.6**: features `derive`, `env` y `string` (los nombres y alias de mes se generan en tiempo de ejecución).
 - **anstyle / anstream 1.0**: ya son dependencias de clap. `format!("{style}texto{style:#}")` aplica el estilo y lo cierra.
 - **crossterm 0.29**: la del workspace, la misma que usa ratatui. `Event::as_key_press_event` filtra las pulsaciones; sin él, en Windows llegarían también las teclas soltadas.
-- **chrono 0.4**: `NaiveDate::iter_days` recibe `&self`, así que se mapea con un closure. Los nombres de meses y días en español son tablas en `render` (`month_name`, `weekday_name`), que también usa la CLI, no los locales inestables de chrono.
+- **jiff 1.0** (`civil::Date`, `Time` y `Weekday`), en lugar de chrono, que ya no se mantiene (RUSTSEC-2026-0543). Los años son `i16`, el tipo de jiff, que cubre el rango 1–9999 que admite `check_year`. jiff no tiene enumeración de meses, así que `Month` es propia. `series(1.day())` recorre los días, `last_of_month` da el último del mes y `with().year(año).build()` falla con el 29 de febrero de un año no bisiesto, como el `with_year` de chrono. `parse_date` sigue comprobando los dígitos antes de `FromStr`. Los nombres de meses y días en español son tablas en `render` (`month_name`, `weekday_name`), que también usa la CLI.
 - **reqwest 0.13**: la del workspace con la feature `blocking`, porque la aplicación no es async. El cliente bloqueante no puede crearse ni usarse dentro de un runtime: los tests con **wiremock** (que sí es async, con **tokio** como dev-dependency) lo llaman dentro de `tokio::task::spawn_blocking`. Como en pr-checker, la URL se monta con `format!` (`RequestBuilder::query` necesita otra feature).
 - **serde_json**: indica los valores de `kind` desconocidos con línea y columna, y un test fija ese texto.
 

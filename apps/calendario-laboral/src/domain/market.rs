@@ -1,7 +1,7 @@
 //! Los mercados de RN-32: el IBEX 35 y el Brent, con su última cotización. Los datos llegan de
 //! `adapters::markets`.
 
-use chrono::{NaiveDate, NaiveTime};
+use jiff::civil::{Date, Time};
 
 /// Un valor de mercado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,9 +33,9 @@ pub struct Quote {
     /// El cierre anterior.
     pub previous: f64,
     /// El día de la cotización.
-    pub date: NaiveDate,
+    pub date: Date,
     /// La hora de la cotización, si se conoce.
-    pub time: Option<NaiveTime>,
+    pub time: Option<Time>,
 }
 
 impl Quote {

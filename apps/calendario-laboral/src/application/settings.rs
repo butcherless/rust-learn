@@ -24,7 +24,7 @@ pub(super) fn reduced_days(calendar: Calendar, days: &[Weekday]) -> Outcome {
 /// Las horas de una jornada en un año (RF-09, RN-25).
 pub(super) fn hours(
     calendar: Calendar,
-    year: i32,
+    year: i16,
     shift: Shift,
     hours: f64,
 ) -> Result<Outcome, DomainError> {
@@ -35,7 +35,7 @@ pub(super) fn hours(
 }
 
 /// El cupo de un año, con el aviso si queda por debajo de las vacaciones usadas (RF-10, RN-11).
-pub(super) fn quota(calendar: Calendar, year: i32, days: u32) -> Result<Outcome, DomainError> {
+pub(super) fn quota(calendar: Calendar, year: i16, days: u32) -> Result<Outcome, DomainError> {
     let calendar = calendar.with_quota(year, days)?;
     let excess = summarize(&calendar, year)?.vacation_excess();
     Ok(Outcome::Changed {

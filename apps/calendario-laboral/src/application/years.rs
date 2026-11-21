@@ -6,8 +6,8 @@ use super::*;
 /// existen en el año nuevo, como un 29 de febrero, se saltan.
 pub(super) fn add_year(
     calendar: Calendar,
-    year: i32,
-    holidays_from: Option<i32>,
+    year: i16,
+    holidays_from: Option<i16>,
 ) -> Result<Outcome, DomainError> {
     let holidays: Vec<Mark> = holidays_from
         .map(|from| calendar.year(from).map(|from| from.marks().to_vec()))
@@ -20,8 +20,9 @@ pub(super) fn add_year(
     let (calendar, copied) = holidays
         .into_iter()
         .filter_map(|mark| {
-            let from = mark.range.from().with_year(year)?;
-            let to = mark.range.to().with_year(year)?;
+            // A holiday on 29 February has no date in a common year, and is not copied.
+            let from = mark.range.from().with().year(year).build().ok()?;
+            let to = mark.range.to().with().year(year).build().ok()?;
             DateRange::new(from, to)
                 .ok()
                 .map(|range| (range, mark.description))
@@ -44,7 +45,7 @@ pub(super) fn add_year(
 /// Elimina un año; si tiene `Mark`, solo con `confirmed` (RF-20).
 pub(super) fn remove_year(
     calendar: Calendar,
-    year: i32,
+    year: i16,
     confirmed: bool,
 ) -> Result<Outcome, DomainError> {
     let marks = calendar.year(year)?.marks().len();

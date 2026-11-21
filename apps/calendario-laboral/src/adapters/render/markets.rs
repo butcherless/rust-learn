@@ -45,8 +45,14 @@ pub(super) fn market_table(table: &MarketTable, lit: bool) -> Vec<String> {
 fn values(quote: &Quote) -> String {
     let change = format!("{:+.2} %", quote.change_percent()).replace('.', ",");
     let date = quote.time.map_or_else(
-        || quote.date.format("%d-%m-%Y").to_string(),
-        |time| format!("{} {}", quote.date.format("%d-%m-%Y"), time.format("%H:%M")),
+        || quote.date.strftime("%d-%m-%Y").to_string(),
+        |time| {
+            format!(
+                "{} {}",
+                quote.date.strftime("%d-%m-%Y"),
+                time.strftime("%H:%M")
+            )
+        },
     );
     format!(
         "{:>PRICE_WIDTH$} {change:>CHANGE_WIDTH$} {date}",

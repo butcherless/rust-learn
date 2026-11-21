@@ -1,24 +1,30 @@
-//! El mes es `chrono::Month`, una enumeración como `Weekday` (RNF-08); [`MonthExt`] le añade lo
-//! que necesita el dominio.
+//! El mes es [`Month`], una enumeración como `Weekday` (RNF-08). jiff representa el mes como un
+//! número, así que este tipo lo envuelve.
 //!
-//! El dominio no compara números de mes: `number_from_month` solo sirve para construir fechas.
+//! El dominio no compara números de mes: [`Month::number`] solo sirve para construir fechas.
 
-pub use chrono::Month;
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
-pub trait MonthExt {
-    /// Los doce meses, en orden.
-    const ALL: [Month; 12];
-
-    /// El mes de una fecha.
-    fn of(date: NaiveDate) -> Month;
-
-    /// Si el mes es `Summer` (RN-08).
-    fn is_summer(&self) -> bool;
+/// Un mes del año.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Month {
+    January,
+    February,
+    March,
+    April,
+    May,
+    June,
+    July,
+    August,
+    September,
+    October,
+    November,
+    December,
 }
 
-impl MonthExt for Month {
-    const ALL: [Self; 12] = [
+impl Month {
+    /// Los doce meses, en orden.
+    pub const ALL: [Self; 12] = [
         Self::January,
         Self::February,
         Self::March,
@@ -33,12 +39,50 @@ impl MonthExt for Month {
         Self::December,
     ];
 
-    fn of(date: NaiveDate) -> Self {
+    /// El mes de una fecha.
+    pub fn of(date: Date) -> Self {
         // Avanza desde enero, en lugar de convertir el número, para no tener un caso imposible.
-        (0..date.month0()).fold(Self::January, |month, _| month.succ())
+        (1..date.month()).fold(Self::January, |month, _| month.succ())
     }
 
-    fn is_summer(&self) -> bool {
+    /// El número del mes, de 1 a 12, para construir fechas.
+    pub const fn number(self) -> i8 {
+        match self {
+            Self::January => 1,
+            Self::February => 2,
+            Self::March => 3,
+            Self::April => 4,
+            Self::May => 5,
+            Self::June => 6,
+            Self::July => 7,
+            Self::August => 8,
+            Self::September => 9,
+            Self::October => 10,
+            Self::November => 11,
+            Self::December => 12,
+        }
+    }
+
+    /// El mes siguiente; tras diciembre, enero.
+    pub const fn succ(self) -> Self {
+        match self {
+            Self::January => Self::February,
+            Self::February => Self::March,
+            Self::March => Self::April,
+            Self::April => Self::May,
+            Self::May => Self::June,
+            Self::June => Self::July,
+            Self::July => Self::August,
+            Self::August => Self::September,
+            Self::September => Self::October,
+            Self::October => Self::November,
+            Self::November => Self::December,
+            Self::December => Self::January,
+        }
+    }
+
+    /// Si el mes es `Summer` (RN-08).
+    pub const fn is_summer(self) -> bool {
         match self {
             Self::July | Self::August => true,
             Self::January
@@ -64,14 +108,31 @@ mod tests {
     fn every_month_is_its_date_month_and_number() {
         Month::ALL.into_iter().for_each(|month| {
             assert_eq!(
-                Month::of(date(2026, month.number_from_month(), 15)),
+                Month::of(date(2026, month.number(), 15)),
                 month,
                 "{month:?}"
             );
         });
         assert_eq!(
-            Month::ALL.map(|month| month.number_from_month()),
+            Month::ALL.map(Month::number),
             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        );
+        assert_eq!(
+            Month::ALL.map(Month::succ),
+            [
+                Month::February,
+                Month::March,
+                Month::April,
+                Month::May,
+                Month::June,
+                Month::July,
+                Month::August,
+                Month::September,
+                Month::October,
+                Month::November,
+                Month::December,
+                Month::January,
+            ]
         );
     }
 

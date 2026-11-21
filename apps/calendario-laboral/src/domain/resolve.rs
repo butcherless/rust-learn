@@ -16,10 +16,10 @@
 
 use std::collections::HashSet;
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 use crate::domain::{
-    Calendar, Category, DayKind, DomainError, MarkId, MarkKind, Month, MonthExt, Year, days_of_year,
+    Calendar, Category, DayKind, DomainError, MarkId, MarkKind, Month, Year, days_of_year,
 };
 
 /// De dónde sale el `DayKind` de un día.
@@ -41,7 +41,7 @@ pub enum Origin {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedDay {
     /// La fecha.
-    pub date: NaiveDate,
+    pub date: Date,
     /// El `DayKind` efectivo.
     pub kind: DayKind,
     /// Las horas de su `Shift`, o 0 si no es laborable.
@@ -88,7 +88,7 @@ const fn day_kind(rule: Option<Rule>, summer: bool) -> DayKind {
 }
 
 /// Todos los días del año `number`, resueltos (RN-05, RN-07, RN-08, RN-14).
-pub fn resolve_year(calendar: &Calendar, number: i32) -> Result<Vec<ResolvedDay>, DomainError> {
+pub fn resolve_year(calendar: &Calendar, number: i16) -> Result<Vec<ResolvedDay>, DomainError> {
     let year = calendar.year(number)?;
     let days = days_of_year(number)
         .map(|date| resolve_marks(calendar, year, date))
@@ -101,7 +101,7 @@ pub fn resolve_year(calendar: &Calendar, number: i32) -> Result<Vec<ResolvedDay>
 }
 
 /// El día `date`, resuelto. Su año debe estar en el calendario (RF-05).
-pub fn resolve_day(calendar: &Calendar, date: NaiveDate) -> Result<ResolvedDay, DomainError> {
+pub fn resolve_day(calendar: &Calendar, date: Date) -> Result<ResolvedDay, DomainError> {
     resolve_year(calendar, date.year())?
         .into_iter()
         .find(|day| day.date == date)
@@ -111,7 +111,7 @@ pub fn resolve_day(calendar: &Calendar, date: NaiveDate) -> Result<ResolvedDay, 
 /// El tipo que dan los `Mark` y las reglas `Weekend` y `ReducedWeekday`: gana el de mayor
 /// prioridad y, con la misma, el primero. Los `Mark` van antes que las reglas, y entre ellos el
 /// más antiguo, así un `Mark` `Reduced` en viernes conserva su `Origin` y su descripción.
-fn resolve_marks(calendar: &Calendar, year: &Year, date: NaiveDate) -> ResolvedDay {
+fn resolve_marks(calendar: &Calendar, year: &Year, date: Date) -> ResolvedDay {
     let weekend = calendar
         .is_weekend(date)
         .then_some((Rule::Weekend, Origin::Weekend, None));
@@ -151,7 +151,7 @@ const DEFAULT_VACATION_FROM: Month = Month::July;
 
 /// Convierte en vacaciones los primeros `quota` días laborables desde el 1 de julio (RN-14).
 fn with_default_vacation(days: Vec<ResolvedDay>, quota: u32) -> Vec<ResolvedDay> {
-    let chosen: HashSet<NaiveDate> = days
+    let chosen: HashSet<Date> = days
         .iter()
         .filter(|day| {
             Month::of(day.date) >= DEFAULT_VACATION_FROM && day.kind.category() == Category::Working
@@ -196,7 +196,7 @@ pub struct MonthTotal {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Summary {
     /// El año.
-    pub year: i32,
+    pub year: i16,
     /// Días de cada tipo, en el orden de [`DayKind::ALL`].
     pub counts: [(DayKind, usize); 7],
     /// Días de los cuatro tipos laborables (RN-09).
@@ -257,7 +257,7 @@ impl Summary {
 }
 
 /// El resumen del año `number` (RF-08).
-pub fn summarize(calendar: &Calendar, number: i32) -> Result<Summary, DomainError> {
+pub fn summarize(calendar: &Calendar, number: i16) -> Result<Summary, DomainError> {
     Ok(summary_of(
         calendar.year(number)?,
         &resolve_year(calendar, number)?,
@@ -319,7 +319,7 @@ mod tests {
     use crate::domain::fixtures::{calendar, date, marked};
     use crate::domain::{DateRange, Shift};
 
-    fn kind_of(calendar: &Calendar, day: NaiveDate) -> Result<(DayKind, Origin), DomainError> {
+    fn kind_of(calendar: &Calendar, day: Date) -> Result<(DayKind, Origin), DomainError> {
         resolve_day(calendar, day).map(|day| (day.kind, day.origin))
     }
 
@@ -465,7 +465,7 @@ mod tests {
             (MarkKind::Reduced, "2026-07-03", "2026-07-03"),
         ]);
         let days = resolve_year(&calendar, 2026);
-        let vacation: Result<Vec<NaiveDate>, DomainError> = days.map(|days| {
+        let vacation: Result<Vec<Date>, DomainError> = days.map(|days| {
             days.into_iter()
                 .filter(|day| day.origin == Origin::DefaultVacation)
                 .map(|day| day.date)

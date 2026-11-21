@@ -5,7 +5,7 @@
 //! datos. `fetched` es un iterador perezoso: cada embalse se pide al tomar su elemento. En
 //! `ReservoirTable`, cada respuesta pasa la fila siguiente a `Fetching`.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde::Deserialize;
 
 use super::feed::{Reading, http_client};
@@ -75,7 +75,7 @@ struct WeekDto {
 impl WeekDto {
     fn level(&self) -> Option<WeeklyLevel> {
         Some(WeeklyLevel {
-            date: NaiveDate::parse_from_str(&self.fecha, "%Y-%m-%d").ok()?,
+            date: Date::strptime("%Y-%m-%d", &self.fecha).ok()?,
             capacity_hm3: self.capacidad_hm3?,
             volume_hm3: self.volumen_hm3?,
             percent: self.fill_percentage?,
@@ -167,7 +167,7 @@ impl ReservoirTable {
     }
 
     /// La fecha del dato más reciente que ha llegado.
-    pub fn latest_date(&self) -> Option<NaiveDate> {
+    pub fn latest_date(&self) -> Option<Date> {
         self.rows
             .iter()
             .filter_map(|(_, reading)| match reading {

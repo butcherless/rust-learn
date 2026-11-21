@@ -1,6 +1,6 @@
 //! Errores de las reglas del dominio.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use thiserror::Error;
 
 use crate::domain::MarkId;
@@ -15,27 +15,27 @@ pub enum DomainError {
     #[error("rango no válido: {from} es posterior a {to}")]
     ReversedRange {
         /// Primer día del rango.
-        from: NaiveDate,
+        from: Date,
         /// Último día del rango.
-        to: NaiveDate,
+        to: Date,
     },
     /// RN-02: el rango abarca dos años.
     #[error("el rango {from} → {to} cruza de año; márcalo con un rango por año")]
     CrossesYear {
         /// Primer día del rango.
-        from: NaiveDate,
+        from: Date,
         /// Último día del rango.
-        to: NaiveDate,
+        to: Date,
     },
     /// El año no se puede escribir como año ISO de cuatro dígitos.
     #[error("año no válido: {0}; debe estar entre 1 y 9999")]
-    InvalidYear(i32),
+    InvalidYear(i16),
     /// RN-02: el año no se ha añadido al calendario.
     #[error("el año {0} no existe en el calendario; añádelo con «calendario add-year {0}»")]
-    UnknownYear(i32),
+    UnknownYear(i16),
     /// El año ya está en el calendario.
     #[error("el año {0} ya existe en el calendario")]
-    DuplicateYear(i32),
+    DuplicateYear(i16),
     /// RF-20: eliminar un año con `Mark` necesita confirmación.
     #[error(
         "el año {year} tiene {}; repite el comando con --confirmar para eliminarlo con ellas",
@@ -43,7 +43,7 @@ pub enum DomainError {
     )]
     YearHasMarks {
         /// El año.
-        year: i32,
+        year: i16,
         /// Cuántos `Mark` tiene.
         marks: usize,
     },

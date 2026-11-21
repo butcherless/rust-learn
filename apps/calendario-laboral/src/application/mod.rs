@@ -21,12 +21,12 @@ mod settings;
 mod views;
 mod years;
 
-use chrono::{Datelike, NaiveDate, Weekday};
+use jiff::civil::{Date, Weekday};
 
 use crate::domain::{
     Absence, Calendar, DEFAULT_VACATION_QUOTA, DateRange, DomainError, Mark, MarkId, MarkKind,
-    Marking, Month, MonthExt, ResolvedDay, Shift, Summary, Year, next_absence, resolve_day,
-    resolve_year, summarize, summary_of,
+    Marking, Month, ResolvedDay, Shift, Summary, Year, next_absence, resolve_day, resolve_year,
+    summarize, summary_of,
 };
 
 /// Una operación pedida por el usuario.
@@ -34,55 +34,55 @@ use crate::domain::{
 pub enum Command {
     /// RF-01: añadir un año; RF-19: con los festivos de `holidays_from`.
     AddYear {
-        year: i32,
-        holidays_from: Option<i32>,
+        year: i16,
+        holidays_from: Option<i16>,
     },
     /// RF-02: marcar un día, o un rango si se indica `to`.
     Mark {
         /// Lo que se marca.
         kind: MarkKind,
         /// Primer día.
-        from: NaiveDate,
+        from: Date,
         /// Último día; si falta, es `from`.
-        to: Option<NaiveDate>,
+        to: Option<Date>,
         /// Texto opcional; un texto en blanco cuenta como ausente.
         description: Option<String>,
     },
     /// RF-20: eliminar un año; con `Mark`, solo si está confirmado.
-    RemoveYear { year: i32, confirmed: bool },
+    RemoveYear { year: i16, confirmed: bool },
     /// RF-18: modificar un `Mark`; lo que es `None` se mantiene.
     Edit {
         id: MarkId,
         kind: Option<MarkKind>,
-        from: Option<NaiveDate>,
-        to: Option<NaiveDate>,
+        from: Option<Date>,
+        to: Option<Date>,
         /// Una descripción en blanco quita la que tenga.
         description: Option<String>,
     },
     /// RF-03: eliminar uno o varios `Mark`, todos o ninguno.
     Unmark(Vec<MarkId>),
     /// RF-04: listar los `Mark` de todos los años o de uno.
-    List(Option<i32>),
+    List(Option<i16>),
     /// RF-05: mostrar un día.
-    Day(NaiveDate),
+    Day(Date),
     /// RF-06: mostrar un mes.
     Month {
         /// El año.
-        year: i32,
+        year: i16,
         /// El mes.
         month: Month,
         /// La fecha actual, desde la que se busca la próxima ausencia (RN-30).
-        today: NaiveDate,
+        today: Date,
     },
     /// RF-07: mostrar un año completo.
     Year {
         /// El año.
-        year: i32,
+        year: i16,
         /// La fecha actual, desde la que se busca la próxima ausencia (RN-30).
-        today: NaiveDate,
+        today: Date,
     },
     /// RF-08: resumir un año.
-    Summary(i32),
+    Summary(i16),
     /// RF-15: consultar la configuración.
     Config,
     /// RF-16: configurar los días de la regla `ReducedWeekday`; vacío, ninguno.
@@ -90,11 +90,11 @@ pub enum Command {
     /// RF-17: configurar los días del `Weekend`; vacío, ninguno.
     Weekend(Vec<Weekday>),
     /// RF-09: configurar las horas de un `Shift` en un `Year` (RN-25).
-    Hours { year: i32, shift: Shift, hours: f64 },
+    Hours { year: i16, shift: Shift, hours: f64 },
     /// RF-10: configurar el cupo de vacaciones de un año.
     Quota {
         /// El año.
-        year: i32,
+        year: i16,
         /// Días de vacaciones.
         days: u32,
     },
@@ -122,11 +122,11 @@ pub enum Event {
     /// Se ha añadido un año con el cupo por defecto.
     YearAdded {
         /// El año.
-        year: i32,
+        year: i16,
         /// Su cupo de vacaciones.
         quota: u32,
         /// RF-19: el año del que se han copiado los festivos y cuántos.
-        holidays: Option<(i32, usize)>,
+        holidays: Option<(i16, usize)>,
     },
     /// Se ha añadido un `Mark`.
     Marked {
@@ -138,7 +138,7 @@ pub enum Event {
     /// Ya existía un `Mark` idéntico (RN-06).
     AlreadyMarked(MarkId),
     /// Se ha eliminado un año con sus `Mark`.
-    YearRemoved { year: i32, marks: usize },
+    YearRemoved { year: i16, marks: usize },
     /// Se ha modificado un `Mark`; `excess` lleva el aviso de RN-11.
     Edited { mark: Mark, excess: usize },
     /// Se han eliminado uno o varios `Mark`, en el orden pedido.
@@ -148,11 +148,11 @@ pub enum Event {
     /// Se han configurado los días del fin de semana, de lunes a domingo.
     WeekendSet(Vec<Weekday>),
     /// Se han configurado las horas de un `Shift` en un `Year`.
-    HoursSet { year: i32, shift: Shift, hours: f64 },
+    HoursSet { year: i16, shift: Shift, hours: f64 },
     /// Se ha configurado el cupo de un año.
     QuotaSet {
         /// El año.
-        year: i32,
+        year: i16,
         /// Días de vacaciones.
         days: u32,
         /// Días de vacaciones usadas por encima del nuevo cupo (RN-11).
@@ -181,7 +181,7 @@ pub enum Report {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MonthView {
     /// El año.
-    pub year: i32,
+    pub year: i16,
     /// El mes.
     pub month: Month,
     /// Todos los días del mes.
@@ -248,7 +248,7 @@ mod tests {
     use crate::domain::fixtures::{calendar, date, marked, range, today};
     use crate::domain::{AbsencePart, DayKind, Origin, parse_date};
 
-    fn mark_command(kind: MarkKind, from: NaiveDate, to: Option<NaiveDate>) -> Command {
+    fn mark_command(kind: MarkKind, from: Date, to: Option<Date>) -> Command {
         Command::Mark {
             kind,
             from,
@@ -982,13 +982,13 @@ mod tests {
     fn rf_16_sets_the_reduced_days_in_week_order() {
         let set = changed(execute(
             calendar(),
-            Command::ReducedDays(vec![Weekday::Fri, Weekday::Mon]),
+            Command::ReducedDays(vec![Weekday::Friday, Weekday::Monday]),
         ));
         assert_eq!(
             set.map(|(calendar, event)| (calendar.reduced_days().to_vec(), event)),
             Some((
-                vec![Weekday::Mon, Weekday::Fri],
-                Event::ReducedDaysSet(vec![Weekday::Mon, Weekday::Fri])
+                vec![Weekday::Monday, Weekday::Friday],
+                Event::ReducedDaysSet(vec![Weekday::Monday, Weekday::Friday])
             ))
         );
         let none = changed(execute(calendar(), Command::ReducedDays(Vec::new())));
@@ -1002,14 +1002,14 @@ mod tests {
     fn rf_17_rn_04_sets_the_weekend_in_week_order() {
         let set = changed(execute(
             calendar(),
-            Command::Weekend(vec![Weekday::Sat, Weekday::Fri]),
+            Command::Weekend(vec![Weekday::Saturday, Weekday::Friday]),
         ));
         assert_eq!(
             set.as_ref()
                 .map(|(calendar, event)| (calendar.weekend().to_vec(), event.clone())),
             Some((
-                vec![Weekday::Fri, Weekday::Sat],
-                Event::WeekendSet(vec![Weekday::Fri, Weekday::Sat])
+                vec![Weekday::Friday, Weekday::Saturday],
+                Event::WeekendSet(vec![Weekday::Friday, Weekday::Saturday])
             ))
         );
         // El domingo 2026-03-01 deja de ser fin de semana y el viernes 2026-03-06 pasa a serlo.

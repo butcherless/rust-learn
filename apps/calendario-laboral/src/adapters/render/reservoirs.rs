@@ -22,8 +22,8 @@ pub const LIGHT_ON: &str = "●";
 pub const LIGHT_OFF: &str = "○";
 
 /// Lo que sigue al título: la fecha del dato más reciente.
-pub fn data_date(date: NaiveDate) -> String {
-    format!(" · datos del {}", date.format("%d-%m-%Y"))
+pub fn data_date(date: Date) -> String {
+    format!(" · datos del {}", date.strftime("%d-%m-%Y"))
 }
 /// La línea de la fuente.
 pub const RESERVOIRS_SOURCE: &str = "Fuente: MITECO";

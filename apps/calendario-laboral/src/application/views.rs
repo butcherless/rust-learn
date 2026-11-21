@@ -6,9 +6,9 @@ use super::*;
 /// La vista de un mes y el resumen de su año (RF-06, RF-14).
 pub(super) fn month(
     calendar: &Calendar,
-    year: i32,
+    year: i16,
     month: Month,
-    today: NaiveDate,
+    today: Date,
 ) -> Result<Outcome, DomainError> {
     let (days, year) = (resolve_year(calendar, year)?, calendar.year(year)?);
     Ok(Outcome::Report(Report::Month(
@@ -19,11 +19,7 @@ pub(super) fn month(
 }
 
 /// Los 12 meses y el resumen de un año, con el año resuelto una sola vez (RF-07, RF-14).
-pub(super) fn year(
-    calendar: &Calendar,
-    year: i32,
-    today: NaiveDate,
-) -> Result<Outcome, DomainError> {
+pub(super) fn year(calendar: &Calendar, year: i16, today: Date) -> Result<Outcome, DomainError> {
     let (days, year) = (resolve_year(calendar, year)?, calendar.year(year)?);
     Ok(Outcome::Report(Report::Year(
         Month::ALL

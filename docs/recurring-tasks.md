@@ -54,12 +54,6 @@
   `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
   this entry. Don't lower the minimum to get there.
 
-- **DEP-1: replace chrono, which is unmaintained.** RustSec published RUSTSEC-2026-0543 on
-  2026-11-17: every chrono version is affected and there is no fixed one; it recommends `jiff` or
-  `time`. `deny.toml` ignores it until then. calendario-laboral (the whole domain: `NaiveDate`,
-  `Month`, ISO weeks, `iter_days`) and severance-pay-calculator use it. Migrate both, move the new
-  crate to `[workspace.dependencies]`, then remove the ignore and this entry.
-
 ## Last check
 
 2026-11-15

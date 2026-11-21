@@ -18,7 +18,7 @@ pub use error::DomainError;
 pub use hours::Hours;
 pub use kind::{Category, DayKind, MarkKind, Shift};
 pub use market::{Market, Quote};
-pub use month::{Month, MonthExt};
+pub use month::Month;
 pub use reservoir::{
     AVERAGE_YEARS, MADRID_RESERVOIRS, Reservoir, ReservoirLevel, WeeklyLevel, reservoir_level,
 };
@@ -30,22 +30,22 @@ pub use resolve::{
 /// Constructores compartidos por los tests.
 #[cfg(test)]
 pub mod fixtures {
-    use chrono::NaiveDate;
+    use jiff::civil::Date;
 
     use super::{Calendar, DateRange, MarkKind};
 
     /// La fecha actual de los tests de las vistas: el lunes 1 de junio de 2026 (RN-30).
-    pub fn today() -> NaiveDate {
+    pub fn today() -> Date {
         date(2026, 6, 1)
     }
 
     /// Una fecha que existe.
-    pub fn date(year: i32, month: u32, day: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(year, month, day).expect("valid date")
+    pub fn date(year: i16, month: i8, day: i8) -> Date {
+        Date::new(year, month, day).expect("valid date")
     }
 
     /// Un rango válido.
-    pub fn range(from: NaiveDate, to: NaiveDate) -> DateRange {
+    pub fn range(from: Date, to: Date) -> DateRange {
         DateRange::new(from, to).expect("valid range")
     }
 

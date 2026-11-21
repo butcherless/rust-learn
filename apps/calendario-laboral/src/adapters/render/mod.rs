@@ -24,7 +24,7 @@ use std::fmt::Display;
 use std::iter;
 
 use anstyle::{Ansi256Color, AnsiColor, Color, Style};
-use chrono::{Datelike, NaiveDate, Weekday};
+use jiff::civil::{Date, Weekday};
 
 use crate::adapters::panel::Panel;
 use crate::application::{Event, MonthView, Report};
@@ -121,13 +121,13 @@ pub const fn month_name(month: Month) -> &'static str {
 
 pub const fn weekday_name(day: Weekday) -> &'static str {
     match day {
-        Weekday::Mon => "lunes",
-        Weekday::Tue => "martes",
-        Weekday::Wed => "miércoles",
-        Weekday::Thu => "jueves",
-        Weekday::Fri => "viernes",
-        Weekday::Sat => "sábado",
-        Weekday::Sun => "domingo",
+        Weekday::Monday => "lunes",
+        Weekday::Tuesday => "martes",
+        Weekday::Wednesday => "miércoles",
+        Weekday::Thursday => "jueves",
+        Weekday::Friday => "viernes",
+        Weekday::Saturday => "sábado",
+        Weekday::Sunday => "domingo",
     }
 }
 
@@ -207,7 +207,7 @@ mod tests {
     use super::*;
     use crate::application::{Command, Outcome, execute};
     use crate::domain::fixtures::{calendar, date, marked, today};
-    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, MonthExt, Shift};
+    use crate::domain::{Calendar, DateRange, MarkId, MarkKind, Month, Shift};
 
     /// La parte de la cuadrícula de una línea de la vista de mes, sin las vacaciones de su derecha
     /// (RN-27).
@@ -783,7 +783,7 @@ mod tests {
     #[test]
     fn rf_15_config_shows_the_weekend_the_reduced_days_and_each_year() {
         let calendar = calendar()
-            .with_reduced_days(&[Weekday::Mon, Weekday::Fri])
+            .with_reduced_days(&[Weekday::Monday, Weekday::Friday])
             .with_year(2027)
             .and_then(|calendar| calendar.with_shift_hours(2027, Shift::Working, 8.0))
             .and_then(|calendar| calendar.with_quota(2027, 23))
@@ -823,7 +823,7 @@ mod tests {
         assert_eq!(
             shown(
                 Calendar::default()
-                    .with_weekend(&[Weekday::Sun])
+                    .with_weekend(&[Weekday::Sunday])
                     .with_reduced_days(&[]),
                 Command::Config
             ),
@@ -975,7 +975,7 @@ mod tests {
                 None,
             ),
             (
-                Event::ReducedDaysSet(vec![Weekday::Mon, Weekday::Fri]),
+                Event::ReducedDaysSet(vec![Weekday::Monday, Weekday::Friday]),
                 "Jornada reducida: lunes y viernes.",
                 None,
             ),
@@ -985,7 +985,7 @@ mod tests {
                 None,
             ),
             (
-                Event::WeekendSet(vec![Weekday::Sat, Weekday::Sun]),
+                Event::WeekendSet(vec![Weekday::Saturday, Weekday::Sunday]),
                 "Fin de semana: sábado y domingo.",
                 None,
             ),

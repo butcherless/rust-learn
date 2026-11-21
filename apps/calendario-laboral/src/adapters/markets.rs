@@ -5,7 +5,7 @@
 //! `LCO` al Brent). `MarketTable` espera hasta `started()` y se rellena con una sola respuesta: el
 //! valor que no llega queda `Failed`.
 
-use chrono::{NaiveDate, NaiveTime};
+use jiff::civil::{Date, Time};
 use serde::Deserialize;
 
 use super::feed::{Reading, http_client};
@@ -96,9 +96,9 @@ struct LastDto {
 /// valen -1.
 #[derive(Deserialize)]
 struct DateDto {
-    dia: u32,
-    mes: u32,
-    anyo: i32,
+    dia: i8,
+    mes: i8,
+    anyo: i16,
     hora: i64,
     minuto: i64,
     time: bool,
@@ -114,9 +114,9 @@ impl ValueDto {
         let time = date
             .time
             .then(|| {
-                let hour = u32::try_from(date.hora).ok()?;
-                let minute = u32::try_from(date.minuto).ok()?;
-                NaiveTime::from_hms_opt(hour, minute, 0)
+                let hour = i8::try_from(date.hora).ok()?;
+                let minute = i8::try_from(date.minuto).ok()?;
+                Time::new(hour, minute, 0, 0).ok()
             })
             .flatten();
         let price = last.precio?;
@@ -125,7 +125,7 @@ impl ValueDto {
             Quote {
                 price,
                 previous: last.previous.unwrap_or(price),
-                date: NaiveDate::from_ymd_opt(date.anyo, date.mes, date.dia)?,
+                date: Date::new(date.anyo, date.mes, date.dia).ok()?,
                 time,
             },
         ))
@@ -216,7 +216,7 @@ pub mod fixtures {
             price: 20020.1,
             previous: 19965.5,
             date: date(2026, 11, 13),
-            time: NaiveTime::from_hms_opt(17, 35, 0),
+            time: Time::new(17, 35, 0, 0).ok(),
         }
     }
 
