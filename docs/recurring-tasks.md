@@ -50,10 +50,11 @@
   | severance-pay-calculator | 98.24 % (19/1079) | 93.51 % (71/1094) |
   | calendario-laboral | 98.24 % (116/6580) | 93.17 % (466/6823) |
 
-  On each new stable release, repeat the comparison. When every package keeps its coverage, set
+  On 2026-11-21, 1.100.0 was still the latest stable, so nothing changed. On each new stable
+  release, repeat the comparison. When every package keeps its coverage, set
   `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
   this entry. Don't lower the minimum to get there.
 
 ## Last check
 
-2026-11-15
+2026-11-21
