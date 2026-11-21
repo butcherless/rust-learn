@@ -391,19 +391,7 @@ impl App {
             received: progress.received + 1,
             ..progress
         });
-        // The report goes to the slot at `index`, moved rather than cloned: it is the only `Some`
-        // in the sequence zipped with the slots.
-        let replacements = iter::repeat_with(|| None)
-            .take(index)
-            .chain(iter::once(Some(report)))
-            .chain(iter::repeat_with(|| None));
-        Self { fetch, ..self }.map_slots(|slots| {
-            slots
-                .into_iter()
-                .zip(replacements)
-                .map(|(slot, replacement)| replacement.map_or(slot, Slot::Done))
-                .collect()
-        })
+        Self { fetch, ..self }.map_slots(|slots| replace_at(slots, index, Slot::Done(report)))
     }
 
     /// Replaces the slots with `change(slots)` and recomputes the rows.
@@ -418,20 +406,10 @@ impl App {
     }
 
     fn runs_fetched(self, index: usize, report: RunsReport) -> Self {
-        let mut report = Some(report);
-        let runs = self
-            .runs
-            .into_iter()
-            .enumerate()
-            .map(|(position, runs)| {
-                if position == index {
-                    report.take()
-                } else {
-                    runs
-                }
-            })
-            .collect();
-        Self { runs, ..self }
+        Self {
+            runs: replace_at(self.runs, index, Some(report)),
+            ..self
+        }
     }
 
     fn finished(self) -> Self {
@@ -564,6 +542,20 @@ impl App {
             Err(error) => app.with_status(Status::ActFailed(action, pull_request, error)),
         }
     }
+}
+
+/// `items` with the one at `index` replaced by `item`, which is moved rather than cloned: it is
+/// the only `Some` in the sequence zipped with them. An `index` past the end changes nothing.
+fn replace_at<T>(items: Vec<T>, index: usize, item: T) -> Vec<T> {
+    let replacements = iter::repeat_with(|| None)
+        .take(index)
+        .chain(iter::once(Some(item)))
+        .chain(iter::repeat_with(|| None));
+    items
+        .into_iter()
+        .zip(replacements)
+        .map(|(old, replacement)| replacement.unwrap_or(old))
+        .collect()
 }
 
 /// The index `index` limited to the last of `len` rows, or `None` when there are no rows.
@@ -1214,5 +1206,18 @@ mod tests {
         let idle = runs("e/f", Ok(vec![]));
         let replaced = run(refreshing, [Message::RunsFetched(2, idle.clone())]).0;
         assert_eq!(replaced.runs().last(), Some(&idle));
+    }
+
+    #[test]
+    fn replaces_only_the_item_at_the_index() {
+        [(0, vec![9, 2, 3]), (2, vec![1, 2, 9]), (3, vec![1, 2, 3])]
+            .into_iter()
+            .for_each(|(index, expected)| {
+                assert_eq!(
+                    replace_at(vec![1, 2, 3], index, 9),
+                    expected,
+                    "index {index}"
+                );
+            });
     }
 }
