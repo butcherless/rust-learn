@@ -443,8 +443,8 @@ impl App {
     }
 
     /// Replaces the slots and their rows, with the pull requests merged or closed in this session
-    /// shown that way. The selection stays on the same pull request when it is still there, and otherwise
-    /// on the same line when it still exists.
+    /// shown that way. The selection stays on the same pull request when it is still there, and
+    /// otherwise on the same line when it still exists.
     fn with_slots(self, slots: Vec<Slot>) -> Self {
         let rows: Vec<DisplayRow> = slots
             .iter()

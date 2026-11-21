@@ -125,9 +125,9 @@ async fn act_on<S: PullRequestMerger + PullRequestCloser>(
 }
 
 /// Draws `app` and waits for whichever comes first: a key, the blink clock or the next report,
-/// these two only while fetching, or the end of the merge or close in progress. Events without a message,
-/// such as a resize or an unbound key, give `None` so the screen is redrawn. A closed event
-/// stream means quit.
+/// these two only while fetching, or the end of the merge or close in progress. Events without a
+/// message, such as a resize or an unbound key, give `None` so the screen is redrawn. A closed
+/// event stream means quit.
 async fn next_message<F, M>(
     terminal: &mut DefaultTerminal,
     app: &App,

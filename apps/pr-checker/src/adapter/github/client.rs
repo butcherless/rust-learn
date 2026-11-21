@@ -28,7 +28,9 @@ pub const DEFAULT_BASE_URL: &str = "https://api.github.com";
 const DETAIL_CONCURRENCY: usize = 4;
 /// How many requests one client has in flight at most, whatever asks for them: GitHub advises
 /// against concurrent requests to stay clear of its secondary rate limits, so the rest wait in a
-/// queue. See <https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api>.
+/// queue. See [best practices for using the REST API][practices].
+///
+/// [practices]: https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api
 pub const MAX_IN_FLIGHT: usize = 4;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const API_VERSION_HEADER: &str = "x-github-api-version";
