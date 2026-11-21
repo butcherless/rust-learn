@@ -116,7 +116,7 @@ async fn concurrency_is_capped() {
 #[test]
 fn has_failures_detects_errors() {
     let succeeded = report("a/ok", Ok(vec![]));
-    let failed = report("a/ko", Err(SourceError::RateLimited));
+    let failed = report("a/ko", Err(SourceError::RateLimited(None)));
 
     assert!(!has_failures(&[]));
     assert!(!has_failures(std::slice::from_ref(&succeeded)));

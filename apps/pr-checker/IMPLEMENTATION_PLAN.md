@@ -77,7 +77,7 @@ Hexagonal, with dependencies pointing inward: `adapter → service → domain`. 
 |---|---|
 | 404 | `NotFound` |
 | 401, or any other 403 | `Unauthorized` |
-| 429, or 403 with `x-ratelimit-remaining: 0` | `RateLimited` |
+| 429, or 403 with `x-ratelimit-remaining: 0` or `retry-after` | `RateLimited(retry-after seconds, if sent)`, shown as `rate limited, retry in N s` |
 | Other non-2xx | `Unavailable("HTTP <code>")` |
 | Transport error | `Unavailable(message)` |
 | Undecodable body | `InvalidResponse(message)` |

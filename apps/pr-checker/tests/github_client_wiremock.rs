@@ -166,7 +166,11 @@ async fn maps_error_statuses() {
         (ResponseTemplate::new(404), SourceError::NotFound),
         (
             ResponseTemplate::new(403).insert_header("x-ratelimit-remaining", "0"),
-            SourceError::RateLimited,
+            SourceError::RateLimited(None),
+        ),
+        (
+            ResponseTemplate::new(403).insert_header("retry-after", "30"),
+            SourceError::RateLimited(Some(30)),
         ),
     ];
 

@@ -37,6 +37,8 @@ const API_VERSION_HEADER: &str = "x-github-api-version";
 const API_VERSION: &str = "2022-11-28";
 const ACCEPT_VALUE: &str = "application/vnd.github+json";
 const RATE_LIMIT_REMAINING_HEADER: &str = "x-ratelimit-remaining";
+/// Seconds to wait before retrying, which GitHub sends with its secondary rate limits.
+const RETRY_AFTER_HEADER: &str = "retry-after";
 const USER_AGENT_VALUE: &str = concat!("pr-checker/", env!("CARGO_PKG_VERSION"));
 /// How pull requests are merged: with a merge commit, GitHub's default.
 const MERGE_METHOD: &str = "merge";
@@ -175,7 +177,7 @@ impl GithubClient {
 
         let status = response.status();
         if !status.is_success() {
-            return Err(map_status(status, ratelimit_remaining(response.headers())));
+            return Err(map_status(status, RateHeaders::from(response.headers())));
         }
         response.json::<T>().await.map_err(body_error)
     }
@@ -198,7 +200,7 @@ impl GithubClient {
         } else {
             Err(map_merge_status(
                 status,
-                ratelimit_remaining(response.headers()),
+                RateHeaders::from(response.headers()),
             ))
         }
     }
@@ -219,7 +221,7 @@ impl GithubClient {
         if status.is_success() {
             Ok(())
         } else {
-            Err(map_status(status, ratelimit_remaining(response.headers())))
+            Err(map_status(status, RateHeaders::from(response.headers())))
         }
     }
 
@@ -276,10 +278,23 @@ impl PullRequestMerger for GithubClient {
     }
 }
 
-fn ratelimit_remaining(headers: &HeaderMap) -> Option<&str> {
-    headers
-        .get(RATE_LIMIT_REMAINING_HEADER)
-        .and_then(|value| value.to_str().ok())
+/// What a response's headers say about the rate limits.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct RateHeaders {
+    /// `x-ratelimit-remaining: 0`: the primary rate limit is spent.
+    exhausted: bool,
+    /// `retry-after`, in seconds: a secondary rate limit was hit.
+    retry_after: Option<u64>,
+}
+
+impl From<&HeaderMap> for RateHeaders {
+    fn from(headers: &HeaderMap) -> Self {
+        let text = |name| headers.get(name).and_then(|value| value.to_str().ok());
+        Self {
+            exhausted: text(RATE_LIMIT_REMAINING_HEADER) == Some("0"),
+            retry_after: text(RETRY_AFTER_HEADER).and_then(|seconds| seconds.trim().parse().ok()),
+        }
+    }
 }
 
 fn transport_error(error: reqwest::Error) -> SourceError {
@@ -294,13 +309,17 @@ fn body_error(error: reqwest::Error) -> SourceError {
     }
 }
 
-/// Classifies a non-success response.
-fn map_status(status: StatusCode, ratelimit_remaining: Option<&str>) -> SourceError {
+/// Classifies a non-success response. GitHub answers a rate limit with 429, or with 403 and
+/// either `x-ratelimit-remaining: 0` (primary) or `retry-after` (secondary); any other 403 is a
+/// missing permission.
+fn map_status(status: StatusCode, rate: RateHeaders) -> SourceError {
     match status {
         StatusCode::NOT_FOUND => SourceError::NotFound,
         StatusCode::UNAUTHORIZED => SourceError::Unauthorized,
-        StatusCode::TOO_MANY_REQUESTS => SourceError::RateLimited,
-        StatusCode::FORBIDDEN if ratelimit_remaining == Some("0") => SourceError::RateLimited,
+        StatusCode::TOO_MANY_REQUESTS => SourceError::RateLimited(rate.retry_after),
+        StatusCode::FORBIDDEN if rate.exhausted || rate.retry_after.is_some() => {
+            SourceError::RateLimited(rate.retry_after)
+        }
         StatusCode::FORBIDDEN => SourceError::Unauthorized,
         other => SourceError::Unavailable(format!("HTTP {}", other.as_u16())),
     }
@@ -308,12 +327,12 @@ fn map_status(status: StatusCode, ratelimit_remaining: Option<&str>) -> SourceEr
 
 /// Classifies a non-success response to a merge: GitHub refuses one that cannot be done with 405,
 /// a head that changed with 409, and a failed validation with 422.
-fn map_merge_status(status: StatusCode, ratelimit_remaining: Option<&str>) -> SourceError {
+fn map_merge_status(status: StatusCode, rate: RateHeaders) -> SourceError {
     match status {
         StatusCode::METHOD_NOT_ALLOWED
         | StatusCode::CONFLICT
         | StatusCode::UNPROCESSABLE_ENTITY => SourceError::NotMergeable,
-        other => map_status(other, ratelimit_remaining),
+        other => map_status(other, rate),
     }
 }
 
@@ -323,30 +342,93 @@ mod tests {
 
     #[test]
     fn maps_statuses_to_errors() {
+        let none = RateHeaders::default();
+        let exhausted = RateHeaders {
+            exhausted: true,
+            retry_after: None,
+        };
+        let retry = RateHeaders {
+            exhausted: false,
+            retry_after: Some(60),
+        };
         [
-            (StatusCode::NOT_FOUND, None, SourceError::NotFound),
-            (StatusCode::UNAUTHORIZED, None, SourceError::Unauthorized),
-            (StatusCode::FORBIDDEN, Some("0"), SourceError::RateLimited),
-            (StatusCode::FORBIDDEN, None, SourceError::Unauthorized),
-            (StatusCode::FORBIDDEN, Some("10"), SourceError::Unauthorized),
+            (StatusCode::NOT_FOUND, none, SourceError::NotFound),
+            (StatusCode::UNAUTHORIZED, none, SourceError::Unauthorized),
+            (
+                StatusCode::FORBIDDEN,
+                exhausted,
+                SourceError::RateLimited(None),
+            ),
+            (
+                StatusCode::FORBIDDEN,
+                retry,
+                SourceError::RateLimited(Some(60)),
+            ),
+            (StatusCode::FORBIDDEN, none, SourceError::Unauthorized),
             (
                 StatusCode::TOO_MANY_REQUESTS,
-                None,
-                SourceError::RateLimited,
+                none,
+                SourceError::RateLimited(None),
+            ),
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                retry,
+                SourceError::RateLimited(Some(60)),
             ),
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                None,
+                none,
                 SourceError::Unavailable("HTTP 500".to_owned()),
             ),
         ]
         .into_iter()
-        .for_each(|(status, remaining, expected)| {
+        .for_each(|(status, rate, expected)| {
             assert_eq!(
-                map_status(status, remaining),
+                map_status(status, rate),
                 expected,
-                "status {status}, x-ratelimit-remaining {remaining:?}"
+                "status {status}, {rate:?}"
             );
+        });
+    }
+
+    #[test]
+    fn reads_the_rate_limit_headers() {
+        let headers = |pairs: &[(&'static str, &'static str)]| {
+            pairs
+                .iter()
+                .map(|&(name, value)| {
+                    (
+                        reqwest::header::HeaderName::from_static(name),
+                        reqwest::header::HeaderValue::from_static(value),
+                    )
+                })
+                .collect::<HeaderMap>()
+        };
+        [
+            (headers(&[]), RateHeaders::default()),
+            (
+                headers(&[("x-ratelimit-remaining", "0")]),
+                RateHeaders {
+                    exhausted: true,
+                    retry_after: None,
+                },
+            ),
+            (
+                headers(&[("x-ratelimit-remaining", "10")]),
+                RateHeaders::default(),
+            ),
+            (
+                headers(&[("retry-after", "42")]),
+                RateHeaders {
+                    exhausted: false,
+                    retry_after: Some(42),
+                },
+            ),
+            (headers(&[("retry-after", "soon")]), RateHeaders::default()),
+        ]
+        .into_iter()
+        .for_each(|(headers, expected)| {
+            assert_eq!(RateHeaders::from(&headers), expected, "{headers:?}");
         });
     }
 
@@ -361,7 +443,11 @@ mod tests {
         ]
         .into_iter()
         .for_each(|(status, expected)| {
-            assert_eq!(map_merge_status(status, None), expected, "status {status}");
+            assert_eq!(
+                map_merge_status(status, RateHeaders::default()),
+                expected,
+                "status {status}"
+            );
         });
     }
 

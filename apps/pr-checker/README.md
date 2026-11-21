@@ -136,7 +136,9 @@ In the interactive UI, the exit code reflects the last fetch before quitting.
 
 - Only the first 100 open pull requests of each repository are listed.
 - A [secondary rate limit](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)
-  returned as 403 without `x-ratelimit-remaining: 0` is reported as `unauthorized`.
+  is reported as `rate limited, retry in N s` when GitHub sends `retry-after`, but as
+  `unauthorized` when it answers 403 without that header or `x-ratelimit-remaining: 0`. Nothing
+  is retried by itself.
 
 ## Development
 
