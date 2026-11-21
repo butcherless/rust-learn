@@ -11,7 +11,7 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
   - `apps/severance-pay-calculator`: calculates Spanish severance pay, in a TUI or as a printed report.
   - `apps/calendario-laboral` (binary `calendario`): a console work calendar stored in JSON. Its docs and user-facing text are in Spanish (RNF-07).
 - `libs/<name>/`: shared libraries, without a `main`. None exist yet. Create one only when two projects really need the same code, keep it pure domain (no I/O), and declare it in `[workspace.dependencies]`.
-- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true` (today: clap, crossterm, jiff, ratatui, reqwest, serde, serde_json, thiserror, tokio, wiremock). A member can add features on top with `dep = { workspace = true, features = [...] }`.
+- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true`. A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
 - `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks. TOOL-1 in `docs/recurring-tasks.md` has the measurements and when to go back to stable.
 - Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
@@ -60,15 +60,6 @@ Workflow rules: actions are pinned to a commit SHA with the version in a comment
 The 90% minimum applies to each project on its own, so a new project needs its own tests. Raise it when coverage grows rather than lowering it.
 
 Dependabot (`.github/dependabot.yml`, `directory: "/"`) covers every member through the root `Cargo.lock`. It waits 7 days after a release (`cooldown`) and groups minor and patch bumps into one weekly PR, because separate ones would conflict in the shared lockfile, plus one for GitHub Actions. Major bumps and crossterm minor bumps (it must match ratatui's crossterm) stay manual. For 0.x crates a "minor" bump can break the API, so read the CI result of that PR before merging it.
-
-## Adding a project
-
-1. Put it in `apps/<name>/`, where `<name>` is its package name. Bring its history with `git filter-repo --to-subdirectory-filter apps/<name>` (`brew install git-filter-repo`; git's own manual advises against `git filter-branch`) in a fresh clone, then merge it with `--allow-unrelated-histories`, or copy it if it has none.
-2. Delete its `Cargo.lock`, `target/`, `rust-toolchain.toml`, `.gitignore`, `.idea/` and CI files; the root ones apply. Add any file it must ignore (such as real data) to the root `.gitignore`.
-3. In its `Cargo.toml`, inherit `version`, `edition` and `publish` with `.workspace = true`. Move each dependency that another member already uses to `[workspace.dependencies]`, at the latest version, and check `cargo tree --workspace -d`.
-4. Add a run alias to `.cargo/config.toml`, passing any data file by its path from the root.
-5. Give it a `README.md` (usage) and a `CLAUDE.md` (commands, architecture, project rules) that link to the root ones instead of repeating them. Add it to the projects table in the root `README.md` and to the list under Layout above.
-6. Run fmt, clippy and `cargo llvm-cov -p <name> --fail-under-lines 90`. CI picks it up by itself.
 
 ## Conventions
 
