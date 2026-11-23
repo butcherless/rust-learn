@@ -13,11 +13,11 @@ Comando que publica en Kafka las mesas del Congreso de 2023, cada una en su mome
 Desde la raíz del workspace:
 
 ```bash
-cargo esc-sim -- --solo-comprobar             # comprueba los ficheros de apps/escrutinio-simulador/datos
+cargo esc-sim --solo-comprobar                # comprueba los ficheros de apps/escrutinio-simulador/datos
 cargo test -p escrutinio-simulador            # unitarios y tests/cli.rs, que ejecuta el binario
 cargo llvm-cov -p escrutinio-simulador        # cobertura; --open para el HTML
 docker compose -f compose/escrutinio.yaml up -d   # Kafka local con los dos topics
-cargo esc-sim -- --duracion 1m                    # la carga completa contra ese Kafka, en un minuto
+cargo esc-sim --duracion 1m                       # la carga completa contra ese Kafka, en un minuto
 docker compose -f compose/escrutinio.yaml down    # lo para y vacía los topics
 ```
 

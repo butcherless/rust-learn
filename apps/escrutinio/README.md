@@ -15,15 +15,15 @@ Desde la raíz del workspace:
 
 ```bash
 cargo esc                                   # 70 % de participación estimada, un paso cada 500 ms
-cargo esc -- --participacion 65             # otra participación estimada
-cargo esc -- --intervalo 200 --semilla 7    # más rápido y con otro escrutinio simulado
+cargo esc --participacion 65                # otra participación estimada
+cargo esc --intervalo 200 --semilla 7       # más rápido y con otro escrutinio simulado
 cargo esc-seguir                            # sigue a escrutinio-servicio en http://localhost:8080
 ```
 
 ## Seguir el escrutinio
 
 Con el servicio arrancado ([escrutinio-servicio](../escrutinio-servicio/README.md#arrancar)), `cargo
-esc-seguir` (o `cargo esc -- --servicio <URL>`) pide el acumulado cada 10 s. El título pasa a 2023 y
+esc-seguir` (o `cargo esc --servicio <URL>`) pide el acumulado cada 10 s. El título pasa a 2023 y
 el censo es el de 2023: la suma de las mesas de Interior. Lanza la carga con `cargo esc-sim` y verás
 crecer el escrutado. Sin servicio, el estado dice «Sin conexión con el servicio», el pie muestra el
 error y la ventana sigue con lo último que llegó.

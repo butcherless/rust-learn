@@ -43,9 +43,9 @@ al pararlo.
 Con los datos en `apps/escrutinio-simulador/datos` y Kafka arrancado:
 
 ```bash
-cargo esc-sim -- --solo-comprobar        # 1. comprueba los ficheros, sin publicar
+cargo esc-sim --solo-comprobar           # 1. comprueba los ficheros, sin publicar
 cargo esc-sim                            # 2. publica las 60.314 mesas durante 2 horas
-cargo esc-sim -- --duracion 5m           #    o en 5 minutos, para probar
+cargo esc-sim --duracion 5m              #    o en 5 minutos, para probar
 ```
 
 Para ver lo publicado, con las herramientas de Kafka del propio contenedor:

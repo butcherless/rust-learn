@@ -20,7 +20,7 @@ ESCRUTINIO_INTEGRACION=1 cargo test -p escrutinio-servicio      # también los d
 ESCRUTINIO_INTEGRACION=1 cargo llvm-cov -p escrutinio-servicio  # la cobertura que mide la CI (98 %); sin la variable, ~65 %
 cargo esc-srv                                              # el servicio contra el compose
 cargo esc-borrar                                           # vacía los topics y las tablas antes de otra carga
-cargo esc-sim -- --duracion 1m                             # la carga completa en un minuto
+cargo esc-sim --duracion 1m                                # la carga completa en un minuto
 curl -s localhost:8080/snapshots                           # el resultado
 docker compose -f compose/escrutinio.yaml down             # lo para y borra los datos
 ```

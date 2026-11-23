@@ -21,7 +21,7 @@ En otra terminal, la carga y la consulta:
 
 ```bash
 cargo esc-seguir                                         # la TUI, que sigue al servicio cada 10 s
-cargo esc-sim -- --duracion 5m                           # publica las mesas en 5 minutos
+cargo esc-sim --duracion 5m                              # publica las mesas en 5 minutos
 curl -s localhost:8080/snapshots                         # el acumulado por circunscripción, en JSON
 ```
 
@@ -37,7 +37,7 @@ cargo esc-borrar     # vacía escrutinio.mesas, su dead letter y las tablas de P
 
 Hazlo con el simulador parado; el servicio puede seguir arrancado. Muestra lo borrado:
 `Escrutinio borrado: 60314 mensajes en Kafka y 60310 mesas en PostgreSQL.` Admite las mismas
-opciones de Kafka, topics y PostgreSQL que el servicio (`cargo esc-borrar -- --topic otro`).
+opciones de Kafka, topics y PostgreSQL que el servicio (`cargo esc-borrar --topic otro`).
 
 `docker compose -f compose/escrutinio.yaml down` también lo borra todo, pero para Kafka y PostgreSQL.
 
