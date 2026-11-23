@@ -253,9 +253,9 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <ol class="flow">
     <li><strong>Simulador</strong> publica una mesa escrutada por mensaje.</li>
     <li><strong>Kafka</strong>, topic <code>escrutinio.mesas</code>.</li>
-    <li><strong>Consumidor</strong> aplica cada mesa en una transacción.</li>
+    <li><strong>Servicio</strong>: su consumidor aplica cada mesa en una transacción.</li>
     <li><strong>PostgreSQL</strong> guarda las mesas y los snapshots.</li>
-    <li><strong>TUI</strong> lee los 52 snapshots.</li>
+    <li><strong>TUI</strong> pide los 52 snapshots al servicio cada 10 s.</li>
   </ol>
 
   <h3>Kafka</h3>
@@ -278,7 +278,23 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE SET votos = votos_provincia.votos + EXCLUDED.votos</code>.</li>
     <li><code>COMMIT</code>, y después el commit del offset en Kafka.</li>
   </ol>
-  <p>Si el consumidor se cae entre el <code>COMMIT</code> y el offset, al volver recibe otra vez esa mesa y el paso 1 la descarta. No hace falta reconstruir nada desde el principio: el snapshot de cada provincia ya está en su fila. La TUI lee <code>provincia_snapshot</code> (52 filas), y el total de España es su suma (RN-07).</p>
+  <p>Si el consumidor se cae entre el <code>COMMIT</code> y el offset, al volver recibe otra vez esa mesa y el paso 1 la descarta. No hace falta reconstruir nada desde el principio: el snapshot de cada provincia ya está en su fila. El servicio lee <code>provincia_snapshot</code> (52 filas) para responder a la TUI.</p>
+
+  <h3>Servicio</h3>
+  <p>Un único servicio con dos entradas: consume <code>escrutinio.mesas</code> y responde a la TUI. Es el único que accede a PostgreSQL. Sigue una arquitectura hexagonal ligera en tres capas, con los módulos en inglés. Las dependencias apuntan hacia dentro: <code>adapters → application → domain</code>.</p>
+  <dl>
+    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa escrutada, el snapshot de provincia y las reglas: una mesa es válida si sus votantes no pasan de su censo y sus votos suman los válidos; aplicar una mesa a un snapshot devuelve el snapshot nuevo.</dd></div>
+    <div><dt><code>application</code></dt><dd>Los casos de uso y los puertos (traits genéricos, sin <code>dyn</code>). Casos: <em>registrar una mesa</em> (la valida y la guarda una sola vez) y <em>consultar los snapshots</em>. Puerto: el repositorio del escrutinio.</dd></div>
+    <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP para la TUI. Salida: el repositorio en PostgreSQL, que hace la transacción descrita arriba.</dd></div>
+  </dl>
+  <p>La API tiene una sola consulta: <code>GET /snapshots</code> devuelve en JSON las 52 circunscripciones con sus mesas escrutadas, censo, votantes, nulos, blancos y votos por candidatura. El total de España lo suma la TUI (RN-07).</p>
+
+  <h3>TUI</h3>
+  <ul>
+    <li>Pide <code>GET /snapshots</code> al servicio cada 10 segundos y redibuja con la respuesta. Son 6 peticiones por minuto de unos pocos KB: una carga despreciable para el servicio y para PostgreSQL.</li>
+    <li>Si el servicio no responde, conserva el último dato y lo indica en la barra de estado; lo vuelve a intentar en la siguiente vuelta.</li>
+    <li>El origen del escrutado es un puerto: el simulado actual (RN-06) o el servicio. Así la maqueta sigue funcionando sin backend.</li>
+  </ul>
 
   <h3>Mensajes por segundo</h3>
   <p>Un mensaje por mesa: 61.033 mesas en 2026 (60.314 al reproducir 2023) durante 2 horas (7.200 s). La curva de llegada es una estimación.</p>
