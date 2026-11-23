@@ -93,6 +93,11 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--fg); }
 .tag.real { color: var(--counted); border: 1px solid var(--counted); }
 .tag.est { color: var(--estimated); border: 1px solid var(--estimated); }
 
+h3 { font: 600 1rem/1.2 var(--font-display); margin: .5rem 0 0; }
+section ul, section ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
+.flow { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.flow li { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .75rem; font-size: .9rem; flex: 1 1 8rem; }
+
 .pending { border-left: 3px solid var(--estimated); padding: .25rem 0 .25rem 1rem; display: grid; gap: .5rem; }
 .pending ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
 footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; }
@@ -242,6 +247,56 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </div>
 </section>
 
+<section aria-labelledby="backend">
+  <h2 id="backend">Backend del escrutinio: Kafka y PostgreSQL</h2>
+  <p>Diseño para cuando el escrutado deje de simularse dentro del programa. Kafka solo transporta los mensajes, sin Kafka Streams ni transacciones de Kafka. El estado, los snapshots por provincia y las transacciones están en PostgreSQL.</p>
+  <ol class="flow">
+    <li><strong>Simulador</strong> publica una mesa escrutada por mensaje.</li>
+    <li><strong>Kafka</strong>, topic <code>escrutinio.mesas</code>.</li>
+    <li><strong>Consumidor</strong> aplica cada mesa en una transacción.</li>
+    <li><strong>PostgreSQL</strong> guarda las mesas y los snapshots.</li>
+    <li><strong>TUI</strong> lee los 52 snapshots.</li>
+  </ol>
+
+  <h3>Kafka</h3>
+  <ul>
+    <li>Un único topic, <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code>. Cada mensaje es una mesa: su identificador (provincia, municipio, distrito, sección y mesa), censo, votantes, nulos, blancos y votos por candidatura.</li>
+    <li>La clave es el código de provincia, así que las mesas de una provincia llegan en orden a la misma partición.</li>
+    <li>El productor usa <code>acks=all</code>. El consumidor desactiva el commit automático y confirma el offset solo después del <code>COMMIT</code> en PostgreSQL. Puede recibir alguna mesa repetida, y PostgreSQL la descarta.</li>
+  </ul>
+
+  <h3>PostgreSQL</h3>
+  <ul>
+    <li><code>mesa_escrutada</code>: una fila por mesa contada, con el identificador como clave primaria. Garantiza que una mesa solo se cuenta una vez.</li>
+    <li><code>provincia_snapshot</code>: una fila por circunscripción (52), con las mesas escrutadas, el censo de esas mesas, los votantes, los nulos y los blancos.</li>
+    <li><code>votos_provincia</code>: los votos por (provincia, candidatura).</li>
+  </ul>
+  <p>Cada mensaje se aplica en una sola transacción:</p>
+  <ol>
+    <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta ninguna fila, la mesa ya estaba contada: se hace <code>COMMIT</code> sin más.</li>
+    <li><code>UPDATE provincia_snapshot SET votantes = votantes + …</code> solo en la fila de esa provincia; las otras 51 no se tocan.</li>
+    <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE SET votos = votos_provincia.votos + EXCLUDED.votos</code>.</li>
+    <li><code>COMMIT</code>, y después el commit del offset en Kafka.</li>
+  </ol>
+  <p>Si el consumidor se cae entre el <code>COMMIT</code> y el offset, al volver recibe otra vez esa mesa y el paso 1 la descarta. No hace falta reconstruir nada desde el principio: el snapshot de cada provincia ya está en su fila. La TUI lee <code>provincia_snapshot</code> (52 filas), y el total de España es su suma (RN-07).</p>
+
+  <h3>Mensajes por segundo</h3>
+  <p>Un mensaje por mesa: 61.033 mesas en 2026 (60.314 al reproducir 2023) durante 2 horas (7.200 s). La curva de llegada es una estimación.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tramo</th><th class="num">Mesas</th><th class="num">Mensajes/s</th></tr></thead>
+      <tbody>
+        <tr><td>Media de las 2 horas</td><td class="num">61.033</td><td class="num">8,5</td></tr>
+        <tr><td>Primeros 30 min: 50 % de las mesas</td><td class="num">30.517</td><td class="num">17,0</td></tr>
+        <tr><td>Siguientes 60 min: 40 %</td><td class="num">24.413</td><td class="num">6,8</td></tr>
+        <tr><td>Últimos 30 min: 10 %</td><td class="num">6.103</td><td class="num">3,4</td></tr>
+        <tr><td>Congreso y Senado en mensajes separados</td><td class="num">122.066</td><td class="num">17 de media; 34 de pico</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Son como mucho unas 34 transacciones por segundo, cada una de tres sentencias sobre una fila. Con mensajes de alrededor de 1 KB, Kafka recibe unos 60 MB en toda la noche. Ni Kafka ni PostgreSQL necesitan más de una partición o una conexión para esto. Sí conviene particionar el topic, por ejemplo en 6, para poder repartir el consumo.</p>
+</section>
+
 <section aria-labelledby="pantalla">
   <h2 id="pantalla">Pantalla y teclas</h2>
   <p>Arriba, la barra con el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
@@ -264,7 +319,8 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h2 id="pendiente">Pendiente de decidir</h2>
   <div class="pending">
     <ul>
-      <li>De dónde llegará el escrutado real (backend) y cada cuánto.</li>
+      <li>Los resultados por mesa de 2023 (infoelectoral, Ministerio del Interior), que el simulador reproducirá: falta descargarlos y comprobarlos.</li>
+      <li>Cómo se prueban el consumidor y PostgreSQL sin red en la CI (puertos con fakes en memoria).</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si se muestra el % de mesas informadas.</li>
       <li>Cómo usará el simulador de votación las mesas y las urnas ya repartidas por municipio (ver <a href="#mesas">Mesas y urnas</a>).</li>
