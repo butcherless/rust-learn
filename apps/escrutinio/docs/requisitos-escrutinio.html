@@ -231,6 +231,15 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     </table>
   </div>
   <p>Mesas y locales: <span class="tag real">real</span>, del INE, en el orden de RN-03. Urnas: 2 por mesa. CER por mesa: el censo de RN-01 entre las mesas, redondeado.</p>
+  <div class="sample">
+    <p><strong>Reparto por localidad (aproximación).</strong> El simulador reparte las mesas de cada circunscripción entre sus municipios, en proporción al censo de cada uno, y las urnas igual: 2 por mesa. Así no hace falta el dato real por municipio ni por sección.</p>
+    <ul>
+      <li>La suma de las mesas de los municipios es la de la circunscripción en el INE.</li>
+      <li>Cada municipio tiene al menos una mesa: hay 8.132 municipios y 61.033 mesas.</li>
+      <li>El redondeo usa los mayores restos: primero la parte entera de cada cuota, y las mesas que sobran van a los municipios con más decimales.</li>
+      <li>Falta el censo CER por municipio, del INE, que el proyecto todavía no tiene.</li>
+    </ul>
+  </div>
 </section>
 
 <section aria-labelledby="pantalla">
@@ -258,7 +267,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       <li>De dónde llegará el escrutado real (backend) y cada cuánto.</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si se muestra el % de mesas informadas.</li>
-      <li>Cómo usará el simulador de votación las mesas y las urnas (ver <a href="#mesas">Mesas y urnas</a>), y si hace falta el reparto por municipio o sección.</li>
+      <li>Cómo usará el simulador de votación las mesas y las urnas ya repartidas por municipio (ver <a href="#mesas">Mesas y urnas</a>).</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>
     </ul>
   </div>
