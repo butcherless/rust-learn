@@ -2,3 +2,5 @@
 .idea
 # calendario-laboral: the temporary file of `save`
 *.json.tmp
+# escrutinio-simulador: the Interior files, downloaded by hand (apps/escrutinio-simulador/README.md)
+/apps/escrutinio-simulador/datos/
