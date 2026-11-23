@@ -87,6 +87,12 @@ th { font: 500 .75rem var(--font-mono); text-transform: uppercase; letter-spacin
 tr:last-child td { border-bottom: 0; }
 kbd { font: .8rem var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 .35rem; background: var(--surface); }
 
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.total td { font-weight: 600; border-top: 2px solid var(--fg); }
+.tag { font: 500 .7rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: .15rem .35rem; border-radius: 3px; white-space: nowrap; }
+.tag.real { color: var(--counted); border: 1px solid var(--counted); }
+.tag.est { color: var(--estimated); border: 1px solid var(--estimated); }
+
 .pending { border-left: 3px solid var(--estimated); padding: .25rem 0 .25rem 1rem; display: grid; gap: .5rem; }
 .pending ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
 footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; }
@@ -148,6 +154,85 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </ul>
 </section>
 
+<section aria-labelledby="mesas">
+  <h2 id="mesas">Mesas y urnas</h2>
+  <p>Datos para el futuro simulador de votación; el escrutinio todavía no los usa. Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí).</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Dato</th><th class="num">2026</th><th class="num">2023</th><th>Origen</th></tr></thead>
+      <tbody>
+        <tr><td>Mesas electorales</td><td class="num">61.033</td><td class="num">60.314</td><td><span class="tag real">real</span> INE 2026; Interior 2023, citado por la prensa</td></tr>
+        <tr><td>Locales electorales</td><td class="num">22.493</td><td class="num">22.562</td><td><span class="tag real">real</span> INE 2026; prensa 2023</td></tr>
+        <tr><td>Urnas en uso</td><td class="num">122.066</td><td class="num">120.628</td><td><span class="tag est">estimada</span> 2 por mesa: Congreso y Senado</td></tr>
+        <tr><td>Urnas repartidas</td><td class="num">212.503</td><td class="num">210.000</td><td><span class="tag est">estimada</span> 2026 con la proporción de 2023 (3,48 por mesa), cifra que solo da la prensa</td></tr>
+        <tr><td>Electores CER por mesa</td><td class="num">589</td><td class="num"></td><td><span class="tag est">estimada</span> censo (RN-01) entre mesas</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Las mesas y los locales de 2026 son los de las listas de votación (<code>elecgral_2026_lv_tab1.xlsx</code>), la misma serie que el censo. El censo de consulta (<code>Elecgral_2026_cc_tab1.xlsx</code>), anterior a las reclamaciones, daba 60.970 mesas y 22.512 locales. El INE no publica el número de urnas. El CERA vota sobre todo por correo y no cuenta en las mesas de cada provincia.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Circunscripción</th><th class="num">Mesas</th><th class="num">Locales</th><th class="num">Urnas (est.)</th><th class="num">CER por mesa (est.)</th></tr></thead>
+      <tbody>
+        <tr><td>A Coruña</td><td class="num">1.528</td><td class="num">882</td><td class="num">3.056</td><td class="num">607</td></tr>
+        <tr><td>Albacete</td><td class="num">527</td><td class="num">203</td><td class="num">1.054</td><td class="num">568</td></tr>
+        <tr><td>Alicante / Alacant</td><td class="num">2.234</td><td class="num">697</td><td class="num">4.468</td><td class="num">584</td></tr>
+        <tr><td>Almería</td><td class="num">850</td><td class="num">323</td><td class="num">1.700</td><td class="num">574</td></tr>
+        <tr><td>Araba/Álava</td><td class="num">422</td><td class="num">101</td><td class="num">844</td><td class="num">609</td></tr>
+        <tr><td>Asturias</td><td class="num">1.443</td><td class="num">581</td><td class="num">2.886</td><td class="num">579</td></tr>
+        <tr><td>Ávila</td><td class="num">354</td><td class="num">286</td><td class="num">708</td><td class="num">359</td></tr>
+        <tr><td>Badajoz</td><td class="num">904</td><td class="num">426</td><td class="num">1.808</td><td class="num">596</td></tr>
+        <tr><td>Barcelona</td><td class="num">6.548</td><td class="num">1.638</td><td class="num">13.096</td><td class="num">631</td></tr>
+        <tr><td>Bizkaia</td><td class="num">1.402</td><td class="num">336</td><td class="num">2.804</td><td class="num">648</td></tr>
+        <tr><td>Burgos</td><td class="num">753</td><td class="num">429</td><td class="num">1.506</td><td class="num">369</td></tr>
+        <tr><td>Cáceres</td><td class="num">513</td><td class="num">358</td><td class="num">1.026</td><td class="num">626</td></tr>
+        <tr><td>Cádiz</td><td class="num">1.617</td><td class="num">572</td><td class="num">3.234</td><td class="num">623</td></tr>
+        <tr><td>Cantabria</td><td class="num">742</td><td class="num">358</td><td class="num">1.484</td><td class="num">638</td></tr>
+        <tr><td>Castellón / Castelló</td><td class="num">754</td><td class="num">340</td><td class="num">1.508</td><td class="num">577</td></tr>
+        <tr><td>Ciudad Real</td><td class="num">711</td><td class="num">266</td><td class="num">1.422</td><td class="num">542</td></tr>
+        <tr><td>Córdoba</td><td class="num">956</td><td class="num">402</td><td class="num">1.912</td><td class="num">657</td></tr>
+        <tr><td>Cuenca</td><td class="num">379</td><td class="num">288</td><td class="num">758</td><td class="num">390</td></tr>
+        <tr><td>Gipuzkoa</td><td class="num">867</td><td class="num">277</td><td class="num">1.734</td><td class="num">648</td></tr>
+        <tr><td>Girona</td><td class="num">894</td><td class="num">386</td><td class="num">1.788</td><td class="num">610</td></tr>
+        <tr><td>Granada</td><td class="num">1.143</td><td class="num">556</td><td class="num">2.286</td><td class="num">637</td></tr>
+        <tr><td>Guadalajara</td><td class="num">588</td><td class="num">336</td><td class="num">1.176</td><td class="num">344</td></tr>
+        <tr><td>Huelva</td><td class="num">656</td><td class="num">265</td><td class="num">1.312</td><td class="num">609</td></tr>
+        <tr><td>Huesca</td><td class="num">404</td><td class="num">257</td><td class="num">808</td><td class="num">412</td></tr>
+        <tr><td>Illes Balears</td><td class="num">1.275</td><td class="num">377</td><td class="num">2.550</td><td class="num">650</td></tr>
+        <tr><td>Jaén</td><td class="num">870</td><td class="num">354</td><td class="num">1.740</td><td class="num">575</td></tr>
+        <tr><td>La Rioja</td><td class="num">518</td><td class="num">252</td><td class="num">1.036</td><td class="num">460</td></tr>
+        <tr><td>Las Palmas</td><td class="num">1.559</td><td class="num">508</td><td class="num">3.118</td><td class="num">560</td></tr>
+        <tr><td>León</td><td class="num">676</td><td class="num">404</td><td class="num">1.352</td><td class="num">549</td></tr>
+        <tr><td>Lleida</td><td class="num">562</td><td class="num">313</td><td class="num">1.124</td><td class="num">542</td></tr>
+        <tr><td>Lugo</td><td class="num">517</td><td class="num">381</td><td class="num">1.034</td><td class="num">511</td></tr>
+        <tr><td>Madrid</td><td class="num">7.608</td><td class="num">1.094</td><td class="num">15.216</td><td class="num">662</td></tr>
+        <tr><td>Málaga</td><td class="num">1.778</td><td class="num">598</td><td class="num">3.556</td><td class="num">685</td></tr>
+        <tr><td>Murcia</td><td class="num">1.743</td><td class="num">575</td><td class="num">3.486</td><td class="num">631</td></tr>
+        <tr><td>Navarra</td><td class="num">956</td><td class="num">362</td><td class="num">1.912</td><td class="num">523</td></tr>
+        <tr><td>Ourense</td><td class="num">523</td><td class="num">391</td><td class="num">1.046</td><td class="num">476</td></tr>
+        <tr><td>Palencia</td><td class="num">342</td><td class="num">245</td><td class="num">684</td><td class="num">376</td></tr>
+        <tr><td>Pontevedra</td><td class="num">1.344</td><td class="num">653</td><td class="num">2.688</td><td class="num">577</td></tr>
+        <tr><td>Salamanca</td><td class="num">633</td><td class="num">457</td><td class="num">1.266</td><td class="num">424</td></tr>
+        <tr><td>Santa Cruz de Tenerife</td><td class="num">1.382</td><td class="num">532</td><td class="num">2.764</td><td class="num">580</td></tr>
+        <tr><td>Segovia</td><td class="num">328</td><td class="num">247</td><td class="num">656</td><td class="num">358</td></tr>
+        <tr><td>Sevilla</td><td class="num">2.625</td><td class="num">684</td><td class="num">5.250</td><td class="num">596</td></tr>
+        <tr><td>Soria</td><td class="num">257</td><td class="num">201</td><td class="num">514</td><td class="num">265</td></tr>
+        <tr><td>Tarragona</td><td class="num">1.072</td><td class="num">360</td><td class="num">2.144</td><td class="num">559</td></tr>
+        <tr><td>Teruel</td><td class="num">328</td><td class="num">275</td><td class="num">656</td><td class="num">306</td></tr>
+        <tr><td>Toledo</td><td class="num">932</td><td class="num">340</td><td class="num">1.864</td><td class="num">594</td></tr>
+        <tr><td>Valencia / València</td><td class="num">3.207</td><td class="num">1.157</td><td class="num">6.414</td><td class="num">619</td></tr>
+        <tr><td>Valladolid</td><td class="num">774</td><td class="num">353</td><td class="num">1.548</td><td class="num">546</td></tr>
+        <tr><td>Zamora</td><td class="num">368</td><td class="num">285</td><td class="num">736</td><td class="num">375</td></tr>
+        <tr><td>Zaragoza</td><td class="num">1.484</td><td class="num">480</td><td class="num">2.968</td><td class="num">492</td></tr>
+        <tr><td>Ceuta</td><td class="num">96</td><td class="num">30</td><td class="num">192</td><td class="num">648</td></tr>
+        <tr><td>Melilla</td><td class="num">87</td><td class="num">22</td><td class="num">174</td><td class="num">656</td></tr>
+        <tr class="total"><td>Total España</td><td class="num">61.033</td><td class="num">22.493</td><td class="num">122.066</td><td class="num">589</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Mesas y locales: <span class="tag real">real</span>, del INE, en el orden de RN-03. Urnas: 2 por mesa. CER por mesa: el censo de RN-01 entre las mesas, redondeado.</p>
+</section>
+
 <section aria-labelledby="pantalla">
   <h2 id="pantalla">Pantalla y teclas</h2>
   <p>Arriba, la barra con el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
@@ -173,12 +258,13 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       <li>De dónde llegará el escrutado real (backend) y cada cuánto.</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si se muestra el % de mesas informadas.</li>
+      <li>Cómo usará el simulador de votación las mesas y las urnas (ver <a href="#mesas">Mesas y urnas</a>), y si hace falta el reparto por municipio o sección.</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>
     </ul>
   </div>
 </section>
 
-<footer>Fuente del censo: INE, Oficina del Censo Electoral, consultado el 21-11-2026. Este documento es la fuente de las reglas; el código las cita por su código (RN-xx).</footer>
+<footer>Fuente del censo: INE, Oficina del Censo Electoral, consultado el 21-11-2026. Mesas y locales: INE, consultado el 23-11-2026; los de 2023, de la prensa (Deia y El Debate, julio de 2023). Este documento es la fuente de las reglas; el código las cita por su código (RN-xx).</footer>
 
 </main>
 </body>
