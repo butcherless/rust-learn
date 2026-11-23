@@ -16,8 +16,12 @@ Desde la raíz del workspace:
 cargo esc-sim -- --solo-comprobar             # comprueba los ficheros de apps/escrutinio-simulador/datos
 cargo test -p escrutinio-simulador            # unitarios y tests/cli.rs, que ejecuta el binario
 cargo llvm-cov -p escrutinio-simulador        # cobertura; --open para el HTML
-docker compose -f compose/escrutinio.yaml up -d   # Kafka local con los dos topics, para probarlo de verdad
+docker compose -f compose/escrutinio.yaml up -d   # Kafka local con los dos topics
+cargo esc-sim -- --duracion 1m                    # la carga completa contra ese Kafka, en un minuto
+docker compose -f compose/escrutinio.yaml down    # lo para y vacía los topics
 ```
+
+El README («Kafka» y «Lanzar la carga») tiene la secuencia completa y cómo ver lo publicado. Pruébalo así tras tocar `kafka.rs`, `application.rs` o el mensaje: los tests no conectan con Kafka.
 
 `tests/data` es un extracto real de los ficheros de Interior: las mesas de Ceuta y Melilla (183), con sus filas de CERA y, en `07`, también el total de España, para probar los filtros. Los tests nunca conectan con Kafka.
 

@@ -23,20 +23,40 @@ unzip 02202307_MESA.zip -d apps/escrutinio-simulador/datos
 
 ## Kafka
 
-```bash
-docker compose -f compose/escrutinio.yaml up -d    # Kafka en localhost:9092 y los topics escrutinio.mesas y escrutinio.mesas.dlq
-docker compose -f compose/escrutinio.yaml down     # pararlo
-```
-
-## Uso
-
-Desde la raíz del workspace:
+`compose/escrutinio.yaml` levanta un Kafka 4.1.0 de un solo nodo en `localhost:9092` y crea los dos
+topics: `escrutinio.mesas` (6 particiones) y su dead letter, `escrutinio.mesas.dlq` (1). Hace falta
+Docker en marcha. Desde la raíz del workspace:
 
 ```bash
-cargo esc-sim -- --solo-comprobar        # solo lee y comprueba los ficheros
-cargo esc-sim                            # publica las mesas durante 2 horas
-cargo esc-sim -- --duracion 5m           # en 5 minutos
+docker compose -f compose/escrutinio.yaml up -d      # arranca Kafka y crea los topics (unos 10 s)
+docker compose -f compose/escrutinio.yaml ps -a      # kafka «healthy» y topics «Exited (0)»: listo
+docker compose -f compose/escrutinio.yaml down       # lo para y borra los mensajes
 ```
+
+Kafka no guarda nada al pararlo: `down` y `up` vuelven a dejar los topics vacíos, que es lo que hace
+falta antes de repetir una carga.
+
+## Lanzar la carga
+
+Con los datos en `apps/escrutinio-simulador/datos` y Kafka arrancado:
+
+```bash
+cargo esc-sim -- --solo-comprobar        # 1. comprueba los ficheros, sin publicar
+cargo esc-sim                            # 2. publica las 60.314 mesas durante 2 horas
+cargo esc-sim -- --duracion 5m           #    o en 5 minutos, para probar
+```
+
+Para ver lo publicado, con las herramientas de Kafka del propio contenedor:
+
+```bash
+k() { docker compose -f compose/escrutinio.yaml exec -T kafka /opt/kafka/bin/"$@"; }
+k kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic escrutinio.mesas       # mensajes por partición
+k kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic escrutinio.mesas.dlq   # 4 al terminar
+k kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic escrutinio.mesas.dlq \
+  --from-beginning --property print.key=true --timeout-ms 10000                           # el dead letter
+```
+
+## Opciones
 
 | Opción | Por defecto | Qué hace |
 |---|---|---|
