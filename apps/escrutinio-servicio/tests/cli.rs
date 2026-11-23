@@ -137,3 +137,28 @@ async fn consumes_a_station_and_serves_it_until_ctrl_c() {
         "{stdout}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn borrar_empties_the_topics_and_the_tables() {
+    if !common::enabled("borrar_empties_the_topics_and_the_tables") {
+        return;
+    }
+    let (topic, dlq) = (common::unique("mesas"), common::unique("dlq"));
+    common::topics(&[&topic, &dlq]).await;
+    common::produce(&topic, "51", b"{}").await;
+    let url = common::schema("borrar").await;
+    let output = run(&[
+        "borrar",
+        "--topic",
+        &topic,
+        "--topic-dlq",
+        &dlq,
+        "--postgres",
+        &url,
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Escrutinio borrado: 1 mensajes en Kafka y 0 mesas en PostgreSQL.\n"
+    );
+}

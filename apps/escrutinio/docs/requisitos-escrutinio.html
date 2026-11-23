@@ -374,6 +374,9 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <p>Si el servicio cae antes de que se confirme el offset, recibe esas mesas otra vez y el paso 1 las descarta. No hay que recalcular nada: cada snapshot ya está en su fila. Las tablas se crean al arrancar si no existen. La API lee los snapshots con otra conexión y en una sola sentencia, así que ve un estado coherente sin esperar al consumidor.</p>
   <p>Las transacciones son cortas, de 1 a 5 ms: nada de Kafka ni de red dentro de ellas, y una mesa por transacción. La sesión del servicio limita <code>transaction_timeout</code> a 5 s, <code>statement_timeout</code> a 2 s e <code>idle_in_transaction_session_timeout</code> a 1 s. Si salta un límite o falla PostgreSQL, la transacción se deshace, el offset no se guarda y el servicio termina con error; al arrancarlo de nuevo, Kafka le entrega otra vez las mesas sin confirmar.</p>
 
+  <h3>Borrar el escrutinio</h3>
+  <p><code>escrutinio-servicio borrar</code> vacía los dos topics (<code>delete_records</code> hasta el final de cada partición) y las tres tablas (<code>TRUNCATE</code> en una transacción), para que los escrutinios sucesivos no se acumulen. Primero Kafka, para que nada borrado vuelva a contarse. Se lanza con el simulador parado y muestra cuántos mensajes y mesas ha borrado.</p>
+
   <h3>TUI</h3>
   <ul>
     <li>Pide <code>GET /snapshots</code> cada 10 s y suma el total de España (RN-07).</li>

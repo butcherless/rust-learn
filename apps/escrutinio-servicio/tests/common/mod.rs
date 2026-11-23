@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use escrutinio_contrato::{StationMessage, VoteMessage};
@@ -24,12 +25,14 @@ pub fn enabled(test: &str) -> bool {
     on
 }
 
-/// Un nombre que no se repite entre ejecuciones: `it_<nombre>_<nanosegundos>`.
+/// Un nombre que no se repite ni entre ejecuciones ni entre tests en paralelo:
+/// `it_<nombre>_<nanosegundos>_<contador>`.
 pub fn unique(name: &str) -> String {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    format!("it_{name}_{nanos}")
+    format!("it_{name}_{nanos}_{}", NEXT.fetch_add(1, Ordering::Relaxed))
 }
 
 /// Crea un esquema nuevo y devuelve la URL de PostgreSQL que lo usa.

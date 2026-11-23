@@ -24,8 +24,21 @@ cargo esc-sim -- --duracion 5m                           # publica las mesas en 
 curl -s localhost:8080/snapshots                         # el acumulado por circunscripción
 ```
 
-`Ctrl+C` para el servicio. `docker compose -f compose/escrutinio.yaml down` para Kafka y PostgreSQL
-y borra sus datos; sin `down`, al volver a arrancar el servicio sigue donde lo dejó.
+`Ctrl+C` para el servicio; al volver a arrancarlo, sigue donde lo dejó.
+
+## Borrar el escrutinio
+
+Para empezar otro escrutinio desde cero, sin que se acumule con el anterior:
+
+```bash
+cargo esc-borrar     # vacía escrutinio.mesas, su dead letter y las tablas de PostgreSQL
+```
+
+Hazlo con el simulador parado; el servicio puede seguir arrancado. Muestra lo borrado:
+`Escrutinio borrado: 60314 mensajes en Kafka y 60310 mesas en PostgreSQL.` Admite las mismas
+opciones de Kafka, topics y PostgreSQL que el servicio (`cargo esc-borrar -- --topic otro`).
+
+`docker compose -f compose/escrutinio.yaml down` también lo borra todo, pero para Kafka y PostgreSQL.
 
 ## API
 
@@ -54,5 +67,5 @@ Muestra el avance cada 5.000 mensajes: mesas registradas, repetidas y enviadas a
 
 ## Códigos de salida
 
-0 al pulsar `Ctrl+C`, 1 si fallan PostgreSQL, Kafka o la API (al arrancarlo de nuevo, recibe otra vez
+0 al pulsar `Ctrl+C` o al terminar `borrar`, 1 si fallan PostgreSQL, Kafka o la API (al arrancarlo de nuevo, recibe otra vez
 lo que no llegó a confirmar), y 2 si los argumentos no son válidos.

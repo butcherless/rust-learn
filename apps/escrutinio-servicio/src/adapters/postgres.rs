@@ -10,7 +10,7 @@ use escrutinio_contrato::{CandidacyTotal, ProvinceSnapshot, StationMessage};
 use thiserror::Error;
 use tokio_postgres::{Client, NoTls};
 
-use crate::application::{Recorded, SnapshotSource, StationStore};
+use crate::application::{Recorded, SnapshotSource, StationStore, Wipe};
 
 /// Las tablas, si no existen.
 const SCHEMA: &str = "
@@ -84,7 +84,7 @@ pub enum PgError {
     Connect(#[source] tokio_postgres::Error),
     #[error("falló una sentencia de PostgreSQL")]
     Query(#[from] tokio_postgres::Error),
-    #[error("la fila de la provincia {0} tiene un número fuera de rango")]
+    #[error("la fila de {0} tiene un número fuera de rango")]
     OutOfRange(String),
 }
 
@@ -166,6 +166,24 @@ impl StationStore for PgStore {
             .await?;
         transaction.commit().await?;
         Ok(Recorded::New)
+    }
+}
+
+/// Vacía las tres tablas en una transacción y devuelve cuántas mesas había.
+impl Wipe for PgStore {
+    type Error = PgError;
+
+    async fn wipe(&mut self) -> Result<u64, PgError> {
+        let transaction = self.client.transaction().await?;
+        let stations: i64 = transaction
+            .query_one("SELECT count(*) FROM mesa_escrutada", &[])
+            .await?
+            .try_get(0)?;
+        transaction
+            .batch_execute("TRUNCATE mesa_escrutada, provincia_snapshot, votos_provincia")
+            .await?;
+        transaction.commit().await?;
+        u64::try_from(stations).map_err(|_| PgError::OutOfRange("mesa_escrutada".to_owned()))
     }
 }
 
@@ -328,7 +346,7 @@ mod tests {
             let error = ProvinceSnapshot::try_from(row.clone()).map_err(|e| e.to_string());
             assert_eq!(
                 error.err().as_deref(),
-                Some("la fila de la provincia 51 tiene un número fuera de rango"),
+                Some("la fila de 51 tiene un número fuera de rango"),
                 "{row:?}"
             );
         });

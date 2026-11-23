@@ -7,9 +7,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use escrutinio_contrato::DeadLetterMessage;
-use escrutinio_servicio::adapters::kafka::{self, KafkaDeadLetters};
+use escrutinio_servicio::adapters::kafka::{self, KafkaDeadLetters, KafkaTopics};
 use escrutinio_servicio::adapters::postgres::{PgSnapshots, PgStore};
-use escrutinio_servicio::application::{SnapshotSource, Tally};
+use escrutinio_servicio::application::{SnapshotSource, Tally, Wipe};
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
 use tokio::sync::Notify;
@@ -87,4 +87,28 @@ async fn consumes_stations_duplicates_and_garbage() {
         ("malformed", Some("basura"))
     );
     assert_eq!(message.key(), None);
+}
+
+#[tokio::test]
+async fn wipes_every_message_of_the_topics() {
+    if !common::enabled("wipes_every_message_of_the_topics") {
+        return;
+    }
+    let (topic, dlq) = (common::unique("mesas"), common::unique("dlq"));
+    common::topics(&[&topic, &dlq]).await;
+    for (target, key) in [(&topic, "51"), (&topic, "52"), (&dlq, "24")] {
+        common::produce(target, key, b"{}").await;
+    }
+    let mut topics = KafkaTopics::new(common::KAFKA, &[&topic, &dlq]).expect("topics");
+    assert_eq!(topics.wipe().await.expect("wiped"), 3);
+    assert_eq!(topics.wipe().await.expect("wiped again"), 0);
+
+    let missing = KafkaTopics::new(common::KAFKA, &["no-existe"])
+        .expect("topics")
+        .wipe()
+        .await;
+    assert_eq!(
+        missing.map_err(|e| e.to_string()).err().as_deref(),
+        Some("el topic no-existe no existe en Kafka")
+    );
 }

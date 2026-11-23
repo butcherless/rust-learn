@@ -33,8 +33,10 @@ docker compose -f compose/escrutinio.yaml ps -a      # kafka «healthy» y topic
 docker compose -f compose/escrutinio.yaml down       # lo para y borra los mensajes
 ```
 
-Kafka no guarda nada al pararlo: `down` y `up` vuelven a dejar los topics vacíos, que es lo que hace
-falta antes de repetir una carga.
+Antes de repetir una carga, vacía los topics para que no se acumulen los escrutinios: `cargo
+esc-borrar` (de [escrutinio-servicio](../escrutinio-servicio/README.md#borrar-el-escrutinio)) borra sus
+mensajes y las tablas del servicio. `down` y `up` también los dejan vacíos, porque Kafka no guarda nada
+al pararlo.
 
 ## Lanzar la carga
 

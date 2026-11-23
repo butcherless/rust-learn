@@ -19,6 +19,7 @@ docker compose -f compose/escrutinio.yaml up -d --wait     # Kafka, topics y Pos
 ESCRUTINIO_INTEGRACION=1 cargo test -p escrutinio-servicio      # también los de integración, contra el compose
 ESCRUTINIO_INTEGRACION=1 cargo llvm-cov -p escrutinio-servicio  # la cobertura que mide la CI (98 %); sin la variable, ~65 %
 cargo esc-srv                                              # el servicio contra el compose
+cargo esc-borrar                                           # vacía los topics y las tablas antes de otra carga
 cargo esc-sim -- --duracion 1m                             # la carga completa en un minuto
 curl -s localhost:8080/snapshots                           # el resultado
 docker compose -f compose/escrutinio.yaml down             # lo para y borra los datos
@@ -33,9 +34,9 @@ Tras tocar `postgres.rs`, `kafka.rs` o `main.rs`, prueba además la carga comple
 Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → application → domain`. Cada módulo explica en su `//!` qué hace y qué regla cumple.
 
 - **`domain`**, puro: `classify` decide si un mensaje se registra o va al dead letter.
-- **`application`**: `handle` (registrar una mesa), `Tally` y los puertos `StationStore`, `DeadLetters` y `SnapshotSource`. Son traits genéricos con métodos que devuelven `impl Future + Send`, sin `dyn` ni `async-trait`; las implementaciones usan `async fn`. Los fakes están en `application::fakes`.
-- **`adapters`**: `postgres` (las tablas, la transacción y la lectura en una sentencia; `SnapshotRow` convierte las filas y se prueba sola), `kafka` (el consumidor, el productor del dead letter y el bucle `consume`), `http` (axum, probado con `tower::ServiceExt::oneshot`) y `cli`.
-- **`main.rs`**: la raíz de composición. Dos conexiones a PostgreSQL (una escribe, otra lee para la API), el bucle de Kafka y la API en el mismo runtime, con `tokio::select!`.
+- **`application`**: `handle` (registrar una mesa), `wipe` (borrar el escrutinio: Kafka primero, después PostgreSQL), `Tally` y los puertos `StationStore`, `DeadLetters`, `SnapshotSource` y `Wipe`. Son traits genéricos con métodos que devuelven `impl Future + Send`, sin `dyn` ni `async-trait`; las implementaciones usan `async fn`. Los fakes están en `application::fakes`.
+- **`adapters`**: `postgres` (las tablas, la transacción y la lectura en una sentencia; `SnapshotRow` convierte las filas y se prueba sola), `kafka` (el consumidor, el productor del dead letter, el bucle `consume` y `KafkaTopics`, que vacía los topics con `delete_records`), `http` (axum, probado con `tower::ServiceExt::oneshot`) y `cli`.
+- **`main.rs`**: la raíz de composición; sin subcomando sirve y con `borrar` vacía el escrutinio. Dos conexiones a PostgreSQL (una escribe, otra lee para la API), el bucle de Kafka y la API en el mismo runtime, con `tokio::select!`.
 
 `postgres.rs`, `kafka.rs` y `main.rs` solo se prueban con los tests de integración: no les pongas lógica que se pueda sacar a una función pura.
 

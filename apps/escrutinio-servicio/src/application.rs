@@ -112,6 +112,39 @@ impl Tally {
     }
 }
 
+/// Algo que se puede vaciar para empezar otro escrutinio: devuelve cuántos elementos borró.
+pub trait Wipe {
+    type Error: Error + Send + Sync + 'static;
+
+    fn wipe(&mut self) -> impl Future<Output = Result<u64, Self::Error>> + Send;
+}
+
+/// Lo borrado al vaciar el escrutinio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wiped {
+    pub messages: u64,
+    pub stations: u64,
+}
+
+#[derive(Debug, Error)]
+pub enum WipeError<K: Error + 'static, P: Error + 'static> {
+    #[error("no se pudieron borrar los mensajes de Kafka")]
+    Kafka(#[source] K),
+    #[error("no se pudieron borrar las mesas de PostgreSQL")]
+    Postgres(#[source] P),
+}
+
+/// Borra el escrutinio: primero los mensajes de Kafka, para que no vuelvan a contarse, y después
+/// las mesas y los snapshots de PostgreSQL.
+pub async fn wipe<K: Wipe, P: Wipe>(
+    kafka: &mut K,
+    postgres: &mut P,
+) -> Result<Wiped, WipeError<K::Error, P::Error>> {
+    let messages = kafka.wipe().await.map_err(WipeError::Kafka)?;
+    let stations = postgres.wipe().await.map_err(WipeError::Postgres)?;
+    Ok(Wiped { messages, stations })
+}
+
 #[cfg(test)]
 pub(crate) mod fakes {
     use std::collections::BTreeSet;
@@ -168,6 +201,26 @@ pub(crate) mod fakes {
             }
             self.sent.push((key.map(str::to_owned), message.clone()));
             Ok(())
+        }
+    }
+
+    /// Devuelve `count` al vaciarse, o falla; `wiped` dice si se llegó a vaciar.
+    #[derive(Default)]
+    pub struct FakeWipe {
+        pub count: u64,
+        pub down: bool,
+        pub wiped: bool,
+    }
+
+    impl Wipe for FakeWipe {
+        type Error = Down;
+
+        async fn wipe(&mut self) -> Result<u64, Down> {
+            if self.down {
+                return Err(Down);
+            }
+            self.wiped = true;
+            Ok(self.count)
         }
     }
 
@@ -246,6 +299,50 @@ mod tests {
         );
         let dead_letter = handle(b"x", &mut store, &mut dead).await;
         assert!(matches!(dead_letter, Err(HandleError::DeadLetter(Down))));
+    }
+
+    #[tokio::test]
+    async fn wipes_kafka_and_then_postgres() {
+        let mut kafka = FakeWipe {
+            count: 60_314,
+            ..FakeWipe::default()
+        };
+        let mut postgres = FakeWipe {
+            count: 60_310,
+            ..FakeWipe::default()
+        };
+        assert_eq!(
+            wipe(&mut kafka, &mut postgres).await.ok(),
+            Some(Wiped {
+                messages: 60_314,
+                stations: 60_310
+            })
+        );
+        assert!(kafka.wiped && postgres.wiped);
+    }
+
+    #[tokio::test]
+    async fn does_not_touch_postgres_when_kafka_fails() {
+        let mut kafka = FakeWipe {
+            down: true,
+            ..FakeWipe::default()
+        };
+        let mut postgres = FakeWipe::default();
+        let result = wipe(&mut kafka, &mut postgres).await;
+        assert!(matches!(result, Err(WipeError::Kafka(Down))), "{result:?}");
+        assert!(!postgres.wiped);
+        let result = wipe(
+            &mut FakeWipe::default(),
+            &mut FakeWipe {
+                down: true,
+                ..FakeWipe::default()
+            },
+        )
+        .await;
+        assert_eq!(
+            result.map_err(|e| e.to_string()).err().as_deref(),
+            Some("no se pudieron borrar las mesas de PostgreSQL")
+        );
     }
 
     #[test]
