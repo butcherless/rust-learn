@@ -247,9 +247,82 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </div>
 </section>
 
+<section aria-labelledby="datos2023">
+  <h2 id="datos2023">Resultados de 2023 por mesa</h2>
+  <p>El simulador reproduce el escrutinio real del Congreso del 23 de julio de 2023, mesa a mesa, en lugar de inventar los votos. Así, al terminar, el total de cada provincia es el resultado oficial.</p>
+  <dl>
+    <div><dt>Fuente</dt><dd>Ministerio del Interior, <a href="https://infoelectoral.interior.gob.es/es/elecciones-celebradas/area-de-descargas/">área de descargas de infoelectoral</a>: Congreso, julio de 2023, nivel mesa. Fichero <code>02202307_MESA.zip</code> (4,6 MB comprimido, 36 MB descomprimido), con los datos fechados entre el 4 y el 10 de noviembre de 2023. Descargado a mano el 23-11-2026, porque la web rechaza las descargas automáticas.</dd></div>
+    <div><dt>Formato</dt><dd>Texto de ancho fijo en Latin-1, descrito en el <code>FICHEROS.doc</code> que viene en el zip. Las posiciones empiezan en 1.</dd></div>
+  </dl>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fichero</th><th>Contenido</th><th>Lo usa el simulador</th></tr></thead>
+      <tbody>
+        <tr><td><code>09022307.DAT</code></td><td>Una fila por mesa: clave, censo, votantes de los avances de las 14:00 y las 18:00, blancos, nulos y votos a candidaturas</td><td>Sí</td></tr>
+        <tr><td><code>10022307.DAT</code></td><td>Votos por candidatura y mesa (647.309 filas, de 8 a 14 candidaturas por mesa)</td><td>Sí</td></tr>
+        <tr><td><code>03022307.DAT</code></td><td>Candidaturas: código, siglas y nombre</td><td>Sí</td></tr>
+        <tr><td><code>07022307.DAT</code></td><td>Totales oficiales por provincia, comunidad y España, con los escaños</td><td>Solo para comprobar</td></tr>
+        <tr><td><code>01</code>, <code>02</code>, <code>04</code>–<code>06</code>, <code>08</code></td><td>Control, proceso, candidatos y datos por municipio</td><td>No</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Campo de <code>09</code></th><th class="num">Posiciones</th><th>Campo de <code>09</code></th><th class="num">Posiciones</th></tr></thead>
+      <tbody>
+        <tr><td>Provincia (INE)</td><td class="num">12–13</td><td>Censo de escrutinio</td><td class="num">31–37</td></tr>
+        <tr><td>Municipio (INE; 999 = CERA)</td><td class="num">14–16</td><td>Votantes 1.º avance (14:00)</td><td class="num">52–58</td></tr>
+        <tr><td>Distrito</td><td class="num">17–18</td><td>Votantes 2.º avance (18:00)</td><td class="num">59–65</td></tr>
+        <tr><td>Sección</td><td class="num">19–22</td><td>Votos en blanco</td><td class="num">66–72</td></tr>
+        <tr><td>Mesa (letra, o U si es única)</td><td class="num">23</td><td>Votos nulos</td><td class="num">73–79</td></tr>
+        <tr><td>Censo del INE</td><td class="num">24–30</td><td>Votos a candidaturas</td><td class="num">80–86</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>La clave de una mesa son las posiciones 12–23 (provincia, municipio, distrito, sección y mesa). En <code>10</code>, la clave ocupa las mismas posiciones, seguida del código de candidatura (24–29) y sus votos (30–36). Los votantes no vienen en el fichero: son blancos + nulos + votos a candidaturas.</p>
+
+  <h3>Comprobaciones</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Comprobación</th><th>Resultado</th></tr></thead>
+      <tbody>
+        <tr><td>Mesas en <code>09</code>, sin el CERA</td><td><span class="tag real">cuadra</span> 60.314, la cifra oficial; todas con datos oficiales y sin claves repetidas; las 52 circunscripciones</td></tr>
+        <tr><td>Votos por candidatura de cada mesa (<code>10</code>) contra sus votos a candidaturas (<code>09</code>)</td><td><span class="tag real">cuadra</span> en las 60.314</td></tr>
+        <tr><td>Mesas por provincia contra los totales oficiales (<code>07</code>)</td><td><span class="tag real">cuadra</span> en las 52</td></tr>
+        <tr><td>Censo y votos por provincia: mesas + CERA de la provincia contra <code>07</code></td><td><span class="tag real">cuadra</span> en 50; <span class="tag est">no cuadra</span> en 2: las mesas suman de más en Cantabria (4 blancos y 12 nulos) y en Toledo (5 blancos, 10 nulos y 175 votos a candidaturas). Son las 206 papeletas de diferencia nacional; probablemente correcciones que no llegaron a <code>07</code>. El simulador usa las mesas.</td></tr>
+        <tr><td>Total nacional: mesas + CERA contra <code>07</code></td><td><span class="tag real">cuadra</span> censo de escrutinio 37.469.458 y 350 escaños</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Total de las 60.314 mesas (CER)</th><th class="num">2023</th></tr></thead>
+      <tbody>
+        <tr><td>Censo de escrutinio</td><td class="num">35.141.198</td></tr>
+        <tr><td>Votantes</td><td class="num">24.744.222 (70,41 %)</td></tr>
+        <tr><td>Blancos · nulos · a candidaturas</td><td class="num">199.103 · 260.784 · 24.284.335</td></tr>
+        <tr><td>Votantes a las 14:00 · a las 18:00</td><td class="num">14.226.892 · 18.671.607</td></tr>
+        <tr><td>Censo por mesa: mínimo · mediana · máximo</td><td class="num">3 · 587 · 1.424</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>El CERA (municipio 999, mesa <code>U</code>) va aparte: 2.328.260 de censo y 208.431 votantes en las filas por provincia, más filas de totales autonómicos y nacionales que no se suman. Se escruta días después, así que el simulador lo deja fuera, igual que el censo (RN-01). El fichero no dice cuándo llegó cada mesa: el orden y el ritmo los decide el simulador.</p>
+</section>
+
 <section aria-labelledby="backend">
   <h2 id="backend">Backend del escrutinio: Kafka y PostgreSQL</h2>
   <p>Diseño para cuando el escrutado deje de simularse dentro del programa. Kafka solo transporta los mensajes, sin Kafka Streams ni transacciones de Kafka. El estado, los snapshots por provincia y las transacciones están en PostgreSQL.</p>
+  <p>Son tres apps distintas del workspace, que solo se comunican por Kafka y por HTTP:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>App</th><th>Qué hace</th><th>Habla con</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Simulador</strong>: un comando</td><td>Dispara el escrutinio: lee los resultados de 2023 por mesa y publica cada mesa en Kafka a lo largo de la duración indicada (2 horas por defecto). Termina al publicar la última.</td><td>Kafka (produce)</td></tr>
+        <tr><td><strong>Servicio</strong></td><td>Consume las mesas, las guarda en PostgreSQL y sirve los snapshots por HTTP.</td><td>Kafka (consume), PostgreSQL, HTTP</td></tr>
+        <tr><td><strong>TUI</strong>: la app <code>escrutinio</code> actual</td><td>Pide los snapshots al servicio cada 10 s y los dibuja.</td><td>HTTP (cliente)</td></tr>
+      </tbody>
+    </table>
+  </div>
   <ol class="flow">
     <li><strong>Simulador</strong> publica una mesa escrutada por mensaje.</li>
     <li><strong>Kafka</strong>, topic <code>escrutinio.mesas</code>.</li>
@@ -280,8 +353,17 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </ol>
   <p>Si el consumidor se cae entre el <code>COMMIT</code> y el offset, al volver recibe otra vez esa mesa y el paso 1 la descarta. No hace falta reconstruir nada desde el principio: el snapshot de cada provincia ya está en su fila. El servicio lee <code>provincia_snapshot</code> (52 filas) para responder a la TUI.</p>
 
+  <h3>Simulador</h3>
+  <ul>
+    <li>Recibe la carpeta con los ficheros de 2023 (<code>09</code>, <code>10</code> y <code>03</code>), la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
+    <li>Antes de publicar nada, lee las mesas y hace las comprobaciones de la sección anterior que no necesitan <code>07</code>: 60.314 mesas, 52 circunscripciones, sin claves repetidas, y los votos de cada mesa sumando sus votos a candidaturas. Si alguna falla, termina con error sin publicar.</li>
+    <li>Ordena las mesas por su hora de llegada simulada: las de menos censo tienden a llegar antes, con la curva de la tabla de mensajes por segundo (50 % en los primeros 30 minutos). Con la misma semilla sale el mismo orden.</li>
+    <li>Publica cada mesa en su momento, con el código de provincia como clave. Al terminar muestra cuántas mesas ha publicado y cuánto ha tardado.</li>
+    <li>No guarda estado: si se vuelve a lanzar, publica otra vez todas las mesas, y el servicio descarta las ya contadas.</li>
+  </ul>
+
   <h3>Servicio</h3>
-  <p>Un único servicio con dos entradas: consume <code>escrutinio.mesas</code> y responde a la TUI. Es el único que accede a PostgreSQL. Sigue una arquitectura hexagonal ligera en tres capas, con los módulos en inglés. Las dependencias apuntan hacia dentro: <code>adapters → application → domain</code>.</p>
+  <p>Una app aparte del simulador y de la TUI, con dos entradas: consume <code>escrutinio.mesas</code> y responde a la TUI. Es el único que accede a PostgreSQL. Sigue una arquitectura hexagonal ligera en tres capas, con los módulos en inglés. Las dependencias apuntan hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
     <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa escrutada, el snapshot de provincia y las reglas: una mesa es válida si sus votantes no pasan de su censo y sus votos suman los válidos; aplicar una mesa a un snapshot devuelve el snapshot nuevo.</dd></div>
     <div><dt><code>application</code></dt><dd>Los casos de uso y los puertos (traits genéricos, sin <code>dyn</code>). Casos: <em>registrar una mesa</em> (la valida y la guarda una sola vez) y <em>consultar los snapshots</em>. Puerto: el repositorio del escrutinio.</dd></div>
@@ -335,7 +417,8 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h2 id="pendiente">Pendiente de decidir</h2>
   <div class="pending">
     <ul>
-      <li>Los resultados por mesa de 2023 (infoelectoral, Ministerio del Interior), que el simulador reproducirá: falta descargarlos y comprobarlos.</li>
+      <li>Si los ficheros de 2023 se versionan en el repositorio (4,6 MB comprimidos) o el simulador los lee de una ruta.</li>
+      <li>El nombre de las dos apps nuevas.</li>
       <li>Cómo se prueban el consumidor y PostgreSQL sin red en la CI (puertos con fakes en memoria).</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si se muestra el % de mesas informadas.</li>
