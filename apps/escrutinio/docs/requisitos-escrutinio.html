@@ -142,6 +142,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
     <li><span class="code">RN-10</span><div><strong>El censo es el de la elección que se ve</strong><p>La maqueta usa el de 2026 (RN-01). Al seguir al servicio, que reproduce 2023, el de 2023: el censo de escrutinio de las 60.314 mesas, sin el CERA (35.141.198), y el título dice 2023. Desde el 29-11-2026, con los datos de 2026, se podrán usar los dos.</p></div></li>
     <li><span class="code">RN-11</span><div><strong>Seguir al servicio</strong><p>Con <code>--servicio</code>, la TUI pide <code>GET /snapshots</code> al empezar y cada 10 s, y el escrutado de cada circunscripción son los votantes de su snapshot (0 si aún no tiene mesas). No hay pausa ni reinicio. Si el servicio no responde, mantiene lo último, lo indica en el estado y en el pie, y reintenta en la siguiente vuelta.</p></div></li>
+    <li><span class="code">RN-12</span><div><strong>Un piloto por fila</strong><p>A la derecha de la participación, un <code>●</code> dice qué provincias cambiaron en la última actualización (cada 10 s con el servicio, cada paso en la maqueta): naranja si su escrutado cambió, verde si sigue igual y gris si aún no tiene votos. Una petición fallida no cambia los pilotos. El del total es naranja si alguna fila lo es, gris si ninguna tiene votos y verde en el resto de casos.</p></div></li>
   </ul>
 </section>
 
@@ -163,7 +164,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 
 <section aria-labelledby="pantalla">
   <h2 id="pantalla">Pantalla y teclas</h2>
-  <p>Arriba, el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
+  <p>Arriba, el título <em>Elecciones generales España 2026</em> (o 2023, con el servicio) y el estado: escrutando, en pausa, completo, siguiendo el servicio o sin conexión. Debajo, la tabla (provincia, censo, estimado, escrutado, participación, piloto y barra) y el total. Al pie, la leyenda y la ayuda.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
@@ -403,6 +404,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <div class="pending">
     <ul>
       <li>Si la TUI muestra el % de mesas escrutadas, que ya viene en el snapshot.</li>
+      <li>Un cuarto estado del piloto (RN-12), «completa», cuando lleguen todas las mesas de una provincia: necesita sus mesas totales.</li>
       <li>Desde el 29-11-2026: cómo elegir entre el escrutinio de 2023 y el de 2026 al seguir al servicio (RN-10).</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>

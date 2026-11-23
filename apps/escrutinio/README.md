@@ -46,6 +46,13 @@ al servicio no hay pausa ni reinicio.
 `░` gris: censo · `▒` amarillo: estimado · `█` verde: escrutado · `█` cian: escrutado por encima
 de lo estimado.
 
+## Piloto
+
+El `●` a la derecha de la participación dice qué provincias han cambiado en la última actualización
+(cada 10 s con el servicio, cada paso en la maqueta): naranja si su escrutado ha cambiado, verde si
+sigue igual y gris si aún no tiene votos. El del total es naranja si alguna provincia lo es. Si una
+petición al servicio falla, los pilotos se quedan como estaban.
+
 ## Códigos de salida
 
 0 al salir, 1 si falla la terminal y 2 si los argumentos no son válidos. Que el servicio no responda

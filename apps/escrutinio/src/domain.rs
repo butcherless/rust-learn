@@ -4,6 +4,7 @@
 //!   `Tally::total` suma varios (RN-07).
 //! - `sort_key` ordena los nombres sin tildes ni mayúsculas, con la `ñ` detrás de la `n` (RN-03).
 //! - `thousands` y `percent` dan los números en formato español (RN-08).
+//! - `Pulse` es el piloto de cada fila: si su escrutado cambió en la última actualización (RN-12).
 
 /// La participación estimada por defecto, en % del censo (RN-04).
 pub const DEFAULT_TURNOUT: u8 = 70;
@@ -48,6 +49,42 @@ impl Tally {
                 census: sum.census + tally.census,
                 estimated: sum.estimated + tally.estimated,
                 counted: sum.counted + tally.counted,
+            })
+    }
+}
+
+/// El piloto de una fila (RN-12): qué pasó con su escrutado en la última actualización.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Pulse {
+    /// Aún sin votos escrutados.
+    #[default]
+    NoData,
+    /// Cambió respecto a la actualización anterior.
+    Updated,
+    /// Igual que en la actualización anterior.
+    Steady,
+}
+
+impl Pulse {
+    /// El piloto de un escrutado que pasa de `before` a `after`.
+    pub fn between(before: u64, after: u64) -> Self {
+        if after == 0 {
+            Self::NoData
+        } else if after == before {
+            Self::Steady
+        } else {
+            Self::Updated
+        }
+    }
+
+    /// El piloto del total: actualizado si alguna fila lo está; sin datos si ninguna los tiene.
+    pub fn total(pulses: impl IntoIterator<Item = Pulse>) -> Self {
+        pulses
+            .into_iter()
+            .fold(Self::NoData, |total, pulse| match (total, pulse) {
+                (Self::Updated, _) | (_, Self::Updated) => Self::Updated,
+                (Self::Steady, _) | (_, Self::Steady) => Self::Steady,
+                (Self::NoData, Self::NoData) => Self::NoData,
             })
     }
 }
@@ -177,5 +214,34 @@ mod tests {
     fn percents_have_one_decimal_and_a_comma() {
         assert_eq!(percent(70.0), "70,0 %");
         assert_eq!(percent(12.345), "12,3 %");
+    }
+
+    #[test]
+    fn the_pulse_says_whether_the_count_changed() {
+        [
+            (0, 0, Pulse::NoData),
+            (5, 0, Pulse::NoData),
+            (0, 5, Pulse::Updated),
+            (5, 7, Pulse::Updated),
+            (7, 7, Pulse::Steady),
+        ]
+        .into_iter()
+        .for_each(|(before, after, pulse)| {
+            assert_eq!(Pulse::between(before, after), pulse, "{before} → {after}");
+        });
+        assert_eq!(Pulse::default(), Pulse::NoData);
+    }
+
+    #[test]
+    fn the_total_pulse_is_updated_if_any_row_is() {
+        use Pulse::{NoData, Steady, Updated};
+        [
+            (vec![], NoData),
+            (vec![NoData, NoData], NoData),
+            (vec![NoData, Steady], Steady),
+            (vec![Steady, Updated, NoData], Updated),
+        ]
+        .into_iter()
+        .for_each(|(pulses, total)| assert_eq!(Pulse::total(pulses.clone()), total, "{pulses:?}"));
     }
 }

@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Row as TableRow, Table};
 
 use crate::census::Election;
-use crate::domain::{Tally, percent, ratio, thousands};
+use crate::domain::{Pulse, Tally, percent, ratio, thousands};
 use crate::mock::Row;
 use crate::tui::app::{App, Scale, Source, Status};
 
@@ -31,12 +31,24 @@ const ESTIMATED: (&str, Color) = ("▒", Color::Yellow);
 const COUNTED: (&str, Color) = ("█", Color::Green);
 const ABOVE_ESTIMATE: (&str, Color) = ("█", Color::Cyan);
 const TITLE_BAR: Style = Style::new().fg(Color::White).bg(Color::Blue);
+/// El piloto (RN-12), como el de pr-checker.
+const PILOT: &str = "●";
+const ORANGE: Color = Color::Rgb(255, 165, 0);
 
 const NAME_WIDTH: u16 = 22;
 const NUMBER_WIDTH: u16 = 10;
 const PERCENT_WIDTH: u16 = 7;
+const PILOT_WIDTH: u16 = 1;
 const SPACING: u16 = 1;
-const HEADERS: [&str; 6] = ["Provincia", "Censo", "Estimado", "Escrutado", "Partic.", ""];
+const HEADERS: [&str; 7] = [
+    "Provincia",
+    "Censo",
+    "Estimado",
+    "Escrutado",
+    "Partic.",
+    "",
+    "",
+];
 
 /// Dibuja `app` en todo el marco.
 pub fn draw(app: &App, frame: &mut Frame) {
@@ -106,7 +118,7 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
 
     let bar_width = inner
         .width
-        .saturating_sub(NAME_WIDTH + 3 * NUMBER_WIDTH + PERCENT_WIDTH + 5 * SPACING);
+        .saturating_sub(NAME_WIDTH + 3 * NUMBER_WIDTH + PERCENT_WIDTH + PILOT_WIDTH + 6 * SPACING);
     let rows = app.scrutiny().rows();
     let visible = usize::from(rows_area.height);
     let offset = app.offset().min(rows.len().saturating_sub(visible));
@@ -128,7 +140,13 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(table([TableRow::new(headers).bold().dark_gray()]), header);
     frame.render_widget(
         table(rows.iter().skip(offset).take(visible).map(|row: &Row| {
-            tally_row(row.district.name, &row.tally, base(&row.tally), bar_width)
+            tally_row(
+                row.district.name,
+                &row.tally,
+                row.pulse,
+                base(&row.tally),
+                bar_width,
+            )
         })),
         rows_area,
     );
@@ -139,7 +157,14 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
     let total = app.scrutiny().total();
     // El total se dibuja siempre contra su censo: con la escala absoluta no cabría.
     frame.render_widget(
-        table([tally_row(TOTAL, &total, total.census, bar_width).bold()]),
+        table([tally_row(
+            TOTAL,
+            &total,
+            app.scrutiny().pulse(),
+            total.census,
+            bar_width,
+        )
+        .bold()]),
         total_area,
     );
 }
@@ -153,13 +178,20 @@ fn table<'a>(rows: impl IntoIterator<Item = TableRow<'a>>) -> Table<'a> {
             Constraint::Length(NUMBER_WIDTH),
             Constraint::Length(NUMBER_WIDTH),
             Constraint::Length(PERCENT_WIDTH),
+            Constraint::Length(PILOT_WIDTH),
             Constraint::Fill(1),
         ],
     )
     .column_spacing(SPACING)
 }
 
-fn tally_row(name: &str, tally: &Tally, base: u64, bar_width: u16) -> TableRow<'static> {
+fn tally_row(
+    name: &str,
+    tally: &Tally,
+    pulse: Pulse,
+    base: u64,
+    bar_width: u16,
+) -> TableRow<'static> {
     let right = |text: String| Line::from(text).right_aligned();
     TableRow::new([
         Line::from(name.to_owned()),
@@ -167,8 +199,18 @@ fn tally_row(name: &str, tally: &Tally, base: u64, bar_width: u16) -> TableRow<'
         right(thousands(tally.estimated)).yellow(),
         right(thousands(tally.counted)).green(),
         right(percent(tally.turnout())),
+        Line::from(Span::styled(PILOT, pulse_color(pulse))),
         bar(tally, base, bar_width),
     ])
+}
+
+/// Naranja si cambió en la última actualización, verde si no y gris sin datos (RN-12).
+pub fn pulse_color(pulse: Pulse) -> Color {
+    match pulse {
+        Pulse::NoData => Color::DarkGray,
+        Pulse::Updated => ORANGE,
+        Pulse::Steady => Color::Green,
+    }
 }
 
 /// La barra de un recuento en `width` celdas, a escala de `base` votos (RN-08): escrutado hasta
@@ -212,6 +254,18 @@ fn legend_line(app: &App) -> Line<'static> {
         (COUNTED, "Escrutado".to_owned()),
         (ABOVE_ESTIMATE, "Escrutado sobre lo estimado".to_owned()),
     ];
+    let pilots = [
+        (Pulse::Updated, "Actualizada"),
+        (Pulse::Steady, "Sin cambios"),
+        (Pulse::NoData, "Sin datos"),
+    ]
+    .into_iter()
+    .flat_map(|(pulse, label)| {
+        [
+            Span::styled(PILOT, pulse_color(pulse)),
+            Span::raw(format!(" {label}  ")),
+        ]
+    });
     Line::from(
         std::iter::once(Span::raw(" "))
             .chain(items.into_iter().flat_map(|((texture, color), label)| {
@@ -220,6 +274,7 @@ fn legend_line(app: &App) -> Line<'static> {
                     Span::raw(format!(" {label}   ")),
                 ]
             }))
+            .chain(pilots)
             .collect::<Vec<_>>(),
     )
 }
@@ -328,6 +383,13 @@ mod tests {
     }
 
     #[test]
+    fn the_pilot_is_orange_green_or_gray() {
+        assert_eq!(pulse_color(Pulse::Updated), Color::Rgb(255, 165, 0));
+        assert_eq!(pulse_color(Pulse::Steady), Color::Green);
+        assert_eq!(pulse_color(Pulse::NoData), Color::DarkGray);
+    }
+
+    #[test]
     fn a_shared_scale_shortens_the_smaller_bars() {
         let tally = Tally::new(1_000_000, 70);
         assert_eq!(text(&bar(&tally, 2_000_000, 10)), "▒▒▒▒░");
@@ -368,6 +430,61 @@ mod tests {
         let line_of = |name| lines.iter().position(|line| line.contains(name));
         assert!(line_of("Zaragoza") < line_of("Ceuta"));
         assert!(line_of("Ceuta") < line_of("Melilla"));
+    }
+
+    /// El color del piloto de la fila que empieza por `name`, en una pantalla de 120 × 20.
+    fn pilot_color(app: &App, name: &str) -> Option<Color> {
+        let mut terminal = Terminal::new(TestBackend::new(120, 20)).expect("test backend");
+        terminal.draw(|frame| draw(app, frame)).expect("draw");
+        let buffer = terminal.backend().buffer();
+        let width = usize::from(buffer.area.width);
+        buffer
+            .content()
+            .chunks(width)
+            .find(|line| {
+                line.iter()
+                    .map(|cell| cell.symbol())
+                    .collect::<String>()
+                    .trim_start_matches(['│', ' '])
+                    .starts_with(name)
+            })
+            .and_then(|line| line.iter().find(|cell| cell.symbol() == PILOT))
+            .map(|cell| cell.fg)
+    }
+
+    #[test]
+    fn the_pilots_show_which_districts_changed_in_the_last_update() {
+        use crate::feed::fixtures::snapshot;
+        let coruna = |counted| Message::Snapshots(Ok(vec![snapshot("15", counted)]));
+        let failed = Message::Snapshots(Err("sin red".to_owned()));
+        let gray = Some(Color::DarkGray);
+        [
+            ("start", vec![], gray),
+            ("first data", vec![coruna(500)], Some(ORANGE)),
+            (
+                "no change",
+                vec![coruna(500), coruna(500)],
+                Some(Color::Green),
+            ),
+            (
+                "more votes",
+                vec![coruna(500), coruna(500), coruna(900)],
+                Some(ORANGE),
+            ),
+            (
+                "a failed request changes nothing",
+                vec![coruna(500), failed],
+                Some(ORANGE),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(case, messages, color)| {
+            let app = apply(following(), &messages);
+            assert_eq!(pilot_color(&app, "A Coruña"), color, "{case}");
+        });
+        let one = apply(following(), &[coruna(500)]);
+        assert_eq!(pilot_color(&one, "Albacete"), gray);
+        assert_eq!(pilot_color(&one, TOTAL), Some(ORANGE));
     }
 
     #[test]

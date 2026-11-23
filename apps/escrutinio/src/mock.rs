@@ -5,7 +5,7 @@
 //! como si informaran unas cuantas mesas. Con la misma semilla, el escrutinio es el mismo.
 
 use crate::census::District;
-use crate::domain::Tally;
+use crate::domain::{Pulse, Tally};
 
 /// El resultado final, como fracción del estimado: entre `1 - FINAL_SPREAD` y `1 + FINAL_SPREAD`.
 const FINAL_SPREAD: f64 = 0.15;
@@ -31,11 +31,13 @@ impl Rng {
     }
 }
 
-/// Una fila del escrutinio: la circunscripción, su recuento y el final simulado.
+/// Una fila del escrutinio: la circunscripción, su recuento, su piloto y el final simulado.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Row {
     pub district: District,
     pub tally: Tally,
+    /// Si su escrutado cambió en la última actualización (RN-12).
+    pub pulse: Pulse,
     /// Los votos con los que acabará el escrutinio simulado.
     pub target: u64,
 }
@@ -66,6 +68,7 @@ impl Scrutiny {
                             Row {
                                 district,
                                 tally,
+                                pulse: Pulse::NoData,
                                 target,
                             },
                         ),
@@ -87,6 +90,7 @@ impl Scrutiny {
                 let counted = (row.tally.counted + step).min(row.target);
                 let row = Row {
                     tally: row.tally.with_counted(counted),
+                    pulse: Pulse::between(row.tally.counted, counted),
                     ..row
                 };
                 (push(rows, row), rng)
@@ -108,17 +112,26 @@ impl Scrutiny {
         Tally::total(self.rows.iter().map(|row| &row.tally))
     }
 
+    /// El piloto del total (RN-12).
+    pub fn pulse(&self) -> Pulse {
+        Pulse::total(self.rows.iter().map(|row| row.pulse))
+    }
+
     /// Las mismas filas con los votos escrutados de `counted`, por código de provincia; las que
     /// no aparecen, a 0. Para seguir al servicio (RN-11), que manda siempre el acumulado.
     pub fn with_counted(self, counted: &std::collections::BTreeMap<String, u64>) -> Self {
         let rows = self
             .rows
             .into_iter()
-            .map(|row| Row {
-                tally: row
+            .map(|row| {
+                let tally = row
                     .tally
-                    .with_counted(counted.get(row.district.code).copied().unwrap_or(0)),
-                ..row
+                    .with_counted(counted.get(row.district.code).copied().unwrap_or(0));
+                Row {
+                    pulse: Pulse::between(row.tally.counted, tally.counted),
+                    tally,
+                    ..row
+                }
             })
             .collect();
         Self { rows, ..self }
@@ -250,6 +263,34 @@ mod tests {
             Some(true)
         );
         assert_eq!(by_code("02").map(|(counted, _)| counted), Some(0));
+    }
+
+    #[test]
+    fn pulses_follow_the_changes_of_each_update() {
+        let pulse_of = |scrutiny: &Scrutiny, code| {
+            scrutiny
+                .rows()
+                .iter()
+                .find(|row| row.district.code == code)
+                .map(|row| row.pulse)
+        };
+        assert_eq!(scrutiny().pulse(), Pulse::NoData);
+        let first = scrutiny().with_counted(&[("28".to_owned(), 1_000)].into());
+        assert_eq!(pulse_of(&first, "28"), Some(Pulse::Updated));
+        assert_eq!(pulse_of(&first, "51"), Some(Pulse::NoData));
+        assert_eq!(first.pulse(), Pulse::Updated);
+        let same = first.with_counted(&[("28".to_owned(), 1_000)].into());
+        assert_eq!(pulse_of(&same, "28"), Some(Pulse::Steady));
+        assert_eq!(same.pulse(), Pulse::Steady);
+        let one_step = advanced(1);
+        assert!(
+            one_step
+                .rows()
+                .iter()
+                .all(|row| row.pulse == Pulse::Updated)
+        );
+        let finished = advanced(200);
+        assert!(finished.rows().iter().all(|row| row.pulse == Pulse::Steady));
     }
 
     #[test]

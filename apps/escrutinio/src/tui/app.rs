@@ -145,7 +145,8 @@ impl App {
         let mock = self.source == Source::Mock;
         let next = match message {
             Message::Quit => return (self, Effect::Quit),
-            Message::Tick if self.status() == Status::Running => Self {
+            // Ya terminada, la maqueta sigue avanzando sin votos, para que sus pilotos pasen a verde.
+            Message::Tick if matches!(self.status(), Status::Running | Status::Finished) => Self {
                 scrutiny: self.scrutiny.advance(),
                 ..self
             },
@@ -317,10 +318,12 @@ mod tests {
     }
 
     #[test]
-    fn finishes_and_then_ignores_ticks() {
+    fn finishes_and_then_ticks_change_no_row() {
         let finished = apply(app(), &vec![Message::Tick; 200]);
         assert_eq!(finished.status(), Status::Finished);
-        assert_eq!(apply(finished.clone(), &[Message::Tick]), finished);
+        let ticked = apply(finished.clone(), &[Message::Tick]);
+        assert_eq!(ticked.status(), Status::Finished);
+        assert_eq!(ticked.scrutiny().rows(), finished.scrutiny().rows());
     }
 
     #[test]
