@@ -95,8 +95,6 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--fg); }
 
 h3 { font: 600 1rem/1.2 var(--font-display); margin: .5rem 0 0; }
 section ul, section ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
-.flow { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
-.flow li { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .75rem; font-size: .9rem; flex: 1 1 8rem; }
 
 .pending { border-left: 3px solid var(--estimated); padding: .25rem 0 .25rem 1rem; display: grid; gap: .5rem; }
 .pending ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
@@ -113,12 +111,41 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 <header>
   <span class="eyebrow">apps/escrutinio · requisitos</span>
   <h1>Escrutinio de las Elecciones generales España 2026</h1>
-  <p class="lead">Una vista de terminal con los votos de cada provincia y ciudad autónoma. Ahora es una maqueta: los votos escrutados se simulan hasta que exista el backend.</p>
+  <p class="lead">Una vista de terminal con los votos de cada provincia y ciudad autónoma. Hoy el escrutado se simula dentro de la TUI; el diseño del <a href="#backend">backend</a> lo sustituye por el escrutinio real de 2023, mesa a mesa.</p>
 </header>
+
+<section aria-labelledby="conceptos">
+  <h2 id="conceptos">Conceptos</h2>
+  <dl>
+    <div><dt>Circunscripción</dt><dd>Una provincia o ciudad autónoma (<code>District</code>). Hay 52.</dd></div>
+    <div><dt>Censo</dt><dd>Los electores que pueden votar en la circunscripción (<code>census</code>).</dd></div>
+    <div><dt>Estimado</dt><dd>Los votos que se esperan según las encuestas (<code>estimated</code>).</dd></div>
+    <div><dt>Escrutado</dt><dd>Los votos ya contados. Crece según informan las mesas (<code>counted</code>).</dd></div>
+    <div><dt>Participación</dt><dd>El escrutado en % del censo.</dd></div>
+    <div><dt>Escala</dt><dd>Contra qué se dibuja una barra: su propio censo, o el mayor de todos.</dd></div>
+    <div><dt>Mesa</dt><dd>Donde se vota y se cuentan los votos. Se identifica por provincia, municipio, distrito, sección y letra.</dd></div>
+    <div><dt>Snapshot</dt><dd>El acumulado de una circunscripción con las mesas ya escrutadas.</dd></div>
+  </dl>
+</section>
+
+<section aria-labelledby="reglas">
+  <h2 id="reglas">Reglas de negocio</h2>
+  <ul class="rules">
+    <li><span class="code">RN-01</span><div><strong>El censo es el CER del INE</strong><p>Los electores residentes en España de las listas de votación del 29 de noviembre de 2026 (<code>elecgral_2026_lv_tab3_mod.xlsx</code>). Total: 35.953.542. Sin el CERA (residentes en el extranjero).</p></div></li>
+    <li><span class="code">RN-02</span><div><strong>52 circunscripciones</strong><p>50 provincias, Ceuta y Melilla, con su nombre oficial: <em>A Coruña</em>, <em>Illes Balears</em>, <em>Valencia / València</em>…</p></div></li>
+    <li><span class="code">RN-03</span><div><strong>Orden alfabético, y las ciudades al final</strong><p>Las provincias por orden alfabético, sin distinguir tildes ni mayúsculas y con la ñ detrás de la n. Después, Ceuta y Melilla.</p></div></li>
+    <li><span class="code">RN-04</span><div><strong>Estimado = participación × censo</strong><p>Participación del 70 % por defecto (unos 25,2 millones de votos), redondeando hacia abajo.</p></div></li>
+    <li><span class="code">RN-05</span><div><strong>El escrutado solo crece</strong><p>Nunca pasa del censo. Sí puede pasar del estimado, y ese tramo tiene su propio color.</p></div></li>
+    <li><span class="code">RN-06</span><div><strong>Maqueta: escrutinio simulado</strong><p>Cada circunscripción acaba entre el 85 % y el 115 % de su estimado, y en cada paso suma hasta el 6 % de ese final. Con la misma semilla sale el mismo escrutinio.</p></div></li>
+    <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de las 52 circunscripciones. Siempre visible, debajo de la tabla.</p></div></li>
+    <li><span class="code">RN-08</span><div><strong>Cómo se muestra</strong><p>Cifras con punto de millar (<code>35.953.542</code>) y porcentajes con coma y un decimal (<code>70,0 %</code>). Cada zona de la barra tiene textura y color propios.</p></div></li>
+    <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
+  </ul>
+</section>
 
 <section aria-labelledby="barra">
   <h2 id="barra">La barra de votos</h2>
-  <p>Cada circunscripción tiene una barra con tres zonas superpuestas. Es el ejemplo del enunciado: 2 millones de censo y 1,4 millones estimados.</p>
+  <p>Tres zonas superpuestas por circunscripción. Ejemplo: 2 millones de censo y 1,4 millones estimados.</p>
   <div class="sample">
     <div class="sample-row"><span>Sin escrutar</span><div class="bar"><span class="z-estimated" style="width:70%"></span><span class="z-census" style="width:30%"></span></div></div>
     <div class="sample-row"><span>400.000 votos</span><div class="bar"><span class="z-counted" style="width:20%"></span><span class="z-estimated" style="width:50%"></span><span class="z-census" style="width:30%"></span></div></div>
@@ -132,49 +159,40 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </div>
 </section>
 
-<section aria-labelledby="conceptos">
-  <h2 id="conceptos">Conceptos</h2>
-  <dl>
-    <div><dt>Circunscripción</dt><dd>Una provincia o ciudad autónoma (<code>District</code>). Hay 52.</dd></div>
-    <div><dt>Censo</dt><dd>Los electores que pueden votar en la circunscripción (<code>census</code>).</dd></div>
-    <div><dt>Estimado</dt><dd>Los votos que se esperan según las encuestas (<code>estimated</code>).</dd></div>
-    <div><dt>Escrutado</dt><dd>Los votos ya contados. Crece el día de la votación, según informan las mesas (<code>counted</code>).</dd></div>
-    <div><dt>Participación</dt><dd>El escrutado en % del censo.</dd></div>
-    <div><dt>Escala</dt><dd>Contra qué se dibuja una barra: su propio censo, o el mayor de todos.</dd></div>
-  </dl>
-</section>
-
-<section aria-labelledby="reglas">
-  <h2 id="reglas">Reglas de negocio</h2>
-  <ul class="rules">
-    <li><span class="code">RN-01</span><div><strong>El censo es el CER del INE</strong><p>Los electores españoles residentes en España de las listas de votación de las Generales del 29 de noviembre de 2026 (tabla <code>elecgral_2026_lv_tab3_mod.xlsx</code> de la Oficina del Censo Electoral). Total: 35.953.542. No incluye a los residentes en el extranjero (CERA).</p></div></li>
-    <li><span class="code">RN-02</span><div><strong>52 circunscripciones</strong><p>50 provincias y las ciudades autónomas de Ceuta y Melilla, con su nombre oficial: <em>A Coruña</em>, <em>Illes Balears</em>, <em>Valencia / València</em>…</p></div></li>
-    <li><span class="code">RN-03</span><div><strong>Orden alfabético, y las ciudades al final</strong><p>Primero las provincias por orden alfabético, sin distinguir tildes ni mayúsculas y con la ñ detrás de la n. Después, Ceuta y Melilla.</p></div></li>
-    <li><span class="code">RN-04</span><div><strong>Estimado = participación × censo</strong><p>La participación estimada es del 70 % por defecto (unos 25,2 millones de votos). Se redondea hacia abajo.</p></div></li>
-    <li><span class="code">RN-05</span><div><strong>El escrutado solo crece</strong><p>Nunca pasa del censo. Sí puede pasar del estimado, y ese tramo tiene su propio color.</p></div></li>
-    <li><span class="code">RN-06</span><div><strong>Maqueta: escrutinio simulado</strong><p>Cada circunscripción acaba entre el 85 % y el 115 % de su estimado, y en cada paso suma hasta el 6 % de ese final. Con la misma semilla sale el mismo escrutinio.</p></div></li>
-    <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de todas las circunscripciones. Siempre se ve, debajo de la tabla.</p></div></li>
-    <li><span class="code">RN-08</span><div><strong>Cómo se muestra</strong><p>Cifras con punto de millar (<code>35.953.542</code>) y porcentajes con coma y un decimal (<code>70,0 %</code>). Cada zona de la barra tiene textura y color propios.</p></div></li>
-    <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
-  </ul>
+<section aria-labelledby="pantalla">
+  <h2 id="pantalla">Pantalla y teclas</h2>
+  <p>Arriba, el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> · <kbd>k</kbd> <kbd>j</kbd></td><td>Desplazar una fila</td></tr>
+        <tr><td><kbd>RePág</kbd> <kbd>AvPág</kbd></td><td>Desplazar 10 filas</td></tr>
+        <tr><td><kbd>espacio</kbd> · <kbd>p</kbd></td><td>Pausar o seguir (solo la maqueta)</td></tr>
+        <tr><td><kbd>r</kbd></td><td>Reiniciar el escrutinio (solo la maqueta)</td></tr>
+        <tr><td><kbd>e</kbd></td><td>Cambiar de escala</td></tr>
+        <tr><td><kbd>q</kbd> · <kbd>Esc</kbd></td><td>Salir</td></tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <section aria-labelledby="mesas">
-  <h2 id="mesas">Mesas y urnas</h2>
-  <p>Datos para el futuro simulador de votación; el escrutinio todavía no los usa. Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí).</p>
+  <h2 id="mesas">Mesas y urnas de 2026</h2>
+  <p>Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí). La TUI todavía no las usa.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Dato</th><th class="num">2026</th><th class="num">2023</th><th>Origen</th></tr></thead>
       <tbody>
-        <tr><td>Mesas electorales</td><td class="num">61.033</td><td class="num">60.314</td><td><span class="tag real">real</span> INE 2026; Interior 2023, citado por la prensa</td></tr>
-        <tr><td>Locales electorales</td><td class="num">22.493</td><td class="num">22.562</td><td><span class="tag real">real</span> INE 2026; prensa 2023</td></tr>
+        <tr><td>Mesas electorales</td><td class="num">61.033</td><td class="num">60.314</td><td><span class="tag real">real</span> INE; 2023, Interior (<a href="#datos2023">por mesa</a>)</td></tr>
+        <tr><td>Locales electorales</td><td class="num">22.493</td><td class="num">22.562</td><td><span class="tag real">real</span> INE; 2023, prensa</td></tr>
         <tr><td>Urnas en uso</td><td class="num">122.066</td><td class="num">120.628</td><td><span class="tag est">estimada</span> 2 por mesa: Congreso y Senado</td></tr>
-        <tr><td>Urnas repartidas</td><td class="num">212.503</td><td class="num">210.000</td><td><span class="tag est">estimada</span> 2026 con la proporción de 2023 (3,48 por mesa), cifra que solo da la prensa</td></tr>
-        <tr><td>Electores CER por mesa</td><td class="num">589</td><td class="num"></td><td><span class="tag est">estimada</span> censo (RN-01) entre mesas</td></tr>
+        <tr><td>Urnas repartidas</td><td class="num">212.503</td><td class="num">210.000</td><td><span class="tag est">estimada</span> con la proporción de 2023 (3,48 por mesa), que solo da la prensa</td></tr>
+        <tr><td>Electores CER por mesa</td><td class="num">589</td><td class="num">583</td><td><span class="tag est">estimada</span> censo entre mesas</td></tr>
       </tbody>
     </table>
   </div>
-  <p>Las mesas y los locales de 2026 son los de las listas de votación (<code>elecgral_2026_lv_tab1.xlsx</code>), la misma serie que el censo. El censo de consulta (<code>Elecgral_2026_cc_tab1.xlsx</code>), anterior a las reclamaciones, daba 60.970 mesas y 22.512 locales. El INE no publica el número de urnas. El CERA vota sobre todo por correo y no cuenta en las mesas de cada provincia.</p>
+  <p>Mesas y locales de 2026: listas de votación del INE (<code>elecgral_2026_lv_tab1.xlsx</code>), la misma serie que el censo. El censo de consulta, anterior a las reclamaciones, daba 60.970 mesas y 22.512 locales. El INE no publica urnas.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Circunscripción</th><th class="num">Mesas</th><th class="num">Locales</th><th class="num">Urnas (est.)</th><th class="num">CER por mesa (est.)</th></tr></thead>
@@ -235,34 +253,24 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       </tbody>
     </table>
   </div>
-  <p>Mesas y locales: <span class="tag real">real</span>, del INE, en el orden de RN-03. Urnas: 2 por mesa. CER por mesa: el censo de RN-01 entre las mesas, redondeado.</p>
-  <div class="sample">
-    <p><strong>Reparto por localidad (aproximación).</strong> El simulador reparte las mesas de cada circunscripción entre sus municipios, en proporción al censo de cada uno, y las urnas igual: 2 por mesa. Así no hace falta el dato real por municipio ni por sección.</p>
-    <ul>
-      <li>La suma de las mesas de los municipios es la de la circunscripción en el INE.</li>
-      <li>Cada municipio tiene al menos una mesa: hay 8.132 municipios y 61.033 mesas.</li>
-      <li>El redondeo usa los mayores restos: primero la parte entera de cada cuota, y las mesas que sobran van a los municipios con más decimales.</li>
-      <li>Falta el censo CER por municipio, del INE, que el proyecto todavía no tiene.</li>
-    </ul>
-  </div>
+  <p><strong>Si se simula 2026 en lugar de 2023</strong>, las mesas de cada circunscripción se reparten entre sus municipios en proporción a su censo, con 2 urnas por mesa. Cada municipio tiene al menos una mesa (8.132 municipios), la suma es la del INE y el redondeo usa los mayores restos. Falta el censo CER por municipio.</p>
 </section>
 
 <section aria-labelledby="datos2023">
   <h2 id="datos2023">Resultados de 2023 por mesa</h2>
-  <p>El simulador reproduce el escrutinio real del Congreso del 23 de julio de 2023, mesa a mesa, en lugar de inventar los votos. Así, al terminar, el total de cada provincia es el resultado oficial.</p>
+  <p>El simulador reproduce el escrutinio real del Congreso del 23 de julio de 2023, mesa a mesa: al terminar, cada provincia tiene su resultado oficial.</p>
   <dl>
-    <div><dt>Fuente</dt><dd>Ministerio del Interior, <a href="https://infoelectoral.interior.gob.es/es/elecciones-celebradas/area-de-descargas/">área de descargas de infoelectoral</a>: Congreso, julio de 2023, nivel mesa. Fichero <code>02202307_MESA.zip</code> (4,6 MB comprimido, 36 MB descomprimido), con los datos fechados entre el 4 y el 10 de noviembre de 2023. Descargado a mano el 23-11-2026, porque la web rechaza las descargas automáticas.</dd></div>
-    <div><dt>Formato</dt><dd>Texto de ancho fijo en Latin-1, descrito en el <code>FICHEROS.doc</code> que viene en el zip. Las posiciones empiezan en 1.</dd></div>
+    <div><dt>Fuente</dt><dd>Ministerio del Interior, <a href="https://infoelectoral.interior.gob.es/es/elecciones-celebradas/area-de-descargas/">área de descargas de infoelectoral</a>: Congreso, julio de 2023, nivel mesa. <code>02202307_MESA.zip</code>, 4,6 MB (36 MB descomprimido). Se descarga a mano: la web rechaza las descargas automáticas.</dd></div>
+    <div><dt>Formato</dt><dd>Texto de ancho fijo en Latin-1, descrito en el <code>FICHEROS.doc</code> del zip. Posiciones desde 1.</dd></div>
   </dl>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Fichero</th><th>Contenido</th><th>Lo usa el simulador</th></tr></thead>
+      <thead><tr><th>Fichero</th><th>Contenido</th><th>Uso</th></tr></thead>
       <tbody>
-        <tr><td><code>09022307.DAT</code></td><td>Una fila por mesa: clave, censo, votantes de los avances de las 14:00 y las 18:00, blancos, nulos y votos a candidaturas</td><td>Sí</td></tr>
-        <tr><td><code>10022307.DAT</code></td><td>Votos por candidatura y mesa (647.309 filas, de 8 a 14 candidaturas por mesa)</td><td>Sí</td></tr>
-        <tr><td><code>03022307.DAT</code></td><td>Candidaturas: código, siglas y nombre</td><td>Sí</td></tr>
-        <tr><td><code>07022307.DAT</code></td><td>Totales oficiales por provincia, comunidad y España, con los escaños</td><td>Solo para comprobar</td></tr>
-        <tr><td><code>01</code>, <code>02</code>, <code>04</code>–<code>06</code>, <code>08</code></td><td>Control, proceso, candidatos y datos por municipio</td><td>No</td></tr>
+        <tr><td><code>09022307.DAT</code></td><td>Una fila por mesa: censo, votantes a las 14:00 y a las 18:00, blancos, nulos y votos a candidaturas</td><td>Simulador</td></tr>
+        <tr><td><code>10022307.DAT</code></td><td>Votos por mesa y candidatura (647.309 filas)</td><td>Simulador</td></tr>
+        <tr><td><code>03022307.DAT</code></td><td>Candidaturas: código, siglas y nombre</td><td>Simulador</td></tr>
+        <tr><td><code>07022307.DAT</code></td><td>Totales oficiales por provincia y de España, con los escaños</td><td>Comprobar</td></tr>
       </tbody>
     </table>
   </div>
@@ -271,32 +279,32 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       <thead><tr><th>Campo de <code>09</code></th><th class="num">Posiciones</th><th>Campo de <code>09</code></th><th class="num">Posiciones</th></tr></thead>
       <tbody>
         <tr><td>Provincia (INE)</td><td class="num">12–13</td><td>Censo de escrutinio</td><td class="num">31–37</td></tr>
-        <tr><td>Municipio (INE; 999 = CERA)</td><td class="num">14–16</td><td>Votantes 1.º avance (14:00)</td><td class="num">52–58</td></tr>
-        <tr><td>Distrito</td><td class="num">17–18</td><td>Votantes 2.º avance (18:00)</td><td class="num">59–65</td></tr>
+        <tr><td>Municipio (999 = CERA)</td><td class="num">14–16</td><td>Votantes a las 14:00</td><td class="num">52–58</td></tr>
+        <tr><td>Distrito</td><td class="num">17–18</td><td>Votantes a las 18:00</td><td class="num">59–65</td></tr>
         <tr><td>Sección</td><td class="num">19–22</td><td>Votos en blanco</td><td class="num">66–72</td></tr>
-        <tr><td>Mesa (letra, o U si es única)</td><td class="num">23</td><td>Votos nulos</td><td class="num">73–79</td></tr>
+        <tr><td>Mesa (letra; U si es única)</td><td class="num">23</td><td>Votos nulos</td><td class="num">73–79</td></tr>
         <tr><td>Censo del INE</td><td class="num">24–30</td><td>Votos a candidaturas</td><td class="num">80–86</td></tr>
       </tbody>
     </table>
   </div>
-  <p>La clave de una mesa son las posiciones 12–23 (provincia, municipio, distrito, sección y mesa). En <code>10</code>, la clave ocupa las mismas posiciones, seguida del código de candidatura (24–29) y sus votos (30–36). Los votantes no vienen en el fichero: son blancos + nulos + votos a candidaturas.</p>
+  <p>La clave de la mesa son las posiciones 12–23, también en <code>10</code>, que añade la candidatura (24–29) y sus votos (30–36). Votantes = blancos + nulos + votos a candidaturas.</p>
 
   <h3>Comprobaciones</h3>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Comprobación</th><th>Resultado</th></tr></thead>
       <tbody>
-        <tr><td>Mesas en <code>09</code>, sin el CERA</td><td><span class="tag real">cuadra</span> 60.314, la cifra oficial; todas con datos oficiales y sin claves repetidas; las 52 circunscripciones</td></tr>
-        <tr><td>Votos por candidatura de cada mesa (<code>10</code>) contra sus votos a candidaturas (<code>09</code>)</td><td><span class="tag real">cuadra</span> en las 60.314</td></tr>
-        <tr><td>Mesas por provincia contra los totales oficiales (<code>07</code>)</td><td><span class="tag real">cuadra</span> en las 52</td></tr>
-        <tr><td>Censo y votos por provincia: mesas + CERA de la provincia contra <code>07</code></td><td><span class="tag real">cuadra</span> en 50; <span class="tag est">no cuadra</span> en 2: las mesas suman de más en Cantabria (4 blancos y 12 nulos) y en Toledo (5 blancos, 10 nulos y 175 votos a candidaturas). Son las 206 papeletas de diferencia nacional; probablemente correcciones que no llegaron a <code>07</code>. El simulador usa las mesas.</td></tr>
-        <tr><td>Total nacional: mesas + CERA contra <code>07</code></td><td><span class="tag real">cuadra</span> censo de escrutinio 37.469.458 y 350 escaños</td></tr>
+        <tr><td>Mesas de <code>09</code> sin el CERA</td><td><span class="tag real">cuadra</span> 60.314 en 52 circunscripciones, oficiales y sin claves repetidas</td></tr>
+        <tr><td>Votos de <code>10</code> por mesa contra sus votos a candidaturas de <code>09</code></td><td><span class="tag real">cuadra</span> en todas</td></tr>
+        <tr><td>Mesas por provincia contra <code>07</code></td><td><span class="tag real">cuadra</span> en las 52</td></tr>
+        <tr><td>Votos por provincia (mesas + CERA) contra <code>07</code></td><td><span class="tag real">cuadra</span> en 50. <span class="tag est">no cuadra</span> en Cantabria (+4 blancos, +12 nulos) y Toledo (+5 blancos, +10 nulos, +175 a candidaturas): 206 papeletas, probablemente correcciones que no llegaron a <code>07</code>. Manda <code>09</code>.</td></tr>
+        <tr><td>Total de España (mesas + CERA) contra <code>07</code></td><td><span class="tag real">cuadra</span> censo de escrutinio 37.469.458 y 350 escaños</td></tr>
       </tbody>
     </table>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Total de las 60.314 mesas (CER)</th><th class="num">2023</th></tr></thead>
+      <thead><tr><th>Total de las 60.314 mesas</th><th class="num">2023</th></tr></thead>
       <tbody>
         <tr><td>Censo de escrutinio</td><td class="num">35.141.198</td></tr>
         <tr><td>Votantes</td><td class="num">24.744.222 (70,41 %)</td></tr>
@@ -306,129 +314,100 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       </tbody>
     </table>
   </div>
-  <p>El CERA (municipio 999, mesa <code>U</code>) va aparte: 2.328.260 de censo y 208.431 votantes en las filas por provincia, más filas de totales autonómicos y nacionales que no se suman. Se escruta días después, así que el simulador lo deja fuera, igual que el censo (RN-01). El fichero no dice cuándo llegó cada mesa: el orden y el ritmo los decide el simulador.</p>
+  <p>El CERA (municipio 999) queda fuera, como en el censo (RN-01): se escruta días después. El fichero no dice cuándo llegó cada mesa; el orden lo decide el simulador.</p>
 </section>
 
 <section aria-labelledby="backend">
-  <h2 id="backend">Backend del escrutinio: Kafka y PostgreSQL</h2>
-  <p>Diseño para cuando el escrutado deje de simularse dentro del programa. Kafka solo transporta los mensajes, sin Kafka Streams ni transacciones de Kafka. El estado, los snapshots por provincia y las transacciones están en PostgreSQL.</p>
-  <p>Son tres apps distintas del workspace, que solo se comunican por Kafka y por HTTP:</p>
+  <h2 id="backend">Backend: simulador, Kafka, servicio y PostgreSQL</h2>
+  <p>Tres apps del workspace, que solo se comunican por Kafka y HTTP. Kafka solo transporta (sin Streams ni transacciones); el estado y las transacciones están en PostgreSQL.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>App</th><th>Qué hace</th><th>Habla con</th></tr></thead>
       <tbody>
-        <tr><td><strong>Simulador</strong>: un comando</td><td>Dispara el escrutinio: lee los resultados de 2023 por mesa y publica cada mesa en Kafka a lo largo de la duración indicada (2 horas por defecto). Termina al publicar la última.</td><td>Kafka (produce)</td></tr>
-        <tr><td><strong>Servicio</strong></td><td>Consume las mesas, las guarda en PostgreSQL y sirve los snapshots por HTTP.</td><td>Kafka (consume), PostgreSQL, HTTP</td></tr>
-        <tr><td><strong>TUI</strong>: la app <code>escrutinio</code> actual</td><td>Pide los snapshots al servicio cada 10 s y los dibuja.</td><td>HTTP (cliente)</td></tr>
+        <tr><td><strong>Simulador</strong> (comando)</td><td>Dispara el escrutinio: publica las mesas de 2023 durante 2 horas y termina.</td><td>Kafka</td></tr>
+        <tr><td><strong>Servicio</strong></td><td>Consume las mesas, las guarda en PostgreSQL y sirve los snapshots.</td><td>Kafka, PostgreSQL, HTTP</td></tr>
+        <tr><td><strong>TUI</strong> (<code>escrutinio</code>)</td><td>Pide los snapshots cada 10 s y los dibuja.</td><td>HTTP</td></tr>
       </tbody>
     </table>
   </div>
-  <ol class="flow">
-    <li><strong>Simulador</strong> publica una mesa escrutada por mensaje.</li>
-    <li><strong>Kafka</strong>, topic <code>escrutinio.mesas</code>.</li>
-    <li><strong>Servicio</strong>: su consumidor aplica cada mesa en una transacción.</li>
-    <li><strong>PostgreSQL</strong> guarda las mesas y los snapshots.</li>
-    <li><strong>TUI</strong> pide los 52 snapshots al servicio cada 10 s.</li>
-  </ol>
-
-  <h3>Kafka</h3>
-  <ul>
-    <li>Un único topic, <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code>. Cada mensaje es una mesa: su identificador (provincia, municipio, distrito, sección y mesa), censo, votantes, nulos, blancos y votos por candidatura.</li>
-    <li>La clave es el código de provincia, así que las mesas de una provincia llegan en orden a la misma partición.</li>
-    <li>El productor usa <code>acks=all</code>. El consumidor desactiva el commit automático y confirma el offset solo después del <code>COMMIT</code> en PostgreSQL. Puede recibir alguna mesa repetida, y PostgreSQL la descarta.</li>
-  </ul>
-
-  <h3>PostgreSQL</h3>
-  <ul>
-    <li><code>mesa_escrutada</code>: una fila por mesa contada, con el identificador como clave primaria. Garantiza que una mesa solo se cuenta una vez.</li>
-    <li><code>provincia_snapshot</code>: una fila por circunscripción (52), con las mesas escrutadas, el censo de esas mesas, los votantes, los nulos y los blancos.</li>
-    <li><code>votos_provincia</code>: los votos por (provincia, candidatura).</li>
-  </ul>
-  <p>Cada mensaje se aplica en una sola transacción:</p>
-  <ol>
-    <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta ninguna fila, la mesa ya estaba contada: se hace <code>COMMIT</code> sin más.</li>
-    <li><code>UPDATE provincia_snapshot SET votantes = votantes + …</code> solo en la fila de esa provincia; las otras 51 no se tocan.</li>
-    <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE SET votos = votos_provincia.votos + EXCLUDED.votos</code>.</li>
-    <li><code>COMMIT</code>, y después el commit del offset en Kafka.</li>
-  </ol>
-  <p>Si el consumidor se cae entre el <code>COMMIT</code> y el offset, al volver recibe otra vez esa mesa y el paso 1 la descarta. No hace falta reconstruir nada desde el principio: el snapshot de cada provincia ya está en su fila. El servicio lee <code>provincia_snapshot</code> (52 filas) para responder a la TUI.</p>
 
   <h3>Simulador</h3>
   <ul>
-    <li>Recibe la carpeta con los ficheros de 2023 (<code>09</code>, <code>10</code> y <code>03</code>), la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
-    <li>Antes de publicar nada, lee las mesas y hace las comprobaciones de la sección anterior que no necesitan <code>07</code>: 60.314 mesas, 52 circunscripciones, sin claves repetidas, y los votos de cada mesa sumando sus votos a candidaturas. Si alguna falla, termina con error sin publicar.</li>
-    <li>Ordena las mesas por su hora de llegada simulada: las de menos censo tienden a llegar antes, con la curva de la tabla de mensajes por segundo (50 % en los primeros 30 minutos). Con la misma semilla sale el mismo orden.</li>
-    <li>Publica cada mesa en su momento, con el código de provincia como clave. Al terminar muestra cuántas mesas ha publicado y cuánto ha tardado.</li>
-    <li>No guarda estado: si se vuelve a lanzar, publica otra vez todas las mesas, y el servicio descarta las ya contadas.</li>
+    <li>Recibe la carpeta con <code>09</code>, <code>10</code> y <code>03</code>, la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
+    <li>Antes de publicar, repite las <a href="#datos2023">comprobaciones</a> que no usan <code>07</code>. Si alguna falla, termina con error sin publicar nada.</li>
+    <li>Las mesas con menos censo tienden a llegar antes, con la curva de la <a href="#carga">carga</a>. Con la misma semilla sale el mismo orden.</li>
+    <li>No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya contado. Al terminar, muestra las mesas publicadas y el tiempo.</li>
+  </ul>
+
+  <h3>Kafka</h3>
+  <ul>
+    <li>Topic <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code> y 6 particiones. Un mensaje por mesa: su clave, censo, blancos, nulos y votos por candidatura.</li>
+    <li>La clave del mensaje es el código de provincia: las mesas de una provincia van en orden a la misma partición.</li>
+    <li>El productor usa <code>acks=all</code>. El consumidor confirma el offset a mano, después del <code>COMMIT</code> en PostgreSQL.</li>
   </ul>
 
   <h3>Servicio</h3>
-  <p>Una app aparte del simulador y de la TUI, con dos entradas: consume <code>escrutinio.mesas</code> y responde a la TUI. Es el único que accede a PostgreSQL. Sigue una arquitectura hexagonal ligera en tres capas, con los módulos en inglés. Las dependencias apuntan hacia dentro: <code>adapters → application → domain</code>.</p>
+  <p>Hexagonal ligera, con los módulos en inglés y las dependencias hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
-    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa escrutada, el snapshot de provincia y las reglas: una mesa es válida si sus votantes no pasan de su censo y sus votos suman los válidos; aplicar una mesa a un snapshot devuelve el snapshot nuevo.</dd></div>
-    <div><dt><code>application</code></dt><dd>Los casos de uso y los puertos (traits genéricos, sin <code>dyn</code>). Casos: <em>registrar una mesa</em> (la valida y la guarda una sola vez) y <em>consultar los snapshots</em>. Puerto: el repositorio del escrutinio.</dd></div>
-    <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP para la TUI. Salida: el repositorio en PostgreSQL, que hace la transacción descrita arriba.</dd></div>
+    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa, el snapshot y sus reglas: los votantes de una mesa no pasan de su censo, sus votos suman los de candidaturas, y aplicar una mesa a un snapshot da el snapshot nuevo.</dd></div>
+    <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em> y <em>consultar los snapshots</em>. Puerto: el repositorio, como trait genérico (sin <code>dyn</code>).</dd></div>
+    <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP. Salida: el repositorio en PostgreSQL.</dd></div>
   </dl>
-  <p>La API tiene una sola consulta: <code>GET /snapshots</code> devuelve en JSON las 52 circunscripciones con sus mesas escrutadas, censo, votantes, nulos, blancos y votos por candidatura. El total de España lo suma la TUI (RN-07).</p>
+  <p>La API tiene una sola consulta, <code>GET /snapshots</code>: las 52 circunscripciones en JSON, con mesas escrutadas, censo, votantes, blancos, nulos y votos por candidatura.</p>
+
+  <h3>PostgreSQL</h3>
+  <ul>
+    <li><code>mesa_escrutada</code>: una fila por mesa, con su clave como clave primaria.</li>
+    <li><code>provincia_snapshot</code>: una fila por circunscripción (52).</li>
+    <li><code>votos_provincia</code>: votos por provincia y candidatura.</li>
+  </ul>
+  <p>Cada mesa, en una transacción:</p>
+  <ol>
+    <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta, la mesa ya estaba contada y termina.</li>
+    <li><code>UPDATE provincia_snapshot</code> solo en la fila de su provincia.</li>
+    <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE</code>, sumando los votos.</li>
+    <li><code>COMMIT</code>; después, el offset en Kafka.</li>
+  </ol>
+  <p>Si el servicio cae entre el <code>COMMIT</code> y el offset, recibe la mesa otra vez y el paso 1 la descarta. No hay que recalcular nada: cada snapshot ya está en su fila.</p>
+  <p>Las transacciones son cortas, de 1 a 5 ms: nada de Kafka ni de red dentro de ellas, y una mesa por transacción. La sesión del servicio limita <code>transaction_timeout</code> a 5 s, <code>statement_timeout</code> a 2 s e <code>idle_in_transaction_session_timeout</code> a 1 s. Si salta un límite, la transacción se deshace, el offset no se confirma y la mesa se reintenta.</p>
 
   <h3>TUI</h3>
   <ul>
-    <li>Pide <code>GET /snapshots</code> al servicio cada 10 segundos y redibuja con la respuesta. Son 6 peticiones por minuto de unos pocos KB: una carga despreciable para el servicio y para PostgreSQL.</li>
-    <li>Si el servicio no responde, conserva el último dato y lo indica en la barra de estado; lo vuelve a intentar en la siguiente vuelta.</li>
-    <li>El origen del escrutado es un puerto: el simulado actual (RN-06) o el servicio. Así la maqueta sigue funcionando sin backend.</li>
+    <li>Pide <code>GET /snapshots</code> cada 10 s y suma el total de España (RN-07).</li>
+    <li>Si el servicio no responde, mantiene el último dato, lo indica en el estado y reintenta en la siguiente vuelta.</li>
+    <li>El origen del escrutado es un puerto: la maqueta (RN-06) o el servicio.</li>
   </ul>
 
-  <h3>Mensajes por segundo</h3>
-  <p>Un mensaje por mesa: 61.033 mesas en 2026 (60.314 al reproducir 2023) durante 2 horas (7.200 s). La curva de llegada es una estimación.</p>
+  <h3 id="carga">Carga</h3>
+  <p>Un mensaje por mesa: 60.314 en 7.200 s. La curva es una estimación.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Tramo</th><th class="num">Mesas</th><th class="num">Mensajes/s</th></tr></thead>
       <tbody>
-        <tr><td>Media de las 2 horas</td><td class="num">61.033</td><td class="num">8,5</td></tr>
-        <tr><td>Primeros 30 min: 50 % de las mesas</td><td class="num">30.517</td><td class="num">17,0</td></tr>
-        <tr><td>Siguientes 60 min: 40 %</td><td class="num">24.413</td><td class="num">6,8</td></tr>
-        <tr><td>Últimos 30 min: 10 %</td><td class="num">6.103</td><td class="num">3,4</td></tr>
-        <tr><td>Congreso y Senado en mensajes separados</td><td class="num">122.066</td><td class="num">17 de media; 34 de pico</td></tr>
+        <tr><td>Primeros 30 min (50 %)</td><td class="num">30.157</td><td class="num">16,8</td></tr>
+        <tr><td>Siguientes 60 min (40 %)</td><td class="num">24.126</td><td class="num">6,7</td></tr>
+        <tr><td>Últimos 30 min (10 %)</td><td class="num">6.031</td><td class="num">3,4</td></tr>
+        <tr class="total"><td>Media de las 2 horas</td><td class="num">60.314</td><td class="num">8,4</td></tr>
       </tbody>
     </table>
   </div>
-  <p>Son como mucho unas 34 transacciones por segundo, cada una de tres sentencias sobre una fila. Con mensajes de alrededor de 1 KB, Kafka recibe unos 60 MB en toda la noche. Ni Kafka ni PostgreSQL necesitan más de una partición o una conexión para esto. Sí conviene particionar el topic, por ejemplo en 6, para poder repartir el consumo.</p>
-</section>
-
-<section aria-labelledby="pantalla">
-  <h2 id="pantalla">Pantalla y teclas</h2>
-  <p>Arriba, la barra con el título <em>Elecciones generales España 2026</em> y el estado: escrutando, en pausa o completo. Debajo, la tabla (provincia, censo, estimado, escrutado, participación y barra) y el total. Al pie, la leyenda y la ayuda.</p>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
-      <tbody>
-        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> · <kbd>k</kbd> <kbd>j</kbd></td><td>Desplazar una fila</td></tr>
-        <tr><td><kbd>RePág</kbd> <kbd>AvPág</kbd></td><td>Desplazar 10 filas</td></tr>
-        <tr><td><kbd>espacio</kbd> · <kbd>p</kbd></td><td>Pausar o seguir</td></tr>
-        <tr><td><kbd>r</kbd></td><td>Reiniciar el escrutinio</td></tr>
-        <tr><td><kbd>e</kbd></td><td>Cambiar de escala</td></tr>
-        <tr><td><kbd>q</kbd> · <kbd>Esc</kbd></td><td>Salir</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <p>Unas 17 transacciones por segundo en el pico y, con mensajes de 1 KB, unos 60 MB en Kafka. La TUI hace 6 peticiones por minuto. Ninguna pieza necesita escalar.</p>
 </section>
 
 <section aria-labelledby="pendiente">
   <h2 id="pendiente">Pendiente de decidir</h2>
   <div class="pending">
     <ul>
-      <li>Si los ficheros de 2023 se versionan en el repositorio (4,6 MB comprimidos) o el simulador los lee de una ruta.</li>
       <li>El nombre de las dos apps nuevas.</li>
-      <li>Cómo se prueban el consumidor y PostgreSQL sin red en la CI (puertos con fakes en memoria).</li>
+      <li>Si los ficheros de 2023 se versionan en el repositorio o el simulador los lee de una ruta.</li>
+      <li>Si la TUI muestra el % de mesas escrutadas, que ya viene en el snapshot.</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
-      <li>Si se muestra el % de mesas informadas.</li>
-      <li>Cómo usará el simulador de votación las mesas y las urnas ya repartidas por municipio (ver <a href="#mesas">Mesas y urnas</a>).</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>
     </ul>
   </div>
 </section>
 
-<footer>Fuente del censo: INE, Oficina del Censo Electoral, consultado el 21-11-2026. Mesas y locales: INE, consultado el 23-11-2026; los de 2023, de la prensa (Deia y El Debate, julio de 2023). Este documento es la fuente de las reglas; el código las cita por su código (RN-xx).</footer>
+<footer>Fuentes: censo, mesas y locales de 2026, INE (Oficina del Censo Electoral), consultados el 21 y el 23-11-2026; resultados de 2023 por mesa, Ministerio del Interior, descargados el 23-11-2026; locales y urnas de 2023, prensa (Deia y El Debate, julio de 2023). Este documento es la fuente de las reglas; el código las cita por su código (RN-xx).</footer>
 
 </main>
 </body>

@@ -4,7 +4,7 @@ Este fichero orienta a Claude Code cuando trabaja en el proyecto `escrutinio` de
 
 Maqueta en ratatui del escrutinio de las Elecciones generales España 2026 por provincia. El escrutado se simula (`mock`) hasta que exista el backend.
 - `README.md` es la guía de uso.
-- La fuente de verdad del comportamiento es `docs/requisitos-escrutinio.html`: conceptos, reglas (RN-xx) y lo pendiente. Cada regla nueva se añade allí, en español y en pocas palabras, y el `//!` del módulo que la aplica la cita.
+- La fuente de verdad del comportamiento es `docs/requisitos-escrutinio.html`: conceptos, reglas (RN-xx), datos de mesas, el diseño del backend y lo pendiente. Cada regla nueva se añade allí, en español y en pocas palabras, y el `//!` del módulo que la aplica la cita.
 - Las librerías y las convenciones siguen `apps/severance-pay-calculator`.
 
 **Idiomas**, como en calendario-laboral: en español la documentación, el rustdoc, los comentarios y lo que ve el usuario; en inglés los identificadores y los nombres de los tests.
