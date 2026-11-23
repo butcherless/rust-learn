@@ -173,9 +173,14 @@ fn tally_row(name: &str, tally: &Tally, base: u64, bar_width: u16) -> TableRow<'
 
 /// La barra de un recuento en `width` celdas, a escala de `base` votos (RN-08): escrutado hasta
 /// el estimado, escrutado por encima del estimado, estimado aún sin escrutar y resto del censo.
+///
+/// Las celdas se redondean primero a centésimas: el estimado redondeado hacia abajo (RN-04) queda
+/// unas milésimas por debajo del 70 %, y sin eso, cuando el 70 % del ancho cae justo en media celda
+/// (73,5 de 105), las provincias con el 70 % exacto tendrían una celda más de estimado que el resto.
 pub fn bar(tally: &Tally, base: u64, width: u16) -> Line<'static> {
     let cells = |votes: u64| {
-        let cells = (ratio(votes, base) * f64::from(width)).round() as usize;
+        let exact = ratio(votes, base) * f64::from(width);
+        let cells = ((exact * 100.0).round() / 100.0).round() as usize;
         cells.min(usize::from(width))
     };
     let (census, estimated, counted) = (
@@ -305,6 +310,21 @@ mod tests {
             colors,
             [Some(Color::Green), Some(Color::Cyan), Some(Color::DarkGray)]
         );
+    }
+
+    #[test]
+    fn an_estimate_rounded_down_draws_as_long_as_an_exact_one() {
+        // Alicante: el 70 % exacto. Albacete: 3 votos por debajo, por el redondeo de RN-04.
+        let width = 105;
+        let estimated_cells = |census| {
+            let tally = Tally::new(census, 70);
+            text(&bar(&tally, tally.census, width))
+                .chars()
+                .filter(|&c| c == '▒')
+                .count()
+        };
+        assert_eq!(estimated_cells(1_261_010), 74);
+        assert_eq!(estimated_cells(299_924), 74);
     }
 
     #[test]
