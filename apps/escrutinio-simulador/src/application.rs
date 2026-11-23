@@ -8,10 +8,11 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::domain::message::{DeadLetterMessage, StationMessage};
+use escrutinio_contrato::{DeadLetterMessage, validate};
+
+use crate::domain::message::station_message;
 use crate::domain::schedule::Scheduled;
 use crate::domain::station::{Candidacy, StationKey};
-use crate::domain::validation::validate;
 
 /// A qué topic va un mensaje.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,20 +84,20 @@ pub fn run<P: Publisher, W: Pacer>(
         .iter()
         .try_fold(Published::default(), |published, scheduled| {
             let station = &scheduled.station;
-            let message = StationMessage::new(station, candidacies);
-            let key = message.key();
-            let (topic, payload) = match validate(station) {
+            let message = station_message(station, candidacies);
+            let key = message.key().to_owned();
+            let (topic, payload) = match validate(&message) {
                 Ok(()) => (Topic::Stations, serde_json::to_string(&message)),
                 Err(rejection) => (
                     Topic::DeadLetter,
-                    serde_json::to_string(&DeadLetterMessage::new(message, rejection)),
+                    serde_json::to_string(&DeadLetterMessage::rejected(message, &rejection)),
                 ),
             };
             let payload =
                 payload.map_err(|error| RunError::Encode(Box::new(station.key.clone()), error))?;
             pacer.wait_until(scheduled.at);
             publisher
-                .publish(topic, key, &payload)
+                .publish(topic, &key, &payload)
                 .map_err(|error| RunError::Publish(Box::new(station.key.clone()), error))?;
             let published = published.add(topic);
             on_published(published.total());

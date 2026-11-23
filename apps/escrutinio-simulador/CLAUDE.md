@@ -29,7 +29,7 @@ El README («Kafka» y «Lanzar la carga») tiene la secuencia completa y cómo 
 
 Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → application → domain`. Cada módulo explica en su `//!` qué hace y qué regla cumple.
 
-- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones que rechazan el fichero entero, y `Summary`), `validation` (lo que manda una mesa sola al dead letter), `schedule` (la curva de llegada y el orden con semilla) y `message` (el JSON de una mesa y el del dead letter: el contrato con el servicio).
+- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones que rechazan el fichero entero, y `Summary`), `schedule` (la curva de llegada y el orden con semilla) y `message` (convierte una mesa en el `StationMessage` del contrato). Los mensajes y la validación que manda una mesa al dead letter son de `libs/escrutinio-contrato`, compartido con el servicio.
 - **`application`**: `run` valida y publica el plan, cada mesa en su `Topic`; `Publisher` y `Pacer` son los puertos (traits genéricos, sin `dyn`), con fakes en los tests.
 - **`adapters`**: `interior` (los ficheros de ancho fijo en Latin-1), `kafka` (el productor), `clock` (duerme hasta cada mesa) y `cli` (clap y los textos).
 - **`main.rs`**: la raíz de composición; imprime el error con sus causas.
@@ -38,5 +38,5 @@ Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → appl
 
 ## Librerías
 
-- **rdkafka 0.39**, sin las features por defecto (tokio) y con `libz`: el `BaseProducer` síncrono basta. Compila librdkafka desde C (make y un compilador C; sin CMake), unos 15 s la primera vez. La 0.40.0 salió el 21-11-2026: subir tras la espera de Dependabot. Al conectar pide los metadatos del topic con `allow.auto.create.topics=false`, para fallar pronto si Kafka o el topic no están.
+- **rdkafka 0.39**, la del workspace, sin las features por defecto (tokio) y con `libz`: el `BaseProducer` síncrono basta. Compila librdkafka desde C (make y un compilador C; sin CMake), unos 15 s la primera vez. La 0.40.0 salió el 21-11-2026: subir tras la espera de Dependabot. Al conectar pide los metadatos del topic con `allow.auto.create.topics=false`, para fallar pronto si Kafka o el topic no están.
 - **serde_json**: el mensaje. **clap 4.6** y **thiserror**, como en el resto del workspace.

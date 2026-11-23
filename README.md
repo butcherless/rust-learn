@@ -15,6 +15,7 @@ README; they share one `Cargo.lock`, one `target/`, the toolchain and CI.
 | [calendario-laboral](apps/calendario-laboral) | A console work calendar (holidays, vacation, shifts, hours) stored in JSON, with year and month views | `cargo cal` |
 | [escrutinio](apps/escrutinio) | A mock of the Spanish 2026 general election count by province, in a terminal UI | `cargo esc` |
 | [escrutinio-simulador](apps/escrutinio-simulador) | Replays the 2023 election count polling station by polling station, publishing each one to Kafka | `cargo esc-sim` |
+| [escrutinio-servicio](apps/escrutinio-servicio) | Consumes those polling stations, stores them in PostgreSQL and serves the totals by province over HTTP | `cargo esc-srv` |
 
 Each project's README explains its usage.
 

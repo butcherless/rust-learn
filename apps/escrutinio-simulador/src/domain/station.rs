@@ -3,14 +3,14 @@
 //!
 //! `build` une las filas de mesas (`09`) con sus votos por candidatura (`10`), deja fuera el CERA
 //! y comprueba que el fichero cuadra antes de publicar nada. Lo que solo afecta a una mesa, como
-//! tener más votantes que censo, no rechaza el fichero: lo valida `validation`.
+//! tener más votantes que censo, no rechaza el fichero: lo valida el contrato (`check_voters`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use thiserror::Error;
 
-use super::validation::validate;
+use escrutinio_contrato::check_voters;
 
 /// El municipio con el que Interior marca las filas del voto exterior (CERA).
 pub const CERA_MUNICIPALITY: &str = "999";
@@ -116,7 +116,7 @@ impl Dataset {
             rejected: self
                 .stations
                 .iter()
-                .filter(|s| validate(s).is_err())
+                .filter(|s| check_voters(s.voters(), s.census).is_err())
                 .count(),
             provinces: self
                 .stations

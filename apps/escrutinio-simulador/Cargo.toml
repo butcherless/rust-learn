@@ -6,8 +6,8 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
-# Without tokio: the simulator uses the synchronous BaseProducer.
-rdkafka = { version = "0.39.0", default-features = false, features = ["libz"] }
+escrutinio-contrato.workspace = true
+rdkafka.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

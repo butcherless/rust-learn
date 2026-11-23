@@ -12,13 +12,15 @@ A Cargo workspace that holds small proof-of-concept Rust projects. Each one is a
   - `apps/calendario-laboral` (binary `calendario`): a console work calendar stored in JSON. Its docs and user-facing text are in Spanish (RNF-07).
   - `apps/escrutinio`: a TUI mock of the 2026 Spanish general election count by province, with simulated votes. Its docs and user-facing text are in Spanish; its rules are in `docs/requisitos-escrutinio.html`.
   - `apps/escrutinio-simulador`: a command that publishes the real 2023 polling-station results to Kafka over two hours, the first app of the escrutinio backend. Spanish like escrutinio, whose requirements document it follows.
-- `libs/<name>/`: shared libraries, without a `main`. None exist yet. Create one only when two projects really need the same code, keep it pure domain (no I/O), and declare it in `[workspace.dependencies]`.
-- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*"]` (add `"libs/*"` with the first library) and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true`. A member can add features on top with `dep = { workspace = true, features = [...] }`.
+  - `apps/escrutinio-servicio`: the service that consumes those polling stations from Kafka, stores them in PostgreSQL and serves the snapshots by province over HTTP (axum). Spanish like escrutinio.
+- `libs/<name>/`: shared libraries, without a `main`. Create one only when two projects really need the same code, keep it pure domain (no I/O), and declare it in `[workspace.dependencies]` with its path and version (a path without a version is a wildcard for `cargo deny`).
+  - `libs/escrutinio-contrato`: the Kafka messages, the polling-station validation and the snapshot shared by the escrutinio apps.
+- Root `Cargo.toml` is a virtual manifest: `members = ["apps/*", "libs/*"]` and `[workspace.package]` (`version`, `edition`, `publish = false`), which members inherit with `field.workspace = true`. Dependencies stay in each member until a second one shares them; then move the version to `[workspace.dependencies]` and use `dep.workspace = true`. A member can add features on top with `dep = { workspace = true, features = [...] }`.
 - Profiles (`[profile.*]`) only take effect in the root `Cargo.toml`.
 - `rust-toolchain.toml` pins Rust 1.99.1, because 1.100.0 breaks the line coverage that CI checks. TOOL-1 in `docs/recurring-tasks.md` has the measurements and when to go back to stable.
-- Every crate has a single version in `Cargo.lock` except three transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only) and `syn` 2/3 (derive_more and strum vs clap_derive). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
+- Every crate has a single version in `Cargo.lock` except four transitive duplicates that come from upstream and can't be unified from here: `base64` 0.22/0.23 (postgres-protocol and wiremock vs hyper-util), `core-foundation` 0.9/0.10 (system-configuration vs rustls-platform-verifier, macOS only), `syn` 2/3 (derive_more and strum vs clap_derive) and `wasi` 0.11/0.14 (mio vs whoami, wasm only). Check with `cargo tree --workspace -d`; `cargo deny check` fails on any other duplicate (`deny.toml` lists the allowed ones).
 - `docs/`: workspace documents. `docs/recurring-tasks.md` lists the periodic reviews (code against SOLID, official docs, functional style, maintained and non-deprecated libraries and features, and duplication; CI efficiency and security). When asked to apply it, present a coded, prioritized plan first and apply only the approved actions, one commit each.
-- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`, `cargo esc`, `cargo esc-sim`).
+- `.cargo/config.toml` holds one run alias per app (`cargo pr`, `cargo sev`, `cargo cal`, `cargo esc`, `cargo esc-sim`, `cargo esc-srv`).
 - `.idea/` is ignored. The README explains how to open the workspace in IntelliJ.
 
 ## Commands
@@ -55,7 +57,7 @@ CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on PRs, with `--loc
 - `lint`: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`, once.
 - `deny`: `cargo deny check` with `deny.toml`: RustSec advisories, licenses (permissive ones only), duplicate versions and sources (crates.io only). A new license or duplicate has to be reviewed and added there. The workflow also runs every Monday, so new advisories show up without a push.
 - `projects`: lists the members with `cargo metadata`, so a new app joins the matrix without editing the workflow.
-- `build-and-test`, one job per member (`fail-fast: false`): `cargo build --release -p <package>`, then `cargo llvm-cov -p <package> --fail-under-lines 90`, which runs its unit and integration tests (not doctests, which need nightly), and the HTML report as the `coverage-html-<package>` artifact.
+- `build-and-test`, one job per member (`fail-fast: false`): `cargo build --release -p <package>`, then (for escrutinio-servicio only) `docker compose -f compose/escrutinio.yaml up -d --wait kafka postgres` and `ESCRUTINIO_INTEGRACION=1`, then `cargo llvm-cov -p <package> --fail-under-lines 90`, which runs its unit and integration tests (not doctests, which need nightly), and the HTML report as the `coverage-html-<package>` artifact.
 
 Workflow rules: actions are pinned to a commit SHA with the version in a comment, the toolchain and tools (`cargo-llvm-cov`, `cargo-deny`) have fixed versions, and matrix values reach scripts through `env`, never `${{ }}` inside `run`. After editing a workflow or `dependabot.yml`, run `zizmor .github/` (`brew install zizmor`); it should report no findings.
 
@@ -83,7 +85,7 @@ Each fact lives in one place; the others link to it.
 
 ### Tests
 
-- Tests must not use the real network or need tokens. Use wiremock for HTTP clients and in-memory fakes for ports.
+- Tests must not use the real network or need tokens. Use wiremock for HTTP clients and in-memory fakes for ports. The one exception is escrutinio-servicio's integration tests: they use the Kafka and PostgreSQL of `compose/escrutinio.yaml` on localhost, only with `ESCRUTINIO_INTEGRACION=1`, and skip otherwise.
 - Share test builders instead of copying them: a `#[cfg(test)]` fixtures module for unit tests, and `tests/common/mod.rs` (included with `mod common;`) for integration tests.
 - Literals in tests:
   - A text that several tests check (a status message, a warning) is a public constant in production. One test pins its exact value with a literal (`assert_eq!(LOADING, "Loading…")`), and the other tests use the constant. A wrong edit then fails one test, and a deliberate change touches two places.

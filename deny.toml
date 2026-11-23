@@ -33,9 +33,10 @@ ignore = true
 # A second version of a crate fails, as the root CLAUDE.md asks ("a single version in Cargo.lock").
 multiple-versions = "deny"
 wildcards = "deny"
-# Transitive duplicates that can't be unified from here (root CLAUDE.md, Layout). base64 0.22/0.23
-# isn't listed: 0.22 only comes with wiremock, a dev-dependency, which this check leaves out.
+# Transitive duplicates that can't be unified from here (root CLAUDE.md, Layout).
 skip = [
+    { crate = "base64@0.22.1", reason = "postgres-protocol (tokio-postgres) and wiremock use 0.22 and hyper-util 0.23" },
+    { crate = "wasi@0.11.1+wasi-snapshot-preview1", reason = "mio uses 0.11 and whoami (tokio-postgres) 0.14 (wasm only)" },
     { crate = "core-foundation@0.9.4", reason = "system-configuration uses 0.9 and rustls-platform-verifier 0.10 (macOS only)" },
     { crate = "syn@2.0.119", reason = "derive_more and strum use syn 2 and clap_derive syn 3" },
 ]

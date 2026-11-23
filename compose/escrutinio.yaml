@@ -1,4 +1,4 @@
-# Kafka local para el simulador de escrutinio (y, más adelante, el servicio).
+# Kafka y PostgreSQL locales para el simulador y el servicio de escrutinio.
 #   docker compose -f compose/escrutinio.yaml up -d
 # Un solo nodo KRaft en localhost:9092 con la configuración por defecto de la imagen, el topic
 # escrutinio.mesas con 6 particiones y su dead letter, escrutinio.mesas.dlq, con una
@@ -28,3 +28,19 @@ services:
         bin=/opt/kafka/bin/kafka-topics.sh
         $$bin --bootstrap-server localhost:9092 --create --if-not-exists --topic escrutinio.mesas --partitions 6
         $$bin --bootstrap-server localhost:9092 --create --if-not-exists --topic escrutinio.mesas.dlq --partitions 1
+
+  # PostgreSQL 17 (el servicio usa transaction_timeout, que llegó en la 17) en localhost:5432.
+  # Usuario, contraseña y base de datos: escrutinio. Solo para desarrollo local.
+  postgres:
+    image: postgres:17.6
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: escrutinio
+      POSTGRES_PASSWORD: escrutinio
+      POSTGRES_DB: escrutinio
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "escrutinio"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

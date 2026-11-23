@@ -116,9 +116,15 @@ jobs:
       with:
         # Pinned like the toolchain, so a new release can't break CI without a code change.
         tool: cargo-llvm-cov@0.9.1
+    # escrutinio-servicio's integration tests need the Kafka and PostgreSQL of its compose file,
+    # on localhost; the other projects don't start them.
+    - if: matrix.package == 'escrutinio-servicio'
+      run: docker compose -f compose/escrutinio.yaml up -d --wait kafka postgres
     # Runs the project's unit and integration tests once with coverage, prints the per-file
     # summary, and fails if the project's line coverage is below the minimum.
     - run: cargo llvm-cov --locked -p "$PACKAGE" --fail-under-lines 90
+      env:
+        ESCRUTINIO_INTEGRACION: ${{ matrix.package == 'escrutinio-servicio' && '1' || '' }}
     # The HTML report is built from the data above, without running the tests again.
     - if: ${{ !cancelled() }}
       run: cargo llvm-cov report --html -p "$PACKAGE"

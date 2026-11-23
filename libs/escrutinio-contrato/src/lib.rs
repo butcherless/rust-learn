@@ -1,0 +1,304 @@
+//! El contrato entre las apps del escrutinio (requisitos de escrutinio, «Backend»): los mensajes de
+//! Kafka, la validación de una mesa y el snapshot que el servicio sirve a la TUI.
+//!
+//! Puro, sin E/S: solo tipos con serde y reglas. Los campos del JSON están en inglés, como el código.
+
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+/// Una mesa escrutada, tal como viaja en `escrutinio.mesas`. La clave del mensaje es `province`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StationMessage {
+    pub province: String,
+    pub municipality: String,
+    pub district: String,
+    pub section: String,
+    pub table: String,
+    pub census: u32,
+    pub blank: u32,
+    pub invalid: u32,
+    pub votes: Vec<VoteMessage>,
+}
+
+/// Los votos de una candidatura en una mesa, con sus siglas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoteMessage {
+    pub candidacy: u32,
+    pub acronym: String,
+    pub votes: u32,
+}
+
+impl StationMessage {
+    /// La clave del mensaje: el código de provincia, para que sus mesas vayan a la misma partición.
+    pub fn key(&self) -> &str {
+        &self.province
+    }
+
+    /// La mesa como texto: `provincia-municipio-distrito-sección-mesa`.
+    pub fn id(&self) -> String {
+        format!(
+            "{}-{}-{}-{}-{}",
+            self.province, self.municipality, self.district, self.section, self.table
+        )
+    }
+
+    pub fn candidacy_votes(&self) -> u32 {
+        self.votes.iter().map(|v| v.votes).sum()
+    }
+
+    /// Votantes = blancos + nulos + votos a candidaturas.
+    pub fn voters(&self) -> u32 {
+        self.blank + self.invalid + self.candidacy_votes()
+    }
+}
+
+/// Por qué una mesa va al dead letter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rejection {
+    /// Más votantes que censo de escrutinio (4 mesas de León en 2023).
+    VotersOverCensus { voters: u32, census: u32 },
+    /// El mensaje no es una mesa válida en JSON.
+    Malformed { detail: String },
+}
+
+impl Rejection {
+    /// El código del motivo en el mensaje del dead letter.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Rejection::VotersOverCensus { .. } => "voters_over_census",
+            Rejection::Malformed { .. } => "malformed",
+        }
+    }
+}
+
+impl fmt::Display for Rejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Rejection::VotersOverCensus { voters, census } => f.pad(&format!(
+                "{voters} votantes y {census} de censo de escrutinio"
+            )),
+            Rejection::Malformed { detail } => f.pad(&format!("mensaje no válido: {detail}")),
+        }
+    }
+}
+
+/// La regla de los votantes: no pueden pasar del censo de escrutinio.
+pub fn check_voters(voters: u32, census: u32) -> Result<(), Rejection> {
+    if voters > census {
+        Err(Rejection::VotersOverCensus { voters, census })
+    } else {
+        Ok(())
+    }
+}
+
+/// `Ok` si la mesa se puede contar; si no, el motivo.
+pub fn validate(station: &StationMessage) -> Result<(), Rejection> {
+    check_voters(station.voters(), station.census)
+}
+
+/// Un mensaje de `escrutinio.mesas.dlq`: el motivo, su texto y la mesa o, si no se pudo leer, el
+/// mensaje tal cual.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeadLetterMessage {
+    pub reason: String,
+    pub detail: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub station: Option<StationMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw: Option<String>,
+}
+
+impl DeadLetterMessage {
+    /// Una mesa que no pasó la validación.
+    pub fn rejected(station: StationMessage, rejection: &Rejection) -> Self {
+        Self {
+            reason: rejection.code().to_owned(),
+            detail: rejection.to_string(),
+            station: Some(station),
+            raw: None,
+        }
+    }
+
+    /// Un mensaje que no se pudo leer como mesa.
+    pub fn malformed(raw: &[u8], detail: String) -> Self {
+        let rejection = Rejection::Malformed { detail };
+        Self {
+            reason: rejection.code().to_owned(),
+            detail: rejection.to_string(),
+            station: None,
+            raw: Some(String::from_utf8_lossy(raw).into_owned()),
+        }
+    }
+}
+
+/// El acumulado de una circunscripción, tal como lo sirve `GET /snapshots`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProvinceSnapshot {
+    pub province: String,
+    /// Mesas escrutadas.
+    pub stations: u32,
+    /// Censo de las mesas escrutadas.
+    pub census: u64,
+    pub voters: u64,
+    pub blank: u64,
+    pub invalid: u64,
+    /// De más a menos votos.
+    pub votes: Vec<CandidacyTotal>,
+}
+
+/// Los votos de una candidatura en una circunscripción.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CandidacyTotal {
+    pub candidacy: u32,
+    pub acronym: String,
+    pub votes: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn station(census: u32) -> StationMessage {
+        StationMessage {
+            province: "51".to_owned(),
+            municipality: "001".to_owned(),
+            district: "01".to_owned(),
+            section: "001".to_owned(),
+            table: "A".to_owned(),
+            census,
+            blank: 1,
+            invalid: 2,
+            votes: vec![
+                VoteMessage {
+                    candidacy: 1,
+                    acronym: "AAA".to_owned(),
+                    votes: 30,
+                },
+                VoteMessage {
+                    candidacy: 2,
+                    acronym: "BBB".to_owned(),
+                    votes: 20,
+                },
+            ],
+        }
+    }
+
+    const STATION_JSON: &str = r#"{"province":"51","municipality":"001","district":"01","section":"001","table":"A","census":100,"blank":1,"invalid":2,"votes":[{"candidacy":1,"acronym":"AAA","votes":30},{"candidacy":2,"acronym":"BBB","votes":20}]}"#;
+
+    #[test]
+    fn the_station_message_is_this_json_both_ways() {
+        assert_eq!(
+            serde_json::to_string(&station(100)).ok().as_deref(),
+            Some(STATION_JSON)
+        );
+        assert_eq!(
+            serde_json::from_str::<StationMessage>(STATION_JSON).ok(),
+            Some(station(100))
+        );
+    }
+
+    #[test]
+    fn a_station_has_its_key_id_and_voters() {
+        let station = station(100);
+        assert_eq!(station.key(), "51");
+        assert_eq!(station.id(), "51-001-01-001-A");
+        assert_eq!(station.candidacy_votes(), 50);
+        assert_eq!(station.voters(), 53);
+    }
+
+    #[test]
+    fn validates_that_voters_fit_in_the_census() {
+        [
+            (100, Ok(())),
+            (53, Ok(())),
+            (
+                52,
+                Err(Rejection::VotersOverCensus {
+                    voters: 53,
+                    census: 52,
+                }),
+            ),
+        ]
+        .into_iter()
+        .for_each(|(census, expected)| {
+            assert_eq!(validate(&station(census)), expected, "{census}")
+        });
+    }
+
+    #[test]
+    fn rejections_have_a_code_and_a_text() {
+        [
+            (
+                Rejection::VotersOverCensus {
+                    voters: 53,
+                    census: 52,
+                },
+                "voters_over_census",
+                "53 votantes y 52 de censo de escrutinio",
+            ),
+            (
+                Rejection::Malformed {
+                    detail: "EOF".to_owned(),
+                },
+                "malformed",
+                "mensaje no válido: EOF",
+            ),
+        ]
+        .into_iter()
+        .for_each(|(rejection, code, text)| {
+            assert_eq!(
+                (rejection.code(), rejection.to_string().as_str()),
+                (code, text)
+            );
+        });
+    }
+
+    #[test]
+    fn the_dead_letter_carries_the_station_or_the_raw_message() {
+        let rejection = Rejection::VotersOverCensus {
+            voters: 53,
+            census: 52,
+        };
+        let rejected = serde_json::to_string(&DeadLetterMessage::rejected(station(52), &rejection));
+        assert_eq!(
+            rejected.ok(),
+            Some(format!(
+                r#"{{"reason":"voters_over_census","detail":"53 votantes y 52 de censo de escrutinio","station":{}}}"#,
+                STATION_JSON.replace("\"census\":100", "\"census\":52")
+            ))
+        );
+        let malformed = DeadLetterMessage::malformed(b"{oops", "EOF".to_owned());
+        assert_eq!(
+            serde_json::to_string(&malformed).ok().as_deref(),
+            Some(r#"{"reason":"malformed","detail":"mensaje no válido: EOF","raw":"{oops"}"#)
+        );
+        let back = serde_json::to_string(&malformed)
+            .ok()
+            .and_then(|json| serde_json::from_str::<DeadLetterMessage>(&json).ok());
+        assert_eq!(back, Some(malformed));
+    }
+
+    #[test]
+    fn the_snapshot_is_this_json() {
+        let snapshot = ProvinceSnapshot {
+            province: "51".to_owned(),
+            stations: 2,
+            census: 200,
+            voters: 106,
+            blank: 2,
+            invalid: 4,
+            votes: vec![CandidacyTotal {
+                candidacy: 1,
+                acronym: "AAA".to_owned(),
+                votes: 60,
+            }],
+        };
+        let json = r#"{"province":"51","stations":2,"census":200,"voters":106,"blank":2,"invalid":4,"votes":[{"candidacy":1,"acronym":"AAA","votes":60}]}"#;
+        assert_eq!(serde_json::to_string(&snapshot).ok().as_deref(), Some(json));
+        assert_eq!(
+            serde_json::from_str::<ProvinceSnapshot>(json).ok(),
+            Some(snapshot)
+        );
+    }
+}

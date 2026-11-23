@@ -320,7 +320,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 
 <section aria-labelledby="backend">
   <h2 id="backend">Backend: simulador, Kafka, servicio y PostgreSQL</h2>
-  <p>Tres apps del workspace, que solo se comunican por Kafka y HTTP. Kafka solo transporta (sin Streams ni transacciones); el estado y las transacciones están en PostgreSQL.</p>
+  <p>Tres apps del workspace, que solo se comunican por Kafka y HTTP. Kafka solo transporta (sin Streams ni transacciones); el estado y las transacciones están en PostgreSQL. Los mensajes, la validación de una mesa y el snapshot son una librería compartida, <code>libs/escrutinio-contrato</code>.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>App</th><th>Qué hace</th><th>Habla con</th></tr></thead>
@@ -344,35 +344,35 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h3>Kafka</h3>
   <ul>
     <li>Topic <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code> y 6 particiones. Tiene que existir: los clientes no lo crean. Un mensaje por mesa: su clave, censo, blancos, nulos y votos por candidatura.</li>
-    <li>Dead letter: <code>escrutinio.mesas.dlq</code>, con 1 partición. Cada mensaje lleva el motivo (<code>reason</code>, como <code>voters_over_census</code>), su texto (<code>detail</code>) y la mesa (<code>station</code>). En 2023 recibe 4 mesas.</li>
+    <li>Dead letter: <code>escrutinio.mesas.dlq</code>, con 1 partición. Cada mensaje lleva el motivo (<code>reason</code>), su texto (<code>detail</code>) y la mesa (<code>station</code>) o, si no se pudo leer, el mensaje tal cual (<code>raw</code>). Motivos: <code>voters_over_census</code> (en 2023, 4 mesas, que manda el simulador) y <code>malformed</code> (lo que el servicio no puede leer como mesa).</li>
     <li>La clave del mensaje es el código de provincia: las mesas de una provincia van en orden a la misma partición.</li>
-    <li>El productor usa <code>acks=all</code>. El consumidor confirma el offset a mano, después del <code>COMMIT</code> en PostgreSQL.</li>
+    <li>El productor usa <code>acks=all</code>. El consumidor (grupo <code>escrutinio-servicio</code>, desde el principio si es nuevo) usa el autocommit de Kafka cada 5 s, pero solo de los offsets que guarda tras el <code>COMMIT</code> en PostgreSQL (<code>enable.auto.offset.store=false</code>). Confirmar cada mensaje a mano dejaba el consumidor parado tras unas 50.000 mesas.</li>
   </ul>
 
   <h3>Servicio</h3>
   <p>Hexagonal ligera, con los módulos en inglés y las dependencias hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
-    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa, el snapshot y sus reglas: la misma validación que el simulador (lo que no la pase va al dead letter), y aplicar una mesa a un snapshot da el snapshot nuevo.</dd></div>
-    <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em> y <em>consultar los snapshots</em>. Puerto: el repositorio, como trait genérico (sin <code>dyn</code>).</dd></div>
+    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. Qué hacer con cada mensaje: registrar la mesa o mandarla al dead letter, con la validación del contrato.</dd></div>
+    <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em> y <em>consultar los snapshots</em>. Puertos, como traits genéricos (sin <code>dyn</code>): el registro de mesas, el dead letter y la lectura de snapshots.</dd></div>
     <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP. Salida: el repositorio en PostgreSQL.</dd></div>
   </dl>
-  <p>La API tiene una sola consulta, <code>GET /snapshots</code>: las 52 circunscripciones en JSON, con mesas escrutadas, censo, votantes, blancos, nulos y votos por candidatura.</p>
+  <p>La API tiene una sola consulta, <code>GET /snapshots</code>: las circunscripciones con alguna mesa escrutada (52 al terminar), por código de provincia, en JSON, con mesas escrutadas, censo, votantes, blancos, nulos y votos por candidatura de más a menos. Si PostgreSQL falla, responde 503.</p>
 
   <h3>PostgreSQL</h3>
   <ul>
     <li><code>mesa_escrutada</code>: una fila por mesa, con su clave como clave primaria.</li>
-    <li><code>provincia_snapshot</code>: una fila por circunscripción (52).</li>
+    <li><code>provincia_snapshot</code>: una fila por circunscripción, creada con su primera mesa.</li>
     <li><code>votos_provincia</code>: votos por provincia y candidatura.</li>
   </ul>
   <p>Cada mesa, en una transacción:</p>
   <ol>
     <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta, la mesa ya estaba contada y termina.</li>
-    <li><code>UPDATE provincia_snapshot</code> solo en la fila de su provincia.</li>
+    <li><code>INSERT INTO provincia_snapshot … ON CONFLICT DO UPDATE</code>, sumando solo en la fila de su provincia.</li>
     <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE</code>, sumando los votos.</li>
-    <li><code>COMMIT</code>; después, el offset en Kafka.</li>
+    <li><code>COMMIT</code>; después se guarda el offset, que Kafka confirma en los 5 s siguientes.</li>
   </ol>
-  <p>Si el servicio cae entre el <code>COMMIT</code> y el offset, recibe la mesa otra vez y el paso 1 la descarta. No hay que recalcular nada: cada snapshot ya está en su fila.</p>
-  <p>Las transacciones son cortas, de 1 a 5 ms: nada de Kafka ni de red dentro de ellas, y una mesa por transacción. La sesión del servicio limita <code>transaction_timeout</code> a 5 s, <code>statement_timeout</code> a 2 s e <code>idle_in_transaction_session_timeout</code> a 1 s. Si salta un límite, la transacción se deshace, el offset no se confirma y la mesa se reintenta.</p>
+  <p>Si el servicio cae antes de que se confirme el offset, recibe esas mesas otra vez y el paso 1 las descarta. No hay que recalcular nada: cada snapshot ya está en su fila. Las tablas se crean al arrancar si no existen. La API lee los snapshots con otra conexión y en una sola sentencia, así que ve un estado coherente sin esperar al consumidor.</p>
+  <p>Las transacciones son cortas, de 1 a 5 ms: nada de Kafka ni de red dentro de ellas, y una mesa por transacción. La sesión del servicio limita <code>transaction_timeout</code> a 5 s, <code>statement_timeout</code> a 2 s e <code>idle_in_transaction_session_timeout</code> a 1 s. Si salta un límite o falla PostgreSQL, la transacción se deshace, el offset no se guarda y el servicio termina con error; al arrancarlo de nuevo, Kafka le entrega otra vez las mesas sin confirmar.</p>
 
   <h3>TUI</h3>
   <ul>
@@ -394,7 +394,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
       </tbody>
     </table>
   </div>
-  <p>Unas 17 transacciones por segundo en el pico y, con mensajes de 1 KB, unos 60 MB en Kafka. La TUI hace 6 peticiones por minuto. Ninguna pieza necesita escalar.</p>
+  <p>Unas 17 transacciones por segundo en el pico y, con mensajes de 1 KB, unos 60 MB en Kafka. La TUI hace 6 peticiones por minuto. Ninguna pieza necesita escalar: en local, el servicio registra unas 800 mesas por segundo, y la carga completa en 1 minuto (60.310 mesas) termina 4 s después que el simulador, con los totales oficiales.</p>
 </section>
 
 <section aria-labelledby="pendiente">
