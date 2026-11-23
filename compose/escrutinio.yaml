@@ -1,7 +1,8 @@
 # Kafka local para el simulador de escrutinio (y, más adelante, el servicio).
 #   docker compose -f compose/escrutinio.yaml up -d
-# Un solo nodo KRaft en localhost:9092 con la configuración por defecto de la imagen, y el topic
-# escrutinio.mesas con 6 particiones (requisitos de escrutinio, «Kafka»).
+# Un solo nodo KRaft en localhost:9092 con la configuración por defecto de la imagen, el topic
+# escrutinio.mesas con 6 particiones y su dead letter, escrutinio.mesas.dlq, con una
+# (requisitos de escrutinio, «Kafka»).
 services:
   kafka:
     image: apache/kafka:4.1.0
@@ -13,20 +14,17 @@ services:
       timeout: 10s
       retries: 20
 
-  # Crea el topic y termina. Comparte la red del broker, así que localhost:9092 es el broker.
+  # Crea los topics y termina. Comparte la red del broker, así que localhost:9092 es el broker.
   topics:
     image: apache/kafka:4.1.0
     network_mode: service:kafka
     depends_on:
       kafka:
         condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - /opt/kafka/bin/kafka-topics.sh
-      - --bootstrap-server
-      - localhost:9092
-      - --create
-      - --if-not-exists
-      - --topic
-      - escrutinio.mesas
-      - --partitions
-      - "6"
+      - |
+        set -e
+        bin=/opt/kafka/bin/kafka-topics.sh
+        $$bin --bootstrap-server localhost:9092 --create --if-not-exists --topic escrutinio.mesas --partitions 6
+        $$bin --bootstrap-server localhost:9092 --create --if-not-exists --topic escrutinio.mesas.dlq --partitions 1

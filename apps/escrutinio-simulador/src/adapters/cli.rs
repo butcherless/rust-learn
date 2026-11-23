@@ -23,6 +23,10 @@ pub struct Args {
     #[arg(long, default_value = "escrutinio.mesas")]
     pub topic: String,
 
+    /// Topic del dead letter, donde van las mesas que no pasan la validación.
+    #[arg(long, default_value = "escrutinio.mesas.dlq")]
+    pub topic_dlq: String,
+
     /// Cuánto dura el escrutinio: un número con h, m o s (2h, 90m, 30s).
     #[arg(long, value_name = "DURACIÓN", default_value = "2h", value_parser = parse_duration)]
     pub duracion: Duration,
@@ -88,6 +92,23 @@ pub fn checked(summary: &Summary) -> String {
         thousands(summary.census),
         thousands(summary.voters),
         format!("{turnout:.2} %").replace('.', ",")
+    ) + &match summary.rejected {
+        0 => String::new(),
+        1 => " 1 no es válida e irá al dead letter.".to_owned(),
+        n => format!(
+            " {} no son válidas e irán al dead letter.",
+            thousands(n as u64)
+        ),
+    }
+}
+
+/// La línea final.
+pub fn published(valid: usize, rejected: usize, elapsed: Duration) -> String {
+    format!(
+        "Publicadas {} mesas y {} en el dead letter en {}.",
+        thousands(valid as u64),
+        thousands(rejected as u64),
+        clock(elapsed)
     )
 }
 
@@ -137,6 +158,7 @@ mod tests {
     fn describes_the_checked_data() {
         let summary = Summary {
             stations: 60_314,
+            rejected: 0,
             provinces: 52,
             census: 35_141_198,
             voters: 24_744_222,
@@ -144,6 +166,36 @@ mod tests {
         assert_eq!(
             checked(&summary),
             "Comprobadas 60.314 mesas en 52 circunscripciones: 35.141.198 de censo y 24.744.222 votantes (70,41 %)."
+        );
+    }
+
+    #[test]
+    fn counts_the_stations_for_the_dead_letter() {
+        let summary = |rejected| Summary {
+            stations: 10,
+            rejected,
+            provinces: 1,
+            census: 100,
+            voters: 50,
+        };
+        [
+            (0, "votantes (50,00 %)."),
+            (
+                1,
+                "votantes (50,00 %). 1 no es válida e irá al dead letter.",
+            ),
+            (
+                4,
+                "votantes (50,00 %). 4 no son válidas e irán al dead letter.",
+            ),
+        ]
+        .into_iter()
+        .for_each(|(rejected, end)| {
+            assert!(checked(&summary(rejected)).ends_with(end), "{rejected}")
+        });
+        assert_eq!(
+            published(60_310, 4, Duration::from_secs(300)),
+            "Publicadas 60.310 mesas y 4 en el dead letter en 0:05:00."
         );
     }
 }

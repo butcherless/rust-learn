@@ -35,10 +35,11 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     let plan = schedule(dataset.stations, args.duracion, args.semilla);
-    let mut publisher = KafkaPublisher::connect(&args.kafka, &args.topic)?;
+    let mut publisher = KafkaPublisher::connect(&args.kafka, &args.topic, &args.topic_dlq)?;
     println!(
-        "Publicando en {} ({}) durante {}…",
+        "Publicando en {} y {} ({}) durante {}…",
         args.topic,
+        args.topic_dlq,
         args.kafka,
         cli::clock(args.duracion)
     );
@@ -56,9 +57,8 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         },
     )?;
     println!(
-        "Publicadas {} mesas en {}.",
-        cli::thousands(published as u64),
-        cli::clock(pacer.elapsed())
+        "{}",
+        cli::published(published.valid, published.rejected, pacer.elapsed())
     );
     Ok(())
 }

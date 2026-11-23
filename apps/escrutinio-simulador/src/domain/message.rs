@@ -1,11 +1,13 @@
-//! El mensaje de una mesa en Kafka (requisitos de escrutinio, «Kafka»): la clave es el código de
-//! provincia y el valor, la mesa en JSON. Es el contrato con el servicio.
+//! Los mensajes de Kafka (requisitos de escrutinio, «Kafka»): la clave es el código de provincia y
+//! el valor, la mesa en JSON (`StationMessage`) o, en el dead letter, la mesa con el motivo de su
+//! rechazo (`DeadLetterMessage`). Son el contrato con el servicio.
 
 use std::collections::BTreeMap;
 
 use serde::Serialize;
 
 use super::station::{Candidacy, Station};
+use super::validation::Rejection;
 
 /// La mesa tal como viaja en el topic.
 #[derive(Debug, Serialize)]
@@ -60,6 +62,24 @@ impl<'a> StationMessage<'a> {
     }
 }
 
+/// Una mesa que no pasó la validación: `reason` es el código del motivo y `detail`, el texto.
+#[derive(Debug, Serialize)]
+pub struct DeadLetterMessage<'a> {
+    pub reason: &'static str,
+    pub detail: String,
+    pub station: StationMessage<'a>,
+}
+
+impl<'a> DeadLetterMessage<'a> {
+    pub fn new(station: StationMessage<'a>, rejection: Rejection) -> Self {
+        Self {
+            reason: rejection.code(),
+            detail: rejection.to_string(),
+            station,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,6 +95,24 @@ mod tests {
             Some(
                 r#"{"province":"51","municipality":"001","district":"01","section":"001","table":"A","census":100,"blank":1,"invalid":2,"votes":[{"candidacy":1,"acronym":"AAA","votes":30},{"candidacy":2,"acronym":"BBB","votes":20}]}"#
             )
+        );
+    }
+
+    #[test]
+    fn the_dead_letter_carries_the_reason_and_the_station() {
+        let dataset = dataset();
+        let station = StationMessage::new(&dataset.stations[0], &dataset.candidacies);
+        let message = DeadLetterMessage::new(
+            station,
+            Rejection::VotersOverCensus {
+                voters: 53,
+                census: 52,
+            },
+        );
+        let json = serde_json::to_string(&message).unwrap_or_default();
+        assert!(
+            json.starts_with(r#"{"reason":"voters_over_census","detail":"53 votantes y 52 de censo de escrutinio","station":{"province":"51","#),
+            "{json}"
         );
     }
 }

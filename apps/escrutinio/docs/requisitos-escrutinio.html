@@ -298,7 +298,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
         <tr><td>Votos de <code>10</code> por mesa contra sus votos a candidaturas de <code>09</code></td><td><span class="tag real">cuadra</span> en todas</td></tr>
         <tr><td>Mesas por provincia contra <code>07</code></td><td><span class="tag real">cuadra</span> en las 52</td></tr>
         <tr><td>Votos por provincia (mesas + CERA) contra <code>07</code></td><td><span class="tag real">cuadra</span> en 50. <span class="tag est">no cuadra</span> en Cantabria (+4 blancos, +12 nulos) y Toledo (+5 blancos, +10 nulos, +175 a candidaturas): 206 papeletas, probablemente correcciones que no llegaron a <code>07</code>. Manda <code>09</code>.</td></tr>
-        <tr><td>Votantes de cada mesa contra su censo de escrutinio</td><td><span class="tag est">no cuadra</span> en 4 mesas de León (24-206 y 24-222), con 1.066 votantes de más; su censo del INE sí los cubre. Se publican tal cual.</td></tr>
+        <tr><td>Votantes de cada mesa contra su censo de escrutinio</td><td><span class="tag est">no cuadra</span> en 4 mesas de León (24-206 y 24-222), con 1.066 votantes de más; su censo del INE sí los cubre. Van al dead letter.</td></tr>
         <tr><td>Total de España (mesas + CERA) contra <code>07</code></td><td><span class="tag real">cuadra</span> censo de escrutinio 37.469.458 y 350 escaños</td></tr>
       </tbody>
     </table>
@@ -336,6 +336,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <ul>
     <li>Recibe la carpeta con <code>09</code>, <code>10</code>, <code>03</code> y <code>07</code>, la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
     <li>Antes de publicar, <a href="#datos2023">comprueba</a> las mesas: claves únicas, votos que suman y candidaturas conocidas, y las mesas de cada provincia contra <code>07</code>. Si algo falla, termina con error sin publicar nada.</li>
+    <li>Valida cada mesa: si tiene más votantes que censo de escrutinio, va al dead letter con su motivo y no se cuenta. El resto del escrutinio sigue.</li>
     <li>Las mesas con menos censo tienden a llegar antes, con la curva de la <a href="#carga">carga</a>. Con la misma semilla sale el mismo orden.</li>
     <li>No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya contado. Al terminar, muestra las mesas publicadas y el tiempo.</li>
   </ul>
@@ -343,6 +344,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h3>Kafka</h3>
   <ul>
     <li>Topic <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code> y 6 particiones. Tiene que existir: los clientes no lo crean. Un mensaje por mesa: su clave, censo, blancos, nulos y votos por candidatura.</li>
+    <li>Dead letter: <code>escrutinio.mesas.dlq</code>, con 1 partición. Cada mensaje lleva el motivo (<code>reason</code>, como <code>voters_over_census</code>), su texto (<code>detail</code>) y la mesa (<code>station</code>). En 2023 recibe 4 mesas.</li>
     <li>La clave del mensaje es el código de provincia: las mesas de una provincia van en orden a la misma partición.</li>
     <li>El productor usa <code>acks=all</code>. El consumidor confirma el offset a mano, después del <code>COMMIT</code> en PostgreSQL.</li>
   </ul>
@@ -350,7 +352,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h3>Servicio</h3>
   <p>Hexagonal ligera, con los módulos en inglés y las dependencias hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
-    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa, el snapshot y sus reglas: los votos de una mesa suman los de candidaturas (los votantes pueden pasar del censo, como en 4 mesas de 2023), y aplicar una mesa a un snapshot da el snapshot nuevo.</dd></div>
+    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. La mesa, el snapshot y sus reglas: la misma validación que el simulador (lo que no la pase va al dead letter), y aplicar una mesa a un snapshot da el snapshot nuevo.</dd></div>
     <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em> y <em>consultar los snapshots</em>. Puerto: el repositorio, como trait genérico (sin <code>dyn</code>).</dd></div>
     <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP. Salida: el repositorio en PostgreSQL.</dd></div>
   </dl>

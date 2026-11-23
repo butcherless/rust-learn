@@ -16,6 +16,7 @@ Desde la raíz del workspace:
 cargo esc-sim -- --solo-comprobar             # comprueba los ficheros de apps/escrutinio-simulador/datos
 cargo test -p escrutinio-simulador            # unitarios y tests/cli.rs, que ejecuta el binario
 cargo llvm-cov -p escrutinio-simulador        # cobertura; --open para el HTML
+docker compose -f compose/escrutinio.yaml up -d   # Kafka local con los dos topics, para probarlo de verdad
 ```
 
 `tests/data` es un extracto real de los ficheros de Interior: las mesas de Ceuta y Melilla (183), con sus filas de CERA y, en `07`, también el total de España, para probar los filtros. Los tests nunca conectan con Kafka.
@@ -24,8 +25,8 @@ cargo llvm-cov -p escrutinio-simulador        # cobertura; --open para el HTML
 
 Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → application → domain`. Cada módulo explica en su `//!` qué hace y qué regla cumple.
 
-- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones y `Summary`), `schedule` (la curva de llegada y el orden con semilla) y `message` (el JSON de una mesa, el contrato con el servicio).
-- **`application`**: `run` publica el plan; `Publisher` y `Pacer` son los puertos (traits genéricos, sin `dyn`), con fakes en los tests.
+- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones que rechazan el fichero entero, y `Summary`), `validation` (lo que manda una mesa sola al dead letter), `schedule` (la curva de llegada y el orden con semilla) y `message` (el JSON de una mesa y el del dead letter: el contrato con el servicio).
+- **`application`**: `run` valida y publica el plan, cada mesa en su `Topic`; `Publisher` y `Pacer` son los puertos (traits genéricos, sin `dyn`), con fakes en los tests.
 - **`adapters`**: `interior` (los ficheros de ancho fijo en Latin-1), `kafka` (el productor), `clock` (duerme hasta cada mesa) y `cli` (clap y los textos).
 - **`main.rs`**: la raíz de composición; imprime el error con sus causas.
 

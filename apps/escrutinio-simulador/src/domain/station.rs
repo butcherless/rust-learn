@@ -2,13 +2,15 @@
 //! mesa»).
 //!
 //! `build` une las filas de mesas (`09`) con sus votos por candidatura (`10`), deja fuera el CERA
-//! y comprueba que los datos cuadran antes de publicar nada. No comprueba que los votantes quepan
-//! en el censo: en 2023 no caben en 4 mesas de León, y los datos oficiales se publican tal cual.
+//! y comprueba que el fichero cuadra antes de publicar nada. Lo que solo afecta a una mesa, como
+//! tener más votantes que censo, no rechaza el fichero: lo valida `validation`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use thiserror::Error;
+
+use super::validation::validate;
 
 /// El municipio con el que Interior marca las filas del voto exterior (CERA).
 pub const CERA_MUNICIPALITY: &str = "999";
@@ -96,10 +98,12 @@ pub struct Dataset {
     pub candidacies: BTreeMap<u32, Candidacy>,
 }
 
-/// Los totales que se muestran al comprobar.
+/// Los totales que se muestran al comprobar. `rejected` son las mesas que irán al dead letter; las
+/// demás cifras las incluyen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Summary {
     pub stations: usize,
+    pub rejected: usize,
     pub provinces: usize,
     pub census: u64,
     pub voters: u64,
@@ -109,6 +113,11 @@ impl Dataset {
     pub fn summary(&self) -> Summary {
         Summary {
             stations: self.stations.len(),
+            rejected: self
+                .stations
+                .iter()
+                .filter(|s| validate(s).is_err())
+                .count(),
             provinces: self
                 .stations
                 .iter()
@@ -377,6 +386,7 @@ mod tests {
             dataset().summary(),
             Summary {
                 stations: 3,
+                rejected: 0,
                 provinces: 2,
                 census: 300,
                 voters: 159,
