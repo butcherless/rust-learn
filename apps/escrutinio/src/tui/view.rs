@@ -1,5 +1,7 @@
 //! Dibuja un [`App`]: la barra del título, la tabla de circunscripciones con su barra de votos y
-//! la fila del total, la leyenda y la ayuda (RN-08, RN-09). Solo lee el estado.
+//! la fila del total, la leyenda y la ayuda (RN-08, RN-09). Con el servicio (RN-11), el título es
+//! el de 2023, la ayuda no tiene pausa ni reinicio y, si falla, el pie muestra el error. Solo lee
+//! el estado.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -7,13 +9,20 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Row as TableRow, Table};
 
+use crate::census::Election;
 use crate::domain::{Tally, percent, ratio, thousands};
 use crate::mock::Row;
-use crate::tui::app::{App, Scale, Status};
+use crate::tui::app::{App, Scale, Source, Status};
 
-pub const TITLE: &str = "Elecciones generales España 2026";
 pub const HELP: &str =
     "↑/↓ desplazar · RePág/AvPág página · espacio pausa · r reiniciar · e escala · q salir";
+/// La ayuda con el servicio, que no tiene pausa ni reinicio.
+pub const HELP_SERVICE: &str = "↑/↓ desplazar · RePág/AvPág página · e escala · q salir";
+
+/// El título de `election`: `Elecciones generales España 2026`.
+pub fn title(election: Election) -> String {
+    format!("Elecciones generales España {}", election.year())
+}
 pub const TOTAL: &str = "Total España";
 
 /// Las texturas y colores de cada zona de la barra (RN-08).
@@ -41,13 +50,27 @@ pub fn draw(app: &App, frame: &mut Frame) {
     draw_title(app, frame, title);
     draw_table(app, frame, body);
     frame.render_widget(legend_line(app), legend);
-    frame.render_widget(Line::from(format!(" {HELP}")).dark_gray(), help);
+    frame.render_widget(help_line(app.source()), help);
+}
+
+/// La ayuda de las teclas o, si el servicio falló, su error.
+fn help_line(source: &Source) -> Line<'static> {
+    match source {
+        Source::Mock => Line::from(format!(" {HELP}")).dark_gray(),
+        Source::Service { error: None, .. } => Line::from(format!(" {HELP_SERVICE}")).dark_gray(),
+        Source::Service {
+            error: Some(error), ..
+        } => Line::from(format!(" {error}")).red(),
+    }
 }
 
 /// El título a la izquierda y el estado a la derecha, sobre fondo azul.
 fn draw_title(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Block::new().style(TITLE_BAR), area);
-    frame.render_widget(Line::from(format!(" {TITLE}")).bold(), area);
+    frame.render_widget(
+        Line::from(format!(" {}", title(app.election()))).bold(),
+        area,
+    );
     frame.render_widget(
         Line::from(format!("{} ", status_text(app.status()))).right_aligned(),
         area,
@@ -59,6 +82,8 @@ pub fn status_text(status: Status) -> &'static str {
         Status::Running => "▶ Escrutando",
         Status::Paused => "⏸ En pausa",
         Status::Finished => "✓ Escrutinio completo",
+        Status::Following => "● Siguiendo el servicio",
+        Status::Unreachable => "✗ Sin conexión con el servicio",
     }
 }
 
@@ -198,7 +223,7 @@ fn legend_line(app: &App) -> Line<'static> {
 mod tests {
     use super::*;
     use crate::tui::app::Message;
-    use crate::tui::app::fixtures::{app, apply};
+    use crate::tui::app::fixtures::{app, apply, following};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -229,7 +254,19 @@ mod tests {
 
     #[test]
     fn texts_shown_to_the_user() {
-        assert_eq!(TITLE, "Elecciones generales España 2026");
+        assert_eq!(
+            title(Election::Generales2026),
+            "Elecciones generales España 2026"
+        );
+        assert_eq!(
+            title(Election::Generales2023),
+            "Elecciones generales España 2023"
+        );
+        assert_eq!(status_text(Status::Following), "● Siguiendo el servicio");
+        assert_eq!(
+            status_text(Status::Unreachable),
+            "✗ Sin conexión con el servicio"
+        );
         assert_eq!(TOTAL, "Total España");
         assert_eq!(status_text(Status::Running), "▶ Escrutando");
         assert_eq!(status_text(Status::Paused), "⏸ En pausa");
@@ -282,7 +319,7 @@ mod tests {
         assert_shows(
             &screen(&app(), 120, 20),
             &[
-                TITLE,
+                &title(Election::Generales2026),
                 status_text(Status::Running),
                 "Votos por provincia",
                 "Provincia",
@@ -304,13 +341,40 @@ mod tests {
 
     #[test]
     fn scrolling_to_the_end_shows_the_autonomous_cities_last() {
-        let screen = screen(&apply(app(), &[Message::PageDown; 6]), 120, 20);
+        let screen = screen(&apply(app(), &vec![Message::PageDown; 6]), 120, 20);
         assert_shows(&screen, &["Zaragoza", "Ceuta", "Melilla", TOTAL]);
         assert!(!screen.contains("A Coruña"));
         let lines: Vec<_> = screen.lines().collect();
         let line_of = |name| lines.iter().position(|line| line.contains(name));
         assert!(line_of("Zaragoza") < line_of("Ceuta"));
         assert!(line_of("Ceuta") < line_of("Melilla"));
+    }
+
+    #[test]
+    fn following_the_service_shows_2023_and_its_errors() {
+        use crate::feed::fixtures::snapshot;
+        let ok = Message::Snapshots(Ok(vec![snapshot("15", 500_000)]));
+        assert_shows(
+            &screen(&apply(following(), std::slice::from_ref(&ok)), 120, 20),
+            &[
+                &title(Election::Generales2023),
+                status_text(Status::Following),
+                "A Coruña",
+                "500.000",
+                "35.141.198",
+                HELP_SERVICE,
+            ],
+        );
+        let failed = apply(
+            following(),
+            &[ok, Message::Snapshots(Err("sin red".to_owned()))],
+        );
+        let screen = screen(&failed, 120, 20);
+        assert_shows(
+            &screen,
+            &[status_text(Status::Unreachable), "500.000", "sin red"],
+        );
+        assert!(!screen.contains(HELP_SERVICE));
     }
 
     #[test]
@@ -323,7 +387,7 @@ mod tests {
             &screen(&paused, 120, 20),
             &[status_text(Status::Paused), "Escala absoluta"],
         );
-        let finished = apply(app(), &[Message::Tick; 200]);
+        let finished = apply(app(), &vec![Message::Tick; 200]);
         assert_shows(
             &screen(&finished, 120, 20),
             &[status_text(Status::Finished)],

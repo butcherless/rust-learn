@@ -140,6 +140,8 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de las 52 circunscripciones. Siempre visible, debajo de la tabla.</p></div></li>
     <li><span class="code">RN-08</span><div><strong>Cómo se muestra</strong><p>Cifras con punto de millar (<code>35.953.542</code>) y porcentajes con coma y un decimal (<code>70,0 %</code>). Cada zona de la barra tiene textura y color propios.</p></div></li>
     <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
+    <li><span class="code">RN-10</span><div><strong>El censo es el de la elección que se ve</strong><p>La maqueta usa el de 2026 (RN-01). Al seguir al servicio, que reproduce 2023, el de 2023: el censo de escrutinio de las 60.314 mesas, sin el CERA (35.141.198), y el título dice 2023. Desde el 29-11-2026, con los datos de 2026, se podrán usar los dos.</p></div></li>
+    <li><span class="code">RN-11</span><div><strong>Seguir al servicio</strong><p>Con <code>--servicio</code>, la TUI pide <code>GET /snapshots</code> al empezar y cada 10 s, y el escrutado de cada circunscripción son los votantes de su snapshot (0 si aún no tiene mesas). No hay pausa ni reinicio. Si el servicio no responde, mantiene lo último, lo indica en el estado y en el pie, y reintenta en la siguiente vuelta.</p></div></li>
   </ul>
 </section>
 
@@ -378,11 +380,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <p><code>escrutinio-servicio borrar</code> vacía los dos topics (<code>delete_records</code> hasta el final de cada partición) y las tres tablas (<code>TRUNCATE</code> en una transacción), para que los escrutinios sucesivos no se acumulen. Primero Kafka, para que nada borrado vuelva a contarse. Se lanza con el simulador parado y muestra cuántos mensajes y mesas ha borrado.</p>
 
   <h3>TUI</h3>
-  <ul>
-    <li>Pide <code>GET /snapshots</code> cada 10 s y suma el total de España (RN-07).</li>
-    <li>Si el servicio no responde, mantiene el último dato, lo indica en el estado y reintenta en la siguiente vuelta.</li>
-    <li>El origen del escrutado es un puerto: la maqueta (RN-06) o el servicio.</li>
-  </ul>
+  <p><code>escrutinio --servicio http://localhost:8080</code> (<code>cargo esc-seguir</code>) sigue al servicio con el censo de 2023 (RN-10, RN-11); sin la opción, es la maqueta de 2026 (RN-06). El total de España lo suma la TUI (RN-07).</p>
 
   <h3 id="carga">Carga</h3>
   <p>Un mensaje por mesa: 60.314 en 7.200 s. La curva es una estimación.</p>
@@ -405,6 +403,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <div class="pending">
     <ul>
       <li>Si la TUI muestra el % de mesas escrutadas, que ya viene en el snapshot.</li>
+      <li>Desde el 29-11-2026: cómo elegir entre el escrutinio de 2023 y el de 2026 al seguir al servicio (RN-10).</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>
     </ul>

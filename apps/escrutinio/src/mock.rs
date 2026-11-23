@@ -108,6 +108,22 @@ impl Scrutiny {
         Tally::total(self.rows.iter().map(|row| &row.tally))
     }
 
+    /// Las mismas filas con los votos escrutados de `counted`, por código de provincia; las que
+    /// no aparecen, a 0. Para seguir al servicio (RN-11), que manda siempre el acumulado.
+    pub fn with_counted(self, counted: &std::collections::BTreeMap<String, u64>) -> Self {
+        let rows = self
+            .rows
+            .into_iter()
+            .map(|row| Row {
+                tally: row
+                    .tally
+                    .with_counted(counted.get(row.district.code).copied().unwrap_or(0)),
+                ..row
+            })
+            .collect();
+        Self { rows, ..self }
+    }
+
     /// Si todas las circunscripciones han llegado a su final.
     pub fn finished(&self) -> bool {
         self.rows.iter().all(|row| row.tally.counted >= row.target)
@@ -121,14 +137,14 @@ fn push<T>(items: Vec<T>, item: T) -> Vec<T> {
 #[cfg(test)]
 pub mod fixtures {
     use super::*;
-    use crate::census::ordered;
+    use crate::census::{Election, ordered};
     use crate::domain::DEFAULT_TURNOUT;
 
     pub const SEED: u64 = 2026;
 
     /// El escrutinio de todas las circunscripciones, sin votos.
     pub fn scrutiny() -> Scrutiny {
-        Scrutiny::start(&ordered(), DEFAULT_TURNOUT, SEED)
+        Scrutiny::start(&ordered(Election::Generales2026), DEFAULT_TURNOUT, SEED)
     }
 
     /// `scrutiny` tras `steps` pasos.
@@ -141,7 +157,7 @@ pub mod fixtures {
 mod tests {
     use super::fixtures::{SEED, advanced, scrutiny};
     use super::*;
-    use crate::census::TOTAL_CENSUS;
+    use crate::census::{Election, TOTAL_CENSUS};
 
     #[test]
     fn the_generator_stays_in_the_unit_interval_and_never_sticks_at_zero() {
@@ -217,8 +233,28 @@ mod tests {
     }
 
     #[test]
+    fn takes_the_counted_votes_by_province_code() {
+        let counted = [("28".to_owned(), 1_000), ("51".to_owned(), 10_000_000)].into();
+        let scrutiny = scrutiny().with_counted(&counted);
+        let by_code = |code| {
+            scrutiny
+                .rows()
+                .iter()
+                .find(|row| row.district.code == code)
+                .map(|row| (row.tally.counted, row.tally.census))
+        };
+        assert_eq!(by_code("28").map(|(counted, _)| counted), Some(1_000));
+        // Nunca pasa del censo (RN-05), y lo que no llega queda a 0.
+        assert_eq!(
+            by_code("51").map(|(counted, census)| counted == census),
+            Some(true)
+        );
+        assert_eq!(by_code("02").map(|(counted, _)| counted), Some(0));
+    }
+
+    #[test]
     fn the_same_seed_gives_the_same_scrutiny() {
-        let other = Scrutiny::start(&crate::census::ordered(), 70, SEED);
+        let other = Scrutiny::start(&crate::census::ordered(Election::Generales2026), 70, SEED);
         assert_eq!(other.advance(), scrutiny().advance());
     }
 }

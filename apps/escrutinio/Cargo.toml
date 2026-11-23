@@ -6,4 +6,13 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
+escrutinio-contrato.workspace = true
 ratatui.workspace = true
+# The TUI has no async runtime: it asks the service with the blocking client.
+reqwest = { workspace = true, features = ["blocking"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock.workspace = true

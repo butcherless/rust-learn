@@ -4,8 +4,8 @@ use clap::Parser;
 
 use crate::domain::DEFAULT_TURNOUT;
 
-/// Maqueta del escrutinio de las Elecciones generales España 2026 por provincia, con votos
-/// simulados.
+/// Escrutinio por provincia: la maqueta de las Elecciones generales España 2026, con votos
+/// simulados, o, con --servicio, el escrutinio de 2023 que sirve escrutinio-servicio.
 #[derive(Debug, Parser)]
 #[command(version, about)]
 pub struct Args {
@@ -22,4 +22,9 @@ pub struct Args {
     /// Semilla de la simulación: con la misma, el escrutinio es el mismo.
     #[arg(long, default_value_t = 2026)]
     pub semilla: u64,
+
+    /// Sigue el escrutinio de 2023 de escrutinio-servicio en esta URL, cada 10 s, en lugar de la
+    /// maqueta.
+    #[arg(long, value_name = "URL")]
+    pub servicio: Option<String>,
 }

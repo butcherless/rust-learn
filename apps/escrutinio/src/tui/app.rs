@@ -1,8 +1,15 @@
 //! El estado de la interfaz, con The Elm Architecture: `message(key)` da un `Message` y
 //! `App::update(self, Message) -> (App, Effect)` da el estado siguiente.
+//!
+//! El escrutado viene de la maqueta (`Source::Mock`, RN-06), que avanza con cada `Tick`, o del
+//! servicio (`Source::Service`, RN-11), que llega con `Snapshots` cada 10 s. Con el servicio no hay
+//! pausa ni reinicio, y el censo es el de 2023 (RN-10).
 
+use escrutinio_contrato::ProvinceSnapshot;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
+use crate::census::Election;
+use crate::feed::counted;
 use crate::mock::Scrutiny;
 
 /// Las filas que salta `PageUp`/`PageDown`.
@@ -33,18 +40,35 @@ impl Scale {
     }
 }
 
-/// En qué punto está el escrutinio simulado.
+/// En qué punto está el escrutinio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Running,
     Paused,
     Finished,
+    /// Siguiendo al servicio, que respondió la última vez.
+    Following,
+    /// La última petición al servicio falló: se ve lo último que llegó.
+    Unreachable,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// De dónde viene el escrutado.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Source {
+    Mock,
+    /// El servicio en `url`, con el error de la última petición si falló.
+    Service {
+        url: String,
+        error: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
     /// Toca avanzar la simulación.
     Tick,
+    /// La respuesta del servicio, o el texto de su error.
+    Snapshots(Result<Vec<ProvinceSnapshot>, String>),
     TogglePause,
     Restart,
     ToggleScale,
@@ -79,6 +103,8 @@ pub fn message(key: KeyEvent) -> Option<Message> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct App {
     scrutiny: Scrutiny,
+    source: Source,
+    election: Election,
     /// El escrutinio del principio, para `Restart`.
     initial: Scrutiny,
     paused: bool,
@@ -88,19 +114,35 @@ pub struct App {
 }
 
 impl App {
+    /// La maqueta de 2026, con el escrutado simulado.
     pub fn new(scrutiny: Scrutiny) -> Self {
         Self {
             initial: scrutiny.clone(),
             scrutiny,
+            source: Source::Mock,
+            election: Election::Generales2026,
             paused: false,
             scale: Scale::Own,
             offset: 0,
         }
     }
 
+    /// Sigue al servicio en `url`; `scrutiny` debe tener el censo de 2023.
+    pub fn following(scrutiny: Scrutiny, url: &str) -> Self {
+        Self {
+            source: Source::Service {
+                url: url.to_owned(),
+                error: None,
+            },
+            election: Election::Generales2023,
+            ..Self::new(scrutiny)
+        }
+    }
+
     pub fn update(self, message: Message) -> (Self, Effect) {
         let last = self.scrutiny.rows().len().saturating_sub(1);
         let offset = self.offset;
+        let mock = self.source == Source::Mock;
         let next = match message {
             Message::Quit => return (self, Effect::Quit),
             Message::Tick if self.status() == Status::Running => Self {
@@ -108,15 +150,17 @@ impl App {
                 ..self
             },
             Message::Tick => self,
-            Message::TogglePause => Self {
+            Message::Snapshots(result) => self.received(result),
+            Message::TogglePause if mock => Self {
                 paused: !self.paused,
                 ..self
             },
-            Message::Restart => Self {
+            Message::Restart if mock => Self {
                 scrutiny: self.initial.clone(),
                 paused: false,
                 ..self
             },
+            Message::TogglePause | Message::Restart => self,
             Message::ToggleScale => Self {
                 scale: self.scale.toggled(),
                 ..self
@@ -133,6 +177,33 @@ impl App {
         Self { offset, ..self }
     }
 
+    /// Con los snapshots, el escrutado de cada fila; con un error, lo mismo que había.
+    fn received(self, result: Result<Vec<ProvinceSnapshot>, String>) -> Self {
+        match (self.source.clone(), result) {
+            (Source::Mock, _) => self,
+            (Source::Service { url, .. }, Ok(snapshots)) => Self {
+                scrutiny: self.scrutiny.with_counted(&counted(&snapshots)),
+                source: Source::Service { url, error: None },
+                ..self
+            },
+            (Source::Service { url, .. }, Err(error)) => Self {
+                source: Source::Service {
+                    url,
+                    error: Some(error),
+                },
+                ..self
+            },
+        }
+    }
+
+    pub fn source(&self) -> &Source {
+        &self.source
+    }
+
+    pub fn election(&self) -> Election {
+        self.election
+    }
+
     pub fn scrutiny(&self) -> &Scrutiny {
         &self.scrutiny
     }
@@ -146,6 +217,11 @@ impl App {
     }
 
     pub fn status(&self) -> Status {
+        match &self.source {
+            Source::Service { error: None, .. } => return Status::Following,
+            Source::Service { error: Some(_), .. } => return Status::Unreachable,
+            Source::Mock => {}
+        }
         if self.scrutiny.finished() {
             Status::Finished
         } else if self.paused {
@@ -165,17 +241,29 @@ pub mod fixtures {
         App::new(scrutiny())
     }
 
+    pub const SERVICE: &str = "http://localhost:8080";
+
+    /// Siguiendo al servicio, con el censo de 2023 y sin votos.
+    pub fn following() -> App {
+        let scrutiny = Scrutiny::start(
+            &crate::census::ordered(Election::Generales2023),
+            crate::domain::DEFAULT_TURNOUT,
+            1,
+        );
+        App::following(scrutiny, SERVICE)
+    }
+
     /// `app` tras cada mensaje, en orden.
     pub fn apply(app: App, messages: &[Message]) -> App {
         messages
             .iter()
-            .fold(app, |app, &message| app.update(message).0)
+            .fold(app, |app, message| app.update(message.clone()).0)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::fixtures::{app, apply};
+    use super::fixtures::{SERVICE, app, apply, following};
     use super::*;
     use ratatui::crossterm::event::KeyModifiers;
 
@@ -230,7 +318,7 @@ mod tests {
 
     #[test]
     fn finishes_and_then_ignores_ticks() {
-        let finished = apply(app(), &[Message::Tick; 200]);
+        let finished = apply(app(), &vec![Message::Tick; 200]);
         assert_eq!(finished.status(), Status::Finished);
         assert_eq!(apply(finished.clone(), &[Message::Tick]), finished);
     }
@@ -243,6 +331,57 @@ mod tests {
         );
         assert_eq!(restarted.scrutiny().total().counted, 0);
         assert_eq!(restarted.status(), Status::Running);
+    }
+
+    #[test]
+    fn follows_the_snapshots_of_the_service() {
+        use crate::feed::fixtures::snapshot;
+        let app = following();
+        assert_eq!(
+            (app.status(), app.election()),
+            (Status::Following, Election::Generales2023)
+        );
+        let counted = |app: &App| app.scrutiny().total().counted;
+        let received = apply(
+            app,
+            &[Message::Snapshots(Ok(vec![
+                snapshot("28", 1_000),
+                snapshot("51", 7),
+            ]))],
+        );
+        assert_eq!(counted(&received), 1_007);
+        // Los ticks, la pausa y el reinicio no cambian nada con el servicio.
+        let keys = apply(
+            received.clone(),
+            &[Message::Tick, Message::TogglePause, Message::Restart],
+        );
+        assert_eq!(keys, received);
+    }
+
+    #[test]
+    fn keeps_the_last_data_when_the_service_fails_and_recovers() {
+        use crate::feed::fixtures::snapshot;
+        let ok = Message::Snapshots(Ok(vec![snapshot("28", 1_000)]));
+        let failed = apply(
+            following(),
+            &[ok.clone(), Message::Snapshots(Err("caído".to_owned()))],
+        );
+        assert_eq!(failed.status(), Status::Unreachable);
+        assert_eq!(failed.scrutiny().total().counted, 1_000);
+        assert_eq!(
+            failed.source(),
+            &Source::Service {
+                url: SERVICE.to_owned(),
+                error: Some("caído".to_owned())
+            }
+        );
+        assert_eq!(apply(failed, &[ok]).status(), Status::Following);
+    }
+
+    #[test]
+    fn the_mock_ignores_snapshots() {
+        let ignored = apply(app(), &[Message::Snapshots(Ok(vec![]))]);
+        assert_eq!(ignored, app());
     }
 
     #[test]

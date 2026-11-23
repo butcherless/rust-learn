@@ -13,7 +13,7 @@ README; they share one `Cargo.lock`, one `target/`, the toolchain and CI.
 | [pr-checker](apps/pr-checker) | Lists the open pull requests of GitHub repositories, as a table or a terminal UI | `cargo pr` |
 | [severance-pay-calculator](apps/severance-pay-calculator) | Calculates Spanish severance pay, in a terminal UI or as a printed report | `cargo sev` |
 | [calendario-laboral](apps/calendario-laboral) | A console work calendar (holidays, vacation, shifts, hours) stored in JSON, with year and month views | `cargo cal` |
-| [escrutinio](apps/escrutinio) | A mock of the Spanish 2026 general election count by province, in a terminal UI | `cargo esc` |
+| [escrutinio](apps/escrutinio) | The Spanish general election count by province in a terminal UI: a 2026 mock, or the 2023 count served by escrutinio-servicio | `cargo esc`, `cargo esc-seguir` |
 | [escrutinio-simulador](apps/escrutinio-simulador) | Replays the 2023 election count polling station by polling station, publishing each one to Kafka | `cargo esc-sim` |
 | [escrutinio-servicio](apps/escrutinio-servicio) | Consumes those polling stations, stores them in PostgreSQL and serves the totals by province over HTTP | `cargo esc-srv` |
 

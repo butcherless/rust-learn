@@ -4,5 +4,6 @@
 pub mod census;
 pub mod cli;
 pub mod domain;
+pub mod feed;
 pub mod mock;
 pub mod tui;

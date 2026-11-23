@@ -764,7 +764,13 @@ name = "escrutinio"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "escrutinio-contrato",
  "ratatui",
+ "reqwest",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "wiremock",
 ]
 
 [[package]]
