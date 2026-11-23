@@ -1,5 +1,5 @@
 //! El escrutinio del servicio (RN-11): `fetch` pide `GET /snapshots` y `counted` da los votantes
-//! escrutados de cada circunscripción, por su código de provincia.
+//! y las mesas escrutadas de cada circunscripción, por su código de provincia.
 //!
 //! El cliente es el bloqueante de reqwest, porque la TUI no es async. Los tests con wiremock lo
 //! ejecutan en `spawn_blocking`: no puede usarse dentro de un runtime async.
@@ -9,6 +9,8 @@ use std::time::Duration;
 
 use escrutinio_contrato::ProvinceSnapshot;
 use thiserror::Error;
+
+use crate::domain::Progress;
 
 /// Cada cuánto se piden los snapshots (RN-11).
 pub const REFRESH: Duration = Duration::from_secs(10);
@@ -46,11 +48,17 @@ pub fn fetch(
         .map_err(|error| FetchError::Request(url, error))
 }
 
-/// Los votantes escrutados de cada circunscripción, por su código de provincia.
-pub fn counted(snapshots: &[ProvinceSnapshot]) -> BTreeMap<String, u64> {
+/// Los votantes y las mesas escrutadas de cada circunscripción, por su código de provincia.
+pub fn counted(snapshots: &[ProvinceSnapshot]) -> BTreeMap<String, Progress> {
     snapshots
         .iter()
-        .map(|snapshot| (snapshot.province.clone(), snapshot.voters))
+        .map(|snapshot| {
+            let progress = Progress {
+                voters: snapshot.voters,
+                stations: snapshot.stations,
+            };
+            (snapshot.province.clone(), progress)
+        })
         .collect()
 }
 
@@ -58,11 +66,16 @@ pub fn counted(snapshots: &[ProvinceSnapshot]) -> BTreeMap<String, u64> {
 pub mod fixtures {
     use escrutinio_contrato::ProvinceSnapshot;
 
-    /// El snapshot de `province` con `voters` votantes.
+    /// El snapshot de `province` con `voters` votantes en una mesa.
     pub fn snapshot(province: &str, voters: u64) -> ProvinceSnapshot {
+        with_stations(province, voters, 1)
+    }
+
+    /// El snapshot de `province` con `voters` votantes en `stations` mesas.
+    pub fn with_stations(province: &str, voters: u64, stations: u32) -> ProvinceSnapshot {
         ProvinceSnapshot {
             province: province.to_owned(),
-            stations: 1,
+            stations,
             census: voters * 2,
             voters,
             blank: 0,
@@ -125,8 +138,14 @@ mod tests {
     #[test]
     fn counts_the_voters_by_province_code() {
         let counted = counted(&[snapshot("28", 100), snapshot("51", 7)]);
-        assert_eq!(counted.get("28"), Some(&100));
-        assert_eq!(counted.get("51"), Some(&7));
+        let progress = |voters| {
+            Some(Progress {
+                voters,
+                stations: 1,
+            })
+        };
+        assert_eq!(counted.get("28").copied(), progress(100));
+        assert_eq!(counted.get("51").copied(), progress(7));
         assert_eq!(counted.len(), 2);
     }
 }

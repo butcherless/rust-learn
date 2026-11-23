@@ -24,7 +24,7 @@ cargo llvm-cov -p escrutinio               # cobertura de este proyecto; --open 
 
 ## Datos
 
-`census.rs` tiene, por circunscripción, el código de provincia del INE y dos censos CER: el de 2026, de la tabla del INE que cita su `//!`, y el de 2023, de las mesas de Interior (RN-10). Si cambia uno, cambia `DISTRICTS` y su total (`TOTAL_CENSUS` o `TOTAL_CENSUS_2023`) juntos: un test comprueba que la suma cuadra. `ordered(Election)` da las filas con el censo de una elección.
+`census.rs` tiene, por circunscripción, el código de provincia del INE, sus mesas de cada elección (para el piloto «completa», RN-12; suman `TOTAL_STATIONS` y `TOTAL_STATIONS_2023`) y dos censos CER: el de 2026, de la tabla del INE que cita su `//!`, y el de 2023, de las mesas de Interior (RN-10). Si cambia uno, cambia `DISTRICTS` y su total (`TOTAL_CENSUS` o `TOTAL_CENSUS_2023`) juntos: un test comprueba que la suma cuadra. `ordered(Election)` da las filas con el censo de una elección.
 
 ## Arquitectura
 

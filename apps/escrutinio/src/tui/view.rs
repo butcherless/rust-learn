@@ -204,12 +204,14 @@ fn tally_row(
     ])
 }
 
-/// Naranja si cambió en la última actualización, verde si no y gris sin datos (RN-12).
+/// Naranja si cambió en la última actualización, verde si no, gris sin datos y azul completa
+/// (RN-12).
 pub fn pulse_color(pulse: Pulse) -> Color {
     match pulse {
         Pulse::NoData => Color::DarkGray,
         Pulse::Updated => ORANGE,
         Pulse::Steady => Color::Green,
+        Pulse::Complete => Color::Blue,
     }
 }
 
@@ -258,6 +260,7 @@ fn legend_line(app: &App) -> Line<'static> {
         (Pulse::Updated, "Actualizada"),
         (Pulse::Steady, "Sin cambios"),
         (Pulse::NoData, "Sin datos"),
+        (Pulse::Complete, "Completa"),
     ]
     .into_iter()
     .flat_map(|(pulse, label)| {
@@ -387,6 +390,7 @@ mod tests {
         assert_eq!(pulse_color(Pulse::Updated), Color::Rgb(255, 165, 0));
         assert_eq!(pulse_color(Pulse::Steady), Color::Green);
         assert_eq!(pulse_color(Pulse::NoData), Color::DarkGray);
+        assert_eq!(pulse_color(Pulse::Complete), Color::Blue);
     }
 
     #[test]
@@ -482,6 +486,14 @@ mod tests {
             let app = apply(following(), &messages);
             assert_eq!(pilot_color(&app, "A Coruña"), color, "{case}");
         });
+        // A Coruña tenía 1.544 mesas en 2023: con todas, completa.
+        let complete = Message::Snapshots(Ok(vec![crate::feed::fixtures::with_stations(
+            "15", 900, 1_544,
+        )]));
+        assert_eq!(
+            pilot_color(&apply(following(), &[complete]), "A Coruña"),
+            Some(Color::Blue)
+        );
         let one = apply(following(), &[coruna(500)]);
         assert_eq!(pilot_color(&one, "Albacete"), gray);
         assert_eq!(pilot_color(&one, TOTAL), Some(ORANGE));

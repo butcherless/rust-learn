@@ -53,6 +53,13 @@ impl Tally {
     }
 }
 
+/// Lo escrutado de una circunscripción según el servicio: votantes y mesas (RN-11, RN-12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Progress {
+    pub voters: u64,
+    pub stations: u32,
+}
+
 /// El piloto de una fila (RN-12): qué pasó con su escrutado en la última actualización.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Pulse {
@@ -63,12 +70,16 @@ pub enum Pulse {
     Updated,
     /// Igual que en la actualización anterior.
     Steady,
+    /// Con todas sus mesas escrutadas (en la maqueta, en su resultado final).
+    Complete,
 }
 
 impl Pulse {
-    /// El piloto de un escrutado que pasa de `before` a `after`.
-    pub fn between(before: u64, after: u64) -> Self {
-        if after == 0 {
+    /// El piloto de un escrutado que pasa de `before` a `after`; `complete` manda sobre todo.
+    pub fn between(before: u64, after: u64, complete: bool) -> Self {
+        if complete {
+            Self::Complete
+        } else if after == 0 {
             Self::NoData
         } else if after == before {
             Self::Steady
@@ -77,15 +88,20 @@ impl Pulse {
         }
     }
 
-    /// El piloto del total: actualizado si alguna fila lo está; sin datos si ninguna los tiene.
+    /// El piloto del total: completo si todas las filas lo están; si no, actualizado si alguna lo
+    /// está, sin datos si ninguna tiene votos y sin cambios en el resto de casos.
     pub fn total(pulses: impl IntoIterator<Item = Pulse>) -> Self {
-        pulses
-            .into_iter()
-            .fold(Self::NoData, |total, pulse| match (total, pulse) {
-                (Self::Updated, _) | (_, Self::Updated) => Self::Updated,
-                (Self::Steady, _) | (_, Self::Steady) => Self::Steady,
-                (Self::NoData, Self::NoData) => Self::NoData,
-            })
+        let pulses: Vec<Pulse> = pulses.into_iter().collect();
+        let any = |wanted: Pulse| pulses.contains(&wanted);
+        if !pulses.is_empty() && pulses.iter().all(|&pulse| pulse == Self::Complete) {
+            Self::Complete
+        } else if any(Self::Updated) {
+            Self::Updated
+        } else if any(Self::Steady) || any(Self::Complete) {
+            Self::Steady
+        } else {
+            Self::NoData
+        }
     }
 }
 
@@ -219,27 +235,33 @@ mod tests {
     #[test]
     fn the_pulse_says_whether_the_count_changed() {
         [
-            (0, 0, Pulse::NoData),
-            (5, 0, Pulse::NoData),
-            (0, 5, Pulse::Updated),
-            (5, 7, Pulse::Updated),
-            (7, 7, Pulse::Steady),
+            (0, 0, false, Pulse::NoData),
+            (5, 0, false, Pulse::NoData),
+            (0, 5, false, Pulse::Updated),
+            (5, 7, false, Pulse::Updated),
+            (7, 7, false, Pulse::Steady),
+            (5, 7, true, Pulse::Complete),
+            (7, 7, true, Pulse::Complete),
         ]
         .into_iter()
-        .for_each(|(before, after, pulse)| {
-            assert_eq!(Pulse::between(before, after), pulse, "{before} → {after}");
+        .for_each(|(before, after, complete, pulse)| {
+            let case = format!("{before} → {after}, {complete}");
+            assert_eq!(Pulse::between(before, after, complete), pulse, "{case}");
         });
         assert_eq!(Pulse::default(), Pulse::NoData);
     }
 
     #[test]
-    fn the_total_pulse_is_updated_if_any_row_is() {
-        use Pulse::{NoData, Steady, Updated};
+    fn the_total_pulse_is_complete_only_when_every_row_is() {
+        use Pulse::{Complete, NoData, Steady, Updated};
         [
             (vec![], NoData),
             (vec![NoData, NoData], NoData),
             (vec![NoData, Steady], Steady),
             (vec![Steady, Updated, NoData], Updated),
+            (vec![Complete, Complete], Complete),
+            (vec![Complete, NoData], Steady),
+            (vec![Complete, Updated], Updated),
         ]
         .into_iter()
         .for_each(|(pulses, total)| assert_eq!(Pulse::total(pulses.clone()), total, "{pulses:?}"));

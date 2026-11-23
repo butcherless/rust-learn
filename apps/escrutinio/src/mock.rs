@@ -5,7 +5,7 @@
 //! como si informaran unas cuantas mesas. Con la misma semilla, el escrutinio es el mismo.
 
 use crate::census::District;
-use crate::domain::{Pulse, Tally};
+use crate::domain::{Progress, Pulse, Tally};
 
 /// El resultado final, como fracción del estimado: entre `1 - FINAL_SPREAD` y `1 + FINAL_SPREAD`.
 const FINAL_SPREAD: f64 = 0.15;
@@ -90,7 +90,7 @@ impl Scrutiny {
                 let counted = (row.tally.counted + step).min(row.target);
                 let row = Row {
                     tally: row.tally.with_counted(counted),
-                    pulse: Pulse::between(row.tally.counted, counted),
+                    pulse: Pulse::between(row.tally.counted, counted, counted >= row.target),
                     ..row
                 };
                 (push(rows, row), rng)
@@ -117,18 +117,19 @@ impl Scrutiny {
         Pulse::total(self.rows.iter().map(|row| row.pulse))
     }
 
-    /// Las mismas filas con los votos escrutados de `counted`, por código de provincia; las que
-    /// no aparecen, a 0. Para seguir al servicio (RN-11), que manda siempre el acumulado.
-    pub fn with_counted(self, counted: &std::collections::BTreeMap<String, u64>) -> Self {
+    /// Las mismas filas con lo escrutado de `counted`, por código de provincia; las que no
+    /// aparecen, a 0. Para seguir al servicio (RN-11), que manda siempre el acumulado. Una fila
+    /// está completa con todas sus mesas (RN-12).
+    pub fn with_counted(self, counted: &std::collections::BTreeMap<String, Progress>) -> Self {
         let rows = self
             .rows
             .into_iter()
             .map(|row| {
-                let tally = row
-                    .tally
-                    .with_counted(counted.get(row.district.code).copied().unwrap_or(0));
+                let progress = counted.get(row.district.code).copied().unwrap_or_default();
+                let tally = row.tally.with_counted(progress.voters);
+                let complete = progress.stations >= row.district.stations;
                 Row {
-                    pulse: Pulse::between(row.tally.counted, tally.counted),
+                    pulse: Pulse::between(row.tally.counted, tally.counted, complete),
                     tally,
                     ..row
                 }
@@ -247,7 +248,15 @@ mod tests {
 
     #[test]
     fn takes_the_counted_votes_by_province_code() {
-        let counted = [("28".to_owned(), 1_000), ("51".to_owned(), 10_000_000)].into();
+        let progress = |voters| Progress {
+            voters,
+            stations: 1,
+        };
+        let counted = [
+            ("28".to_owned(), progress(1_000)),
+            ("51".to_owned(), progress(10_000_000)),
+        ]
+        .into();
         let scrutiny = scrutiny().with_counted(&counted);
         let by_code = |code| {
             scrutiny
@@ -275,11 +284,29 @@ mod tests {
                 .map(|row| row.pulse)
         };
         assert_eq!(scrutiny().pulse(), Pulse::NoData);
-        let first = scrutiny().with_counted(&[("28".to_owned(), 1_000)].into());
+        let first = scrutiny().with_counted(
+            &[(
+                "28".to_owned(),
+                Progress {
+                    voters: 1_000,
+                    stations: 1,
+                },
+            )]
+            .into(),
+        );
         assert_eq!(pulse_of(&first, "28"), Some(Pulse::Updated));
         assert_eq!(pulse_of(&first, "51"), Some(Pulse::NoData));
         assert_eq!(first.pulse(), Pulse::Updated);
-        let same = first.with_counted(&[("28".to_owned(), 1_000)].into());
+        let same = first.clone().with_counted(
+            &[(
+                "28".to_owned(),
+                Progress {
+                    voters: 1_000,
+                    stations: 1,
+                },
+            )]
+            .into(),
+        );
         assert_eq!(pulse_of(&same, "28"), Some(Pulse::Steady));
         assert_eq!(same.pulse(), Pulse::Steady);
         let one_step = advanced(1);
@@ -290,7 +317,24 @@ mod tests {
                 .all(|row| row.pulse == Pulse::Updated)
         );
         let finished = advanced(200);
-        assert!(finished.rows().iter().all(|row| row.pulse == Pulse::Steady));
+        assert!(
+            finished
+                .rows()
+                .iter()
+                .all(|row| row.pulse == Pulse::Complete)
+        );
+        assert_eq!(finished.pulse(), Pulse::Complete);
+        let all_stations = first.with_counted(
+            &[(
+                "28".to_owned(),
+                Progress {
+                    voters: 2_000,
+                    stations: 7_608,
+                },
+            )]
+            .into(),
+        );
+        assert_eq!(pulse_of(&all_stations, "28"), Some(Pulse::Complete));
     }
 
     #[test]
