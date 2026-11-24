@@ -27,6 +27,9 @@ curl -s localhost:8080/snapshots                         # el acumulado por circ
 
 `Ctrl+C` para el servicio; al volver a arrancarlo, sigue donde lo dejó.
 
+Para ver en el navegador los mensajes que consume y su retraso, arranca el compose con el
+[visor web de Kafka](../escrutinio-simulador/README.md#visor-web-de-kafka).
+
 ## Borrar el escrutinio
 
 Para empezar otro escrutinio desde cero, sin que se acumule con el anterior:

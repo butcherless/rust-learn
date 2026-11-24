@@ -48,19 +48,8 @@ cargo esc-sim                            # 2. publica las 60.314 mesas durante 2
 cargo esc-sim --duracion 5m              #    o en 5 minutos, para probar
 ```
 
-Para ver lo publicado en el navegador, el compose trae un visor opcional,
-[Kafbat UI](https://github.com/kafbat/kafka-ui), en http://localhost:8081: topics, mensajes y el
-retraso del grupo del servicio.
-
-```bash
-docker compose -f compose/escrutinio.yaml --profile visor up -d   # Kafka, PostgreSQL y el visor
-docker compose -f compose/escrutinio.yaml --profile visor down    # lo para todo, también el visor
-```
-
-La primera vez recrea el contenedor de Kafka, que publica el puerto del visor, y se pierden sus
-mensajes: hazlo sin una carga en marcha.
-
-O desde la terminal, con las herramientas de Kafka del propio contenedor:
+Para ver lo publicado en el navegador, usa el [visor web](#visor-web-de-kafka). Desde la terminal,
+con las herramientas de Kafka del propio contenedor:
 
 ```bash
 k() { docker compose -f compose/escrutinio.yaml exec -T kafka /opt/kafka/bin/"$@"; }
@@ -69,6 +58,35 @@ k kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic escrutinio.mesa
 k kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic escrutinio.mesas.dlq \
   --from-beginning --property print.key=true --timeout-ms 10000                           # el dead letter
 ```
+
+## Visor web de Kafka
+
+El compose trae un visor opcional, [Kafbat UI](https://github.com/kafbat/kafka-ui), para seguir los
+mensajes en el navegador. Solo arranca con el perfil `visor`:
+
+```bash
+docker compose -f compose/escrutinio.yaml --profile visor up -d   # Kafka, PostgreSQL y el visor
+```
+
+La primera vez recrea el contenedor de Kafka (que publica el puerto del visor) y se pierden sus
+mensajes: hazlo antes de lanzar la carga, no durante. Después, abre **http://localhost:8081**:
+
+- **Topics → `escrutinio.mesas` → Messages:** las mesas publicadas, con su clave (el código de
+  provincia) y el JSON. Puedes empezar por las más antiguas o las más nuevas, seguirlas en directo
+  mientras corre el simulador y filtrar por clave, por ejemplo `28` para Madrid.
+- **Topics → `escrutinio.mesas.dlq` → Messages:** las mesas rechazadas, con su motivo (`reason`) y
+  su texto (`detail`). En 2023 son 4, de León.
+- **Consumers → `escrutinio-servicio`:** el retraso (*lag*) del servicio en cada partición, es decir,
+  las mesas publicadas que aún no ha registrado. Con el servicio al día, 0.
+
+El visor solo lee: no publica ni borra mensajes. Para vaciar los topics, usa `cargo esc-borrar`.
+
+```bash
+docker compose -f compose/escrutinio.yaml --profile visor down    # lo para todo, también el visor
+```
+
+Para pararlo, usa también `--profile visor`, para que `down` incluya el visor junto a Kafka, cuya red
+comparte.
 
 ## Opciones
 
