@@ -27,7 +27,10 @@ pub const TOTAL: &str = "Total España";
 
 /// Las texturas y colores de cada zona de la barra (RN-08).
 const CENSUS: (&str, Color) = ("░", Color::DarkGray);
-const ESTIMATED: (&str, Color) = ("▒", Color::Yellow);
+/// Ocre apagado: el amarillo de la terminal es tan brillante que se confunde con el verde del
+/// escrutado.
+const OCHRE: Color = Color::Rgb(140, 110, 50);
+const ESTIMATED: (&str, Color) = ("▒", OCHRE);
 const COUNTED: (&str, Color) = ("█", Color::Green);
 const ABOVE_ESTIMATE: (&str, Color) = ("█", Color::Cyan);
 const TITLE_BAR: Style = Style::new().fg(Color::White).bg(Color::Blue);
@@ -196,7 +199,7 @@ fn tally_row(
     TableRow::new([
         Line::from(name.to_owned()),
         right(thousands(tally.census)),
-        right(thousands(tally.estimated)).yellow(),
+        right(thousands(tally.estimated)).fg(OCHRE),
         right(thousands(tally.counted)).green(),
         right(percent(tally.turnout())),
         Line::from(Span::styled(PILOT, pulse_color(pulse))),
@@ -391,6 +394,24 @@ mod tests {
         assert_eq!(pulse_color(Pulse::Steady), Color::Green);
         assert_eq!(pulse_color(Pulse::NoData), Color::DarkGray);
         assert_eq!(pulse_color(Pulse::Complete), Color::Blue);
+    }
+
+    #[test]
+    fn the_estimate_is_a_dim_ochre_not_the_terminal_yellow() {
+        let tally = Tally::new(2_000_000, 70).with_counted(400_000);
+        let colors: Vec<_> = bar(&tally, tally.census, 10)
+            .spans
+            .iter()
+            .map(|span| span.style.fg)
+            .collect();
+        assert_eq!(
+            colors,
+            [
+                Some(Color::Green),
+                Some(Color::Rgb(140, 110, 50)),
+                Some(Color::DarkGray)
+            ]
+        );
     }
 
     #[test]

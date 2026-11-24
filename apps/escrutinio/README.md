@@ -43,7 +43,7 @@ al servicio no hay pausa ni reinicio.
 
 ## Barra
 
-`░` gris: censo · `▒` amarillo: estimado · `█` verde: escrutado · `█` cian: escrutado por encima
+`░` gris: censo · `▒` ocre: estimado · `█` verde: escrutado · `█` cian: escrutado por encima
 de lo estimado.
 
 ## Piloto
