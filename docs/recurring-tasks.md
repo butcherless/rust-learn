@@ -50,11 +50,18 @@
   | severance-pay-calculator | 98.24 % (19/1079) | 93.51 % (71/1094) |
   | calendario-laboral | 98.24 % (116/6580) | 93.17 % (466/6823) |
 
-  On 2026-11-21, 1.100.0 was still the latest stable, so nothing changed. On each new stable
+  On 2026-11-21 and 2026-11-24, 1.100.0 was still the latest stable, so nothing changed. On each new stable
   release, repeat the comparison. When every package keeps its coverage, set
   `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
   this entry. Don't lower the minimum to get there.
 
+- **DEP-1: rdkafka 0.39 → 0.40** (librdkafka 2.12 → 2.16), used by escrutinio-simulador and
+  escrutinio-servicio. 0.40.0 came out on 2026-11-21, so Dependabot's 7-day cooldown ends on
+  2026-11-28. Being 0.x, a minor bump can break the API: read its changelog, update
+  `[workspace.dependencies]`, run the integration tests (`ESCRUTINIO_INTEGRACION=1`) and a full
+  load against the compose file, then fix the rdkafka notes in both projects' `CLAUDE.md` and
+  remove this entry.
+
 ## Last check
 
-2026-11-21
+2026-11-24
