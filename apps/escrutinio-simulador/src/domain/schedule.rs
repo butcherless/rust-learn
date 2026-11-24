@@ -1,8 +1,11 @@
 //! Cuándo llega cada mesa (requisitos de escrutinio, «Simulador» y «Carga»).
 //!
 //! El fichero de Interior no dice cuándo llegó cada mesa, así que `schedule` lo inventa: las mesas
-//! con menos censo tienden a llegar antes, y la llegada sigue la curva de `arrival`. Con la misma
-//! semilla sale el mismo plan.
+//! con menos censo tienden a llegar antes, y la llegada sigue la curva de `arrival`. Cada mesa tiene
+//! su hueco en la curva y llega en un punto al azar dentro de él, hasta medio hueco antes o después
+//! de su centro: los intervalos varían entre 0 y el doble del medio, con ráfagas y pausas, pero
+//! ninguna mesa adelanta a la siguiente y los tramos de la curva se mantienen. Con la misma semilla
+//! sale el mismo plan.
 
 use std::time::Duration;
 
@@ -35,7 +38,7 @@ pub fn arrival(share: f64) -> f64 {
 /// El plan de publicación, ordenado por momento de llegada.
 pub fn schedule(stations: Vec<Station>, duration: Duration, seed: u64) -> Vec<Scheduled> {
     let total = stations.len();
-    let (_, scored) = stations.into_iter().fold(
+    let (rng, scored) = stations.into_iter().fold(
         (Rng::new(seed), Vec::with_capacity(total)),
         |(rng, mut scored), station| {
             let (factor, rng) = rng.next_unit();
@@ -46,14 +49,20 @@ pub fn schedule(stations: Vec<Station>, duration: Duration, seed: u64) -> Vec<Sc
     );
     let mut scored = scored;
     scored.sort_by(|(a, sa), (b, sb)| a.total_cmp(b).then_with(|| sa.key.cmp(&sb.key)));
-    scored
-        .into_iter()
-        .enumerate()
-        .map(|(index, (_, station))| Scheduled {
-            at: duration.mul_f64(arrival((index as f64 + 0.5) / total as f64)),
-            station,
-        })
-        .collect()
+    let (_, plan) = scored.into_iter().enumerate().fold(
+        (rng, Vec::with_capacity(total)),
+        |(rng, mut plan), (index, (_, station))| {
+            // Un punto al azar dentro del hueco `index`: [index, index + 1) / total.
+            let (offset, rng) = rng.next_unit();
+            let share = (index as f64 + offset) / total as f64;
+            plan.push(Scheduled {
+                at: duration.mul_f64(arrival(share)),
+                station,
+            });
+            (rng, plan)
+        },
+    );
+    plan
 }
 
 /// Xorshift64*: sin dependencias y determinista. Cada paso devuelve el generador siguiente.
@@ -144,6 +153,24 @@ mod tests {
                 / part.len() as f64
         };
         assert!(mean(&plan[..500]) < mean(&plan[500..]));
+    }
+
+    #[test]
+    fn the_intervals_vary_around_their_mean() {
+        // 500 mesas en el primer cuarto de 1.000 s: de media, una cada 0,5 s.
+        let plan = schedule(stations(1000), Duration::from_secs(1000), 7);
+        let gaps: Vec<f64> = plan[..500]
+            .windows(2)
+            .map(|pair| (pair[1].at - pair[0].at).as_secs_f64())
+            .collect();
+        let mean = gaps.iter().sum::<f64>() / gaps.len() as f64;
+        assert!((mean - 0.5).abs() < 0.01, "mean {mean}");
+        assert!(gaps.iter().any(|&gap| gap < 0.15), "no burst");
+        assert!(gaps.iter().any(|&gap| gap > 0.85), "no pause");
+        assert!(
+            gaps.iter().all(|&gap| gap < 1.0),
+            "a station outside its slot"
+        );
     }
 
     #[test]

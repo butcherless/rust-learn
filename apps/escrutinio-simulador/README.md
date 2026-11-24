@@ -67,7 +67,7 @@ k kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic escrutinio
 | `--topic <TOPIC>` | `escrutinio.mesas` | Topic donde se publican las mesas; tiene que existir |
 | `--topic-dlq <TOPIC_DLQ>` | `escrutinio.mesas.dlq` | Dead letter: las mesas que no pasan la validación; tiene que existir |
 | `--duracion <DURACIÓN>` | `2h` | Cuánto dura el escrutinio: un número con `h`, `m` o `s` |
-| `--semilla <N>` | 2023 | La misma semilla da el mismo orden de llegada |
+| `--semilla <N>` | 2023 | La misma semilla da el mismo orden y los mismos tiempos de llegada |
 | `--solo-comprobar` | | Solo comprueba los ficheros, sin publicar |
 
 Muestra lo comprobado, el avance cada 10 % y, al terminar, las mesas publicadas, las del dead letter

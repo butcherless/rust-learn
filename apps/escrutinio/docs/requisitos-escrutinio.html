@@ -340,7 +340,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li>Recibe la carpeta con <code>09</code>, <code>10</code>, <code>03</code> y <code>07</code>, la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
     <li>Antes de publicar, <a href="#datos2023">comprueba</a> las mesas: claves únicas, votos que suman y candidaturas conocidas, y las mesas de cada provincia contra <code>07</code>. Si algo falla, termina con error sin publicar nada.</li>
     <li>Valida cada mesa: si tiene más votantes que censo de escrutinio, va al dead letter con su motivo y no se cuenta. El resto del escrutinio sigue.</li>
-    <li>Las mesas con menos censo tienden a llegar antes, con la curva de la <a href="#carga">carga</a>. Con la misma semilla sale el mismo orden.</li>
+    <li>Las mesas con menos censo tienden a llegar antes, con la curva de la <a href="#carga">carga</a>. Cada mesa llega en un punto al azar de su hueco en la curva, hasta medio hueco antes o después: los intervalos varían entre 0 y el doble del medio, con ráfagas y pausas, sin que ninguna mesa adelante a otra ni cambien los tramos. Con la misma semilla sale el mismo plan.</li>
     <li>No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya contado. Al terminar, muestra las mesas publicadas y el tiempo.</li>
   </ul>
 
