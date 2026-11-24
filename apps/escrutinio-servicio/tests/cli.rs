@@ -113,12 +113,13 @@ async fn consumes_a_station_and_serves_it_until_ctrl_c() {
         .spawn()
         .expect("service starts");
     wait_until("the API answers", || {
-        get(port, "/snapshots").as_deref() == Some("[]")
+        get(port, "/snapshots").is_some_and(|body| body.starts_with(r#"{"provinces":["#))
     });
 
     common::produce(&topic, "51", &common::json(&common::station("51", "A"))).await;
     wait_until("the station is served", || {
-        get(port, "/snapshots").is_some_and(|body| body.contains(r#""province":"51","stations":1"#))
+        get(port, "/snapshots")
+            .is_some_and(|body| body.contains(r#""province":"51","stations":1,"possible":96"#))
     });
 
     let pid = child.id().to_string();

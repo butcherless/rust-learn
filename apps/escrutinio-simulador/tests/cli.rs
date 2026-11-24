@@ -50,7 +50,6 @@ fn help_lists_the_options() {
         "--datos",
         "--kafka",
         "--topic",
-        "--topic-dlq",
         "--duracion",
         "--semilla",
         "--solo-comprobar",

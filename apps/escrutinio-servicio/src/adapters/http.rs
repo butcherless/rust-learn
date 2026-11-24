@@ -1,5 +1,5 @@
-//! La API para la TUI (requisitos de escrutinio, «Servicio»): `GET /snapshots` devuelve en JSON los
-//! snapshots de las circunscripciones con mesas escrutadas, ordenados por código de provincia.
+//! La API para la TUI (requisitos de escrutinio, «Servicio»): `GET /snapshots` devuelve en JSON las
+//! 52 circunscripciones, por código de provincia, y el total de España, con todo calculado.
 
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
-use crate::application::SnapshotSource;
+use crate::application::{SnapshotSource, snapshots as consult};
 
 /// El texto de la respuesta 503 cuando no se pueden leer los snapshots.
 pub const UNAVAILABLE: &str = "no se pueden leer los snapshots";
@@ -24,7 +24,7 @@ pub fn router<S: SnapshotSource + Send + Sync + 'static>(source: Arc<S>) -> Rout
 async fn snapshots<S: SnapshotSource + Send + Sync + 'static>(
     State(source): State<Arc<S>>,
 ) -> Response {
-    match source.snapshots().await {
+    match consult(&*source).await {
         Ok(snapshots) => Json(snapshots).into_response(),
         Err(error) => {
             eprintln!("error: {UNAVAILABLE}: {error}");
@@ -37,11 +37,12 @@ async fn snapshots<S: SnapshotSource + Send + Sync + 'static>(
 mod tests {
     use axum::body::{Body, to_bytes};
     use axum::http::Request;
-    use escrutinio_contrato::{CandidacyTotal, ProvinceSnapshot};
+    use escrutinio_contrato::Snapshots;
     use tower::ServiceExt;
 
     use super::*;
     use crate::application::fakes::FakeSnapshots;
+    use crate::domain::snapshot::fixtures::totals;
 
     async fn get(source: FakeSnapshots, uri: &str) -> (StatusCode, String) {
         let response = router(Arc::new(source))
@@ -55,34 +56,44 @@ mod tests {
         (status, String::from_utf8_lossy(&body).into_owned())
     }
 
-    fn snapshot() -> ProvinceSnapshot {
-        ProvinceSnapshot {
-            province: "51".to_owned(),
-            stations: 1,
-            census: 100,
-            voters: 53,
-            blank: 1,
-            invalid: 2,
-            votes: vec![CandidacyTotal {
-                candidacy: 1,
-                acronym: "AAA".to_owned(),
-                votes: 50,
-            }],
-        }
+    #[tokio::test]
+    async fn serves_the_52_districts_and_the_total_already_calculated() {
+        let (status, body) = get(FakeSnapshots(Ok(vec![totals("51", 96, 0)])), "/snapshots").await;
+        assert_eq!(status, StatusCode::OK);
+        let snapshots: Snapshots = serde_json::from_str(&body).expect("snapshots json");
+        assert_eq!(snapshots.provinces.len(), 52);
+        let ceuta = snapshots.provinces.iter().find(|p| p.province == "51");
+        assert_eq!(
+            ceuta.map(|p| (p.stations, p.possible, p.rejected, p.complete)),
+            Some((96, 96, 0, true))
+        );
+        assert_eq!(
+            (
+                snapshots.total.stations,
+                snapshots.total.possible,
+                snapshots.total.complete
+            ),
+            (96, 60_314, false)
+        );
+        // Los nombres de los campos son el contrato con la TUI.
+        assert!(
+            body.starts_with(r#"{"provinces":[{"province":"01","stations":0,"possible":"#),
+            "{body}"
+        );
+        assert!(body.ends_with(r#""total":{"stations":96,"possible":60314,"rejected":0,"complete":false,"voters":5088}}"#), "{body}");
     }
 
     #[tokio::test]
-    async fn serves_the_snapshots_as_json() {
-        assert_eq!(
-            get(FakeSnapshots(Ok(vec![snapshot()])), "/snapshots").await,
-            (
-                StatusCode::OK,
-                r#"[{"province":"51","stations":1,"census":100,"voters":53,"blank":1,"invalid":2,"votes":[{"candidacy":1,"acronym":"AAA","votes":50}]}]"#.to_owned()
-            )
-        );
-        assert_eq!(
-            get(FakeSnapshots(Ok(vec![])), "/snapshots").await,
-            (StatusCode::OK, "[]".to_owned())
+    async fn serves_all_the_districts_with_zeros_before_any_station() {
+        let (status, body) = get(FakeSnapshots(Ok(vec![])), "/snapshots").await;
+        assert_eq!(status, StatusCode::OK);
+        let snapshots: Snapshots = serde_json::from_str(&body).expect("snapshots json");
+        assert_eq!(snapshots.provinces.len(), 52);
+        assert!(
+            snapshots
+                .provinces
+                .iter()
+                .all(|p| p.stations == 0 && !p.complete)
         );
     }
 

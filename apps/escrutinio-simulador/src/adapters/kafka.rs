@@ -14,7 +14,7 @@ use rdkafka::error::KafkaError;
 use rdkafka::producer::{BaseProducer, BaseRecord, DeliveryResult, Producer, ProducerContext};
 use thiserror::Error;
 
-use crate::application::{Publisher, Topic};
+use crate::application::Publisher;
 
 /// Cuánto se espera a Kafka al conectar y al confirmar lo publicado.
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -53,17 +53,12 @@ impl ProducerContext for Deliveries {
 
 pub struct KafkaPublisher {
     producer: BaseProducer<Deliveries>,
-    stations: String,
-    dead_letter: String,
+    topic: String,
 }
 
 impl KafkaPublisher {
-    /// Conecta con `brokers` y comprueba que existen el topic de mesas y el del dead letter.
-    pub fn connect(
-        brokers: &str,
-        stations: &str,
-        dead_letter: &str,
-    ) -> Result<Self, KafkaPublishError> {
+    /// Conecta con `brokers` y comprueba que existe `topic`.
+    pub fn connect(brokers: &str, topic: &str) -> Result<Self, KafkaPublishError> {
         let connect = |error| KafkaPublishError::Connect(brokers.to_owned(), error);
         let producer: BaseProducer<Deliveries> = ClientConfig::new()
             .set("bootstrap.servers", brokers)
@@ -73,22 +68,18 @@ impl KafkaPublisher {
             .set("allow.auto.create.topics", "false")
             .create_with_context(Deliveries::default())
             .map_err(connect)?;
-        [stations, dead_letter].into_iter().try_for_each(|topic| {
-            let metadata = producer
-                .client()
-                .fetch_metadata(Some(topic), TIMEOUT)
-                .map_err(connect)?;
-            metadata
-                .topics()
-                .iter()
-                .find(|t| t.name() == topic && t.error().is_none() && !t.partitions().is_empty())
-                .map(|_| ())
-                .ok_or_else(|| KafkaPublishError::NoTopic(topic.to_owned()))
-        })?;
+        let metadata = producer
+            .client()
+            .fetch_metadata(Some(topic), TIMEOUT)
+            .map_err(connect)?;
+        metadata
+            .topics()
+            .iter()
+            .find(|t| t.name() == topic && t.error().is_none() && !t.partitions().is_empty())
+            .ok_or_else(|| KafkaPublishError::NoTopic(topic.to_owned()))?;
         Ok(Self {
             producer,
-            stations: stations.to_owned(),
-            dead_letter: dead_letter.to_owned(),
+            topic: topic.to_owned(),
         })
     }
 }
@@ -96,13 +87,9 @@ impl KafkaPublisher {
 impl Publisher for KafkaPublisher {
     type Error = KafkaPublishError;
 
-    fn publish(&mut self, topic: Topic, key: &str, payload: &str) -> Result<(), KafkaPublishError> {
-        let topic = match topic {
-            Topic::Stations => &self.stations,
-            Topic::DeadLetter => &self.dead_letter,
-        };
+    fn publish(&mut self, key: &str, payload: &str) -> Result<(), KafkaPublishError> {
         self.producer
-            .send(BaseRecord::to(topic).key(key).payload(payload))
+            .send(BaseRecord::to(&self.topic).key(key).payload(payload))
             .map_err(|(error, _)| KafkaPublishError::Send(error))?;
         // Atiende las confirmaciones pendientes sin esperar.
         self.producer.poll(Duration::ZERO);

@@ -29,8 +29,8 @@ El README («Kafka» y «Lanzar la carga») tiene la secuencia completa y cómo 
 
 Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → application → domain`. Cada módulo explica en su `//!` qué hace y qué regla cumple.
 
-- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones que rechazan el fichero entero, y `Summary`), `schedule` (la curva de llegada, el orden y el momento al azar de cada mesa dentro de su hueco, con semilla) y `message` (convierte una mesa en el `StationMessage` del contrato). Los mensajes y la validación que manda una mesa al dead letter son de `libs/escrutinio-contrato`, compartido con el servicio.
-- **`application`**: `run` valida y publica el plan, cada mesa en su `Topic`; `Publisher` y `Pacer` son los puertos (traits genéricos, sin `dyn`), con fakes en los tests.
+- **`domain`**, puro: `station` (las filas, `build` con las comprobaciones que rechazan el fichero entero, y `Summary`), `schedule` (la curva de llegada, el orden y el momento al azar de cada mesa dentro de su hueco, con semilla) y `message` (convierte una mesa en el `StationMessage` del contrato). Los mensajes son de `libs/escrutinio-contrato`, compartido con el servicio. El simulador no valida las mesas, solo informa de cuántas rechazará el servicio (`Summary`): publicar todas es lo que permite al servicio saber cuántas mesas posibles tiene cada provincia.
+- **`application`**: `run` publica el plan, cada mesa en su momento; `Publisher` y `Pacer` son los puertos (traits genéricos, sin `dyn`), con fakes en los tests.
 - **`adapters`**: `interior` (los ficheros de ancho fijo en Latin-1), `kafka` (el productor), `clock` (duerme hasta cada mesa) y `cli` (clap y los textos).
 - **`main.rs`**: la raíz de composición; imprime el error con sus causas.
 

@@ -152,12 +152,13 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li><span class="code">RN-04</span><div><strong>Estimado = participación × censo</strong><p>Participación del 70 % por defecto (unos 25,2 millones de votos), redondeando hacia abajo.</p></div></li>
     <li><span class="code">RN-05</span><div><strong>El escrutado solo crece</strong><p>Nunca pasa del censo. Sí puede pasar del estimado, y ese tramo tiene su propio color.</p></div></li>
     <li><span class="code">RN-06</span><div><strong>Maqueta: escrutinio simulado</strong><p>Cada circunscripción acaba entre el 85 % y el 115 % de su estimado, y en cada paso suma hasta el 6 % de ese final. Con la misma semilla sale el mismo escrutinio.</p></div></li>
-    <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de las 52 circunscripciones. Siempre visible, debajo de la tabla.</p></div></li>
+    <li><span class="code">RN-07</span><div><strong>Total España</strong><p>La suma del censo, el estimado y el escrutado de las 52 circunscripciones. Siempre visible, debajo de la tabla. Las mesas y si está completo no se suman aquí: los trae el servicio (RN-13).</p></div></li>
     <li><span class="code">RN-08</span><div><strong>Cómo se muestra</strong><p>Cifras con punto de millar (<code>35.953.542</code>) y porcentajes con coma y un decimal (<code>70,0 %</code>). Cada zona de la barra tiene textura y color propios.</p></div></li>
     <li><span class="code">RN-09</span><div><strong>Dos escalas</strong><p>Proporcional (por defecto): cada barra contra su censo, para comparar el avance. Absoluta: contra el censo mayor (Madrid), para comparar tamaños. El total siempre es proporcional.</p></div></li>
     <li><span class="code">RN-10</span><div><strong>El censo es el de la elección que se ve</strong><p>La maqueta usa el de 2026 (RN-01). Al seguir al servicio, que reproduce 2023, el de 2023: el censo de escrutinio de las 60.314 mesas, sin el CERA (35.141.198), y el título dice 2023. Desde el 29-11-2026, con los datos de 2026, se podrán usar los dos.</p></div></li>
-    <li><span class="code">RN-11</span><div><strong>Seguir al servicio</strong><p>Con <code>--servicio</code>, la TUI pide <code>GET /snapshots</code> al empezar y cada 10 s, y el escrutado de cada circunscripción son los votantes de su snapshot (0 si aún no tiene mesas). No hay pausa ni reinicio. Si el servicio no responde, mantiene lo último, lo indica en el estado y en el pie, y reintenta en la siguiente vuelta.</p></div></li>
-    <li><span class="code">RN-12</span><div><strong>Un piloto por fila</strong><p>A la derecha de la participación, un <code>●</code> dice qué provincias cambiaron en la última actualización (cada 10 s con el servicio, cada paso en la maqueta): verde si está completa (todas sus mesas escrutadas, sin nada más que esperar; en la maqueta, en su resultado final), naranja si su escrutado cambió, azul claro si sigue igual y gris si aún no tiene votos, por ese orden. Una petición fallida no cambia los pilotos. El del total es verde si todas las filas lo son; si no, naranja si alguna lo es, gris si ninguna tiene votos y azul claro en el resto de casos. Las mesas de cada circunscripción son las del INE en 2026 y las de Interior en 2023. León no llega a verde en 2023: 4 de sus 722 mesas van al dead letter.</p></div></li>
+    <li><span class="code">RN-11</span><div><strong>Seguir al servicio</strong><p>Con <code>--servicio</code>, la TUI pide <code>GET /snapshots</code> al empezar y cada 10 s, y el escrutado de cada circunscripción son los votantes de su snapshot (0 si aún no tiene mesas). La TUI solo pinta: lo que se calcula, como las mesas y si una provincia está completa, lo calcula el servicio (RN-13). No hay pausa ni reinicio. Si el servicio no responde, mantiene lo último, lo indica en el estado y en el pie, y reintenta en la siguiente vuelta.</p></div></li>
+    <li><span class="code">RN-12</span><div><strong>Un piloto por fila</strong><p>A la derecha de la participación, un <code>●</code> dice qué provincias cambiaron en la última actualización (cada 10 s con el servicio, cada paso en la maqueta): verde si está completa (el servicio dice que se escrutaron todas sus mesas posibles, sin nada más que esperar; en la maqueta, que llegó a su resultado final), naranja si su escrutado cambió, azul claro si sigue igual y gris si aún no tiene votos, por ese orden. Una petición fallida no cambia los pilotos. El del total es verde si el servicio dice que está completo; si no, naranja si alguna fila lo es, gris si ninguna tiene votos y azul claro en el resto de casos. Lo único que decide la TUI es si cambió el escrutado desde la respuesta anterior.</p></div></li>
+    <li><span class="code">RN-13</span><div><strong>Las mesas las calcula el servicio</strong><p>Cada circunscripción y el total traen sus mesas escrutadas, N', de las posibles, N (<code>718/718</code>), y se pintan en la columna <em>Mesas</em>. N' son las válidas, y N, las de la circunscripción menos las rechazadas, así que N' ≤ N. Se escrutaron todas las posibles, y está completa, cuando N' más las rechazadas llegan a las mesas de la circunscripción. Las mesas de cada circunscripción son las de Interior en 2023 (60.314). La maqueta no tiene mesas y no muestra la columna.</p></div></li>
   </ul>
 </section>
 
@@ -197,7 +198,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 
 <section aria-labelledby="mesas">
   <h2 id="mesas">Mesas y urnas de 2026</h2>
-  <p>Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí). La TUI usa las mesas de cada circunscripción para el piloto «completa» (RN-12).</p>
+  <p>Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí). El servicio usa las de 2023 para saber cuándo una circunscripción está completa (RN-13); las de 2026 todavía no las usa nadie.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Dato</th><th class="num">2026</th><th class="num">2023</th><th>Origen</th></tr></thead>
@@ -351,7 +352,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   </div>
 
   <figure class="diagram" aria-labelledby="d-flujo">
-    <figcaption id="d-flujo"><strong>Flujo y topics.</strong> Las mesas viajan por Kafka del simulador al servicio; lo que no se puede contar va al dead letter.</figcaption>
+    <figcaption id="d-flujo"><strong>Flujo y topics.</strong> El simulador publica todas las mesas; el servicio aparta al dead letter las que no puede contar.</figcaption>
     <svg viewBox="0 0 740 236" role="img" aria-labelledby="d-flujo">
 <defs><marker id="d-flujo-tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-tipfill" d="M0 0 L10 5 L0 10 z"/></marker></defs>
 <rect class="d-box" x="10" y="90" width="120" height="50" rx="8"/>
@@ -367,21 +368,19 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 <text class="d-muted" x="285.0" y="214.0" text-anchor="middle" dominant-baseline="middle">dead letter</text>
 <rect class="d-box" x="430" y="90" width="140" height="50" rx="8"/>
 <text class="d-title" x="500.0" y="111.0" text-anchor="middle" dominant-baseline="middle">Servicio</text>
-<text class="d-muted" x="500.0" y="127.0" text-anchor="middle" dominant-baseline="middle">valida y registra</text>
+<text class="d-muted" x="500.0" y="127.0" text-anchor="middle" dominant-baseline="middle">valida y calcula</text>
 <rect class="d-box" x="610" y="20" width="120" height="50" rx="8"/>
 <text class="d-title" x="670.0" y="41.0" text-anchor="middle" dominant-baseline="middle">PostgreSQL</text>
-<text class="d-muted" x="670.0" y="57.0" text-anchor="middle" dominant-baseline="middle">3 tablas</text>
+<text class="d-muted" x="670.0" y="57.0" text-anchor="middle" dominant-baseline="middle">4 tablas</text>
 <rect class="d-box" x="610" y="160" width="120" height="50" rx="8"/>
 <text class="d-title" x="670.0" y="181.0" text-anchor="middle" dominant-baseline="middle">TUI</text>
 <text class="d-muted" x="670.0" y="197.0" text-anchor="middle" dominant-baseline="middle">escrutinio</text>
 <path class="d-arrow" d="M130 105 L188 70" marker-end="url(#d-flujo-tip)"/>
-<text class="d-label" x="150" y="78" text-anchor="end">mesa válida</text>
-<path class="d-arrow" d="M130 125 L188 180" marker-end="url(#d-flujo-tip)"/>
-<text class="d-label" x="150" y="168" text-anchor="end">rechazada</text>
+<text class="d-label" x="150" y="78" text-anchor="end">todas las mesas</text>
 <path class="d-arrow" d="M380 62 L428 100" marker-end="url(#d-flujo-tip)"/>
 <text class="d-label" x="410" y="74" text-anchor="start">consume</text>
 <path class="d-arrow" d="M430 130 L382 182" marker-end="url(#d-flujo-tip)"/>
-<text class="d-label" x="412" y="172" text-anchor="start">no legible</text>
+<text class="d-label" x="412" y="172" text-anchor="start">rechazada</text>
 <path class="d-arrow" d="M570 100 L608 56" marker-end="url(#d-flujo-tip)"/>
 <text class="d-label" x="584" y="70" text-anchor="end">1 transacción</text>
 <path class="d-arrow" d="M610 182 L572 132" marker-end="url(#d-flujo-tip)"/>
@@ -393,7 +392,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <ul>
     <li>Recibe la carpeta con <code>09</code>, <code>10</code>, <code>03</code> y <code>07</code>, la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
     <li>Antes de publicar, <a href="#datos2023">comprueba</a> las mesas: claves únicas, votos que suman y candidaturas conocidas, y las mesas de cada provincia contra <code>07</code>. Si algo falla, termina con error sin publicar nada.</li>
-    <li>Valida cada mesa: si tiene más votantes que censo de escrutinio, va al dead letter con su motivo y no se cuenta. El resto del escrutinio sigue.</li>
+    <li>Publica todas las mesas, también las que el servicio rechazará: validarlas es cosa suya, porque solo él sabe cuántas mesas posibles tiene cada provincia (RN-13). Al comprobar los ficheros avisa de cuántas serán.</li>
     <li>Las mesas con menos censo tienden a llegar antes, con la curva de la <a href="#carga">carga</a>. Cada mesa llega en un punto al azar de su hueco en la curva, hasta medio hueco antes o después: los intervalos varían entre 0 y el doble del medio, con ráfagas y pausas, sin que ninguna mesa adelante a otra ni cambien los tramos. Con la misma semilla sale el mismo plan.</li>
     <li>No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya contado. Al terminar, muestra las mesas publicadas y el tiempo.</li>
   </ul>
@@ -401,7 +400,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h3>Kafka</h3>
   <ul>
     <li>Topic <code>escrutinio.mesas</code>, con <code>cleanup.policy=delete</code> y 6 particiones. Tiene que existir: los clientes no lo crean. Un mensaje por mesa: su clave, censo, blancos, nulos y votos por candidatura.</li>
-    <li>Dead letter: <code>escrutinio.mesas.dlq</code>, con 1 partición. Cada mensaje lleva el motivo (<code>reason</code>), su texto (<code>detail</code>) y la mesa (<code>station</code>) o, si no se pudo leer, el mensaje tal cual (<code>raw</code>). Motivos: <code>voters_over_census</code> (en 2023, 4 mesas, que manda el simulador) y <code>malformed</code> (lo que el servicio no puede leer como mesa).</li>
+    <li>Dead letter: <code>escrutinio.mesas.dlq</code>, con 1 partición, donde escribe el servicio. Cada mensaje lleva el motivo (<code>reason</code>), su texto (<code>detail</code>) y la mesa (<code>station</code>) o, si no se pudo leer, el mensaje tal cual (<code>raw</code>). Motivos: <code>voters_over_census</code> (más votantes que censo de escrutinio; en 2023, 4 mesas de León), <code>unknown_province</code> (una provincia que no es una de las 52) y <code>malformed</code> (lo que no se puede leer como mesa).</li>
     <li>La clave del mensaje es el código de provincia: las mesas de una provincia van en orden a la misma partición.</li>
     <li>El productor usa <code>acks=all</code>. El consumidor (grupo <code>escrutinio-servicio</code>, desde el principio si es nuevo) usa el autocommit de Kafka cada 5 s, pero solo de los offsets que guarda tras el <code>COMMIT</code> en PostgreSQL (<code>enable.auto.offset.store=false</code>). Confirmar cada mensaje a mano dejaba el consumidor parado tras unas 50.000 mesas.</li>
   </ul>
@@ -452,21 +451,23 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h3>Servicio</h3>
   <p>Hexagonal ligera, con los módulos en inglés y las dependencias hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
-    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. Qué hacer con cada mensaje: registrar la mesa o mandarla al dead letter, con la validación del contrato.</dd></div>
-    <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em> y <em>consultar los snapshots</em>. Puertos, como traits genéricos (sin <code>dyn</code>): el registro de mesas, el dead letter y la lectura de snapshots.</dd></div>
+    <div><dt><code>domain</code></dt><dd>Puro, sin E/S. Qué hacer con cada mensaje: registrar la mesa o mandarla al dead letter, con la validación del contrato y la comprobación de la provincia; las mesas de cada circunscripción (<code>reference</code>); y el cálculo del snapshot (<code>snapshot</code>): mesas N'/N', rechazadas y si está completa, por circunscripción y en total.</dd></div>
+    <div><dt><code>application</code></dt><dd>Casos de uso: <em>registrar una mesa</em>, que también anota las rechazadas, y <em>consultar los snapshots</em>, que junta lo de PostgreSQL con las 52 circunscripciones. Puertos, como traits genéricos (sin <code>dyn</code>): el registro de mesas, el dead letter y la lectura de totales.</dd></div>
     <div><dt><code>adapters</code></dt><dd>Entrada: el consumidor de Kafka y la API HTTP. Salida: el repositorio en PostgreSQL.</dd></div>
   </dl>
-  <p>La API tiene una sola consulta, <code>GET /snapshots</code>: las circunscripciones con alguna mesa escrutada (52 al terminar), por código de provincia, en JSON, con mesas escrutadas, censo, votantes, blancos, nulos y votos por candidatura de más a menos. Si PostgreSQL falla, responde 503.</p>
+  <p>La API tiene una sola consulta, <code>GET /snapshots</code>: un JSON con <code>provinces</code>, siempre las 52 circunscripciones por código de provincia (con ceros las que aún no tienen mesas), y <code>total</code>, el de España. Cada circunscripción trae <code>stations</code> (N'), <code>possible</code> (N), <code>rejected</code>, <code>complete</code>, censo, votantes, blancos, nulos y votos por candidatura de más a menos; el total, <code>stations</code>, <code>possible</code>, <code>rejected</code>, <code>complete</code> y <code>voters</code>. Todo calculado: quien lo pinta no suma ni compara. Si PostgreSQL falla, responde 503.</p>
+  <p>El denominador N baja a medida que llegan las rechazadas: León empieza en 722 y acaba en 718 cuando han llegado sus 4. Está completa cuando N' más las rechazadas llegan a 722.</p>
 
   <h3>PostgreSQL</h3>
   <ul>
     <li><code>mesa_escrutada</code>: una fila por mesa, con su clave como clave primaria.</li>
+    <li><code>mesa_rechazada</code>: una fila por mesa rechazada, con su clave y su motivo.</li>
     <li><code>provincia_snapshot</code>: una fila por circunscripción, creada con su primera mesa.</li>
     <li><code>votos_provincia</code>: votos por provincia y candidatura.</li>
   </ul>
   <figure class="diagram" aria-labelledby="d-tablas">
-    <figcaption id="d-tablas"><strong>Modelo relacional.</strong> Las tres tablas de PostgreSQL; las de provincia son acumulados que se suman con cada mesa.</figcaption>
-    <svg viewBox="0 0 730 232" role="img" aria-labelledby="d-tablas">
+    <figcaption id="d-tablas"><strong>Modelo relacional.</strong> Las cuatro tablas de PostgreSQL; las de provincia son acumulados que se suman con cada mesa.</figcaption>
+    <svg viewBox="0 0 730 384" role="img" aria-labelledby="d-tablas">
 <defs><marker id="d-tablas-tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-tipfill" d="M0 0 L10 5 L0 10 z"/></marker></defs>
 <rect class="d-box" x="10" y="20" width="220" height="178" rx="6"/>
 <rect class="d-head" x="10" y="20" width="220" height="26" rx="6"/>
@@ -506,29 +507,48 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 <text class="d-text" x="548" y="79">candidatura</text>
 <text class="d-text" x="548" y="97">siglas</text>
 <text class="d-text" x="548" y="115">votos</text>
+<rect class="d-box" x="280" y="190" width="180" height="160" rx="6"/>
+<rect class="d-head" x="280" y="190" width="180" height="26" rx="6"/>
+<rect class="d-head" x="280" y="210" width="180" height="6"/>
+<text class="d-title" x="290" y="207">mesa_rechazada</text>
+<text class="d-mark" x="290" y="231">PK</text>
+<text class="d-text" x="318" y="231">provincia</text>
+<text class="d-mark" x="290" y="249">PK</text>
+<text class="d-text" x="318" y="249">municipio</text>
+<text class="d-mark" x="290" y="267">PK</text>
+<text class="d-text" x="318" y="267">distrito</text>
+<text class="d-mark" x="290" y="285">PK</text>
+<text class="d-text" x="318" y="285">seccion</text>
+<text class="d-mark" x="290" y="303">PK</text>
+<text class="d-text" x="318" y="303">mesa</text>
+<text class="d-text" x="318" y="321">motivo</text>
+<text class="d-text" x="318" y="339">recibida</text>
 <path class="d-arrow" d="M230 56 L278 56" marker-end="url(#d-tablas-tip)"/>
 <text class="d-label" x="254" y="49" text-anchor="middle">N : 1</text>
 <path class="d-arrow" d="M510 56 L462 56" marker-end="url(#d-tablas-tip)"/>
 <text class="d-label" x="486" y="49" text-anchor="middle">N : 1</text>
-<text class="d-muted" x="10" y="220">PK: clave primaria · las relaciones son por provincia, sin clave foránea</text>
+<path class="d-arrow" d="M370 188 L370 164" marker-end="url(#d-tablas-tip)"/>
+<text class="d-label" x="396" y="178" text-anchor="start">N : 1</text>
+<text class="d-muted" x="10" y="372">PK: clave primaria · las relaciones son por provincia, sin clave foránea válidas</text>
     </svg>
   </figure>
 
-  <p>Cada mesa, en una transacción:</p>
+  <p>Cada mesa válida, en una transacción:</p>
   <ol>
     <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta, la mesa ya estaba contada y termina.</li>
     <li><code>INSERT INTO provincia_snapshot … ON CONFLICT DO UPDATE</code>, sumando solo en la fila de su provincia.</li>
     <li><code>INSERT INTO votos_provincia … ON CONFLICT DO UPDATE</code>, sumando los votos.</li>
     <li><code>COMMIT</code>; después se guarda el offset, que Kafka confirma en los 5 s siguientes.</li>
   </ol>
+  <p>Una mesa rechazada se anota con un solo <code>INSERT INTO mesa_rechazada … ON CONFLICT DO NOTHING</code> y después se envía al dead letter. Si el servicio cae entre las dos cosas, la recibe otra vez: no se cuenta dos veces, y el dead letter puede recibirla dos.</p>
   <p>Si el servicio cae antes de que se confirme el offset, recibe esas mesas otra vez y el paso 1 las descarta. No hay que recalcular nada: cada snapshot ya está en su fila. Las tablas se crean al arrancar si no existen. La API lee los snapshots con otra conexión y en una sola sentencia, así que ve un estado coherente sin esperar al consumidor.</p>
   <p>Las transacciones son cortas, de 1 a 5 ms: nada de Kafka ni de red dentro de ellas, y una mesa por transacción. La sesión del servicio limita <code>transaction_timeout</code> a 5 s, <code>statement_timeout</code> a 2 s e <code>idle_in_transaction_session_timeout</code> a 1 s. Si salta un límite o falla PostgreSQL, la transacción se deshace, el offset no se guarda y el servicio termina con error; al arrancarlo de nuevo, Kafka le entrega otra vez las mesas sin confirmar.</p>
 
   <h3>Borrar el escrutinio</h3>
-  <p><code>escrutinio-servicio borrar</code> vacía los dos topics (<code>delete_records</code> hasta el final de cada partición) y las tres tablas (<code>TRUNCATE</code> en una transacción), para que los escrutinios sucesivos no se acumulen. Primero Kafka, para que nada borrado vuelva a contarse. Se lanza con el simulador parado y muestra cuántos mensajes y mesas ha borrado.</p>
+  <p><code>escrutinio-servicio borrar</code> vacía los dos topics (<code>delete_records</code> hasta el final de cada partición) y las cuatro tablas (<code>TRUNCATE</code> en una transacción), para que los escrutinios sucesivos no se acumulen. Primero Kafka, para que nada borrado vuelva a contarse. Se lanza con el simulador parado y muestra cuántos mensajes y mesas ha borrado.</p>
 
   <h3>TUI</h3>
-  <p><code>escrutinio --servicio http://localhost:8080</code> (<code>cargo esc-seguir</code>) sigue al servicio con el censo de 2023 (RN-10, RN-11); sin la opción, es la maqueta de 2026 (RN-06). El total de España lo suma la TUI (RN-07).</p>
+  <p><code>escrutinio --servicio http://localhost:8080</code> (<code>cargo esc-seguir</code>) sigue al servicio con el censo de 2023 (RN-10, RN-11); sin la opción, es la maqueta de 2026 (RN-06). Pinta lo que trae el servicio (RN-13); solo suma el censo, el estimado y el escrutado del total (RN-07).</p>
 
   <h3 id="carga">Carga</h3>
   <p>Un mensaje por mesa: 60.314 en 7.200 s. La curva es una estimación.</p>
@@ -550,8 +570,8 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <h2 id="pendiente">Pendiente de decidir</h2>
   <div class="pending">
     <ul>
-      <li>Si la TUI muestra el % de mesas escrutadas, que ya viene en el snapshot.</li>
-      <li>Cómo contar como llegadas las mesas del dead letter, para que León pueda completarse (RN-12): hoy las aparta el simulador y el servicio no las ve.</li>
+      <li>Con los datos de 2026, de dónde saca el servicio las mesas de cada circunscripción (RN-13): hoy son las de 2023, fijas.</li>
+      <li>Si la TUI deja de sumar también el censo, el estimado y el escrutado del total (RN-07) y los trae el servicio.</li>
       <li>Desde el 29-11-2026: cómo elegir entre el escrutinio de 2023 y el de 2026 al seguir al servicio (RN-10).</li>
       <li>Si se añade el CERA al censo, y cómo se reparte por provincia.</li>
       <li>Si la participación estimada puede variar por provincia según las encuestas.</li>

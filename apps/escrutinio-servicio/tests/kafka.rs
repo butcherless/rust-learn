@@ -1,5 +1,5 @@
 //! El bucle de Kafka contra el Kafka y el PostgreSQL del compose (ver `common`): registra las mesas,
-//! descarta las repetidas y manda al dead letter lo que no es una mesa.
+//! descarta las repetidas, anota las rechazadas y manda al dead letter lo que no se puede contar.
 
 mod common;
 
@@ -31,9 +31,15 @@ async fn consumes_stations_duplicates_and_garbage() {
     let consumer = kafka::consumer(common::KAFKA, &group, &topic).expect("consumer");
 
     let a = common::json(&common::station("51", "A"));
+    // Una mesa con más votantes que censo: el servicio la rechaza.
+    let invalid = common::json(&escrutinio_contrato::StationMessage {
+        census: 10,
+        ..common::station("51", "B")
+    });
     for (key, payload) in [
         ("51", a.as_slice()),
         ("51", a.as_slice()),
+        ("51", invalid.as_slice()),
         ("51", b"basura".as_slice()),
     ] {
         common::produce(&topic, key, payload).await;
@@ -43,7 +49,7 @@ async fn consumes_stations_duplicates_and_garbage() {
     let mut last = Tally::default();
     let consuming = kafka::consume(&consumer, &mut store, &mut dead_letters, |tally| {
         last = tally;
-        if tally.total() == 3 {
+        if tally.total() == 4 {
             done.notify_one();
         }
     });
@@ -54,39 +60,47 @@ async fn consumes_stations_duplicates_and_garbage() {
         }
     })
     .await
-    .expect("three messages in time");
+    .expect("four messages in time");
     assert_eq!(
         last,
         Tally {
             recorded: 1,
             duplicates: 1,
-            dead_letters: 1
+            dead_letters: 2
         }
     );
 
     let snapshots = PgSnapshots::connect(&url).await.expect("snapshots");
-    let stations: u32 = snapshots
-        .snapshots()
-        .await
-        .expect("read")
-        .iter()
-        .map(|s| s.stations)
-        .sum();
-    assert_eq!(stations, 1);
+    let totals = snapshots.totals().await.expect("read");
+    assert_eq!(
+        totals
+            .iter()
+            .map(|t| (t.stations, t.rejected))
+            .collect::<Vec<_>>(),
+        [(1, 1)]
+    );
 
     let reader: StreamConsumer =
         kafka::consumer(common::KAFKA, &common::unique("lector"), &dlq).expect("reader");
-    let message = tokio::time::timeout(Duration::from_secs(60), reader.recv())
-        .await
-        .expect("dead letter in time")
-        .expect("dead letter");
-    let dead: DeadLetterMessage =
-        serde_json::from_slice(message.payload().unwrap_or_default()).expect("json");
+    let mut dead = vec![];
+    for _ in 0..2 {
+        let message = tokio::time::timeout(Duration::from_secs(60), reader.recv())
+            .await
+            .expect("dead letter in time")
+            .expect("dead letter");
+        let parsed: DeadLetterMessage =
+            serde_json::from_slice(message.payload().unwrap_or_default()).expect("json");
+        dead.push((message.key().map(<[u8]>::to_vec), parsed));
+    }
     assert_eq!(
-        (dead.reason.as_str(), dead.raw.as_deref()),
-        ("malformed", Some("basura"))
+        dead.iter()
+            .map(|(key, m)| (key.as_deref(), m.reason.as_str(), m.raw.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (Some(b"51".as_slice()), "voters_over_census", None),
+            (None, "malformed", Some("basura")),
+        ]
     );
-    assert_eq!(message.key(), None);
     common::drop_topics(&[&topic, &dlq]).await;
     common::drop_schema(&url).await;
 }

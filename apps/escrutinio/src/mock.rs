@@ -5,7 +5,7 @@
 //! como si informaran unas cuantas mesas. Con la misma semilla, el escrutinio es el mismo.
 
 use crate::census::District;
-use crate::domain::{Progress, Pulse, Tally};
+use crate::domain::{Pulse, Stations, Tally, Update};
 
 /// El resultado final, como fracción del estimado: entre `1 - FINAL_SPREAD` y `1 + FINAL_SPREAD`.
 const FINAL_SPREAD: f64 = 0.15;
@@ -38,6 +38,8 @@ pub struct Row {
     pub tally: Tally,
     /// Si su escrutado cambió en la última actualización (RN-12).
     pub pulse: Pulse,
+    /// Las mesas N'/N' que dice el servicio (RN-13); la maqueta no tiene mesas.
+    pub stations: Option<Stations>,
     /// Los votos con los que acabará el escrutinio simulado.
     pub target: u64,
 }
@@ -48,6 +50,10 @@ pub struct Scrutiny {
     rows: Vec<Row>,
     turnout: u8,
     rng: Rng,
+    /// Las mesas del total de España que dice el servicio (RN-13).
+    stations: Option<Stations>,
+    /// Si el escrutinio está completo: lo dice el servicio y, en la maqueta, `advance`.
+    complete: bool,
 }
 
 impl Scrutiny {
@@ -69,13 +75,20 @@ impl Scrutiny {
                                 district,
                                 tally,
                                 pulse: Pulse::NoData,
+                                stations: None,
                                 target,
                             },
                         ),
                         rng,
                     )
                 });
-        Self { rows, turnout, rng }
+        Self {
+            rows,
+            turnout,
+            rng,
+            stations: None,
+            complete: false,
+        }
     }
 
     /// Un paso más: cada circunscripción que no ha acabado suma al menos un voto, sin pasar de su
@@ -95,7 +108,13 @@ impl Scrutiny {
                 };
                 (push(rows, row), rng)
             });
-        Self { rows, rng, ..self }
+        let complete = rows.iter().all(|row| row.tally.counted >= row.target);
+        Self {
+            rows,
+            rng,
+            complete,
+            ..self
+        }
     }
 
     pub fn rows(&self) -> &[Row] {
@@ -112,35 +131,53 @@ impl Scrutiny {
         Tally::total(self.rows.iter().map(|row| &row.tally))
     }
 
-    /// El piloto del total (RN-12).
+    /// El piloto del total (RN-12): verde si el escrutinio está completo, y si no, según sus filas.
     pub fn pulse(&self) -> Pulse {
-        Pulse::total(self.rows.iter().map(|row| row.pulse))
+        if self.complete {
+            Pulse::Complete
+        } else {
+            Pulse::total(self.rows.iter().map(|row| row.pulse))
+        }
     }
 
-    /// Las mismas filas con lo escrutado de `counted`, por código de provincia; las que no
-    /// aparecen, a 0. Para seguir al servicio (RN-11), que manda siempre el acumulado. Una fila
-    /// está completa con todas sus mesas (RN-12).
-    pub fn with_counted(self, counted: &std::collections::BTreeMap<String, Progress>) -> Self {
+    /// Las mesas del total de España, N'/N', si las dice el servicio (RN-13).
+    pub fn stations(&self) -> Option<Stations> {
+        self.stations
+    }
+
+    /// Las mismas filas con lo que dice el servicio (RN-11, RN-13): sus votantes, sus mesas y si
+    /// están completas, por código de provincia, y lo mismo del total. Las filas que no aparecen se
+    /// quedan sin votos. El servicio manda siempre el acumulado, y aquí no se calcula nada: solo se
+    /// compara el escrutado con el de antes para el piloto (RN-12).
+    pub fn with_update(self, update: &Update) -> Self {
         let rows = self
             .rows
             .into_iter()
             .map(|row| {
-                let progress = counted.get(row.district.code).copied().unwrap_or_default();
-                let tally = row.tally.with_counted(progress.voters);
-                let complete = progress.stations >= row.district.stations;
+                let progress = update.provinces.get(row.district.code).copied();
+                let tally = row
+                    .tally
+                    .with_counted(progress.map_or(0, |progress| progress.voters));
+                let complete = progress.is_some_and(|progress| progress.complete);
                 Row {
                     pulse: Pulse::between(row.tally.counted, tally.counted, complete),
+                    stations: progress.map(|progress| progress.stations),
                     tally,
                     ..row
                 }
             })
             .collect();
-        Self { rows, ..self }
+        Self {
+            rows,
+            stations: Some(update.total),
+            complete: update.complete,
+            ..self
+        }
     }
 
-    /// Si todas las circunscripciones han llegado a su final.
+    /// Si el escrutinio está completo.
     pub fn finished(&self) -> bool {
-        self.rows.iter().all(|row| row.tally.counted >= row.target)
+        self.complete
     }
 }
 
@@ -172,6 +209,7 @@ mod tests {
     use super::fixtures::{SEED, advanced, scrutiny};
     use super::*;
     use crate::census::{Election, TOTAL_CENSUS};
+    use crate::domain::Progress;
 
     #[test]
     fn the_generator_stays_in_the_unit_interval_and_never_sticks_at_zero() {
@@ -246,69 +284,98 @@ mod tests {
         assert_eq!(finished.clone().advance().rows(), finished.rows());
     }
 
-    #[test]
-    fn takes_the_counted_votes_by_province_code() {
-        let progress = |voters| Progress {
-            voters,
-            stations: 1,
-        };
-        let counted = [
-            ("28".to_owned(), progress(1_000)),
-            ("51".to_owned(), progress(10_000_000)),
-        ]
-        .into();
-        let scrutiny = scrutiny().with_counted(&counted);
-        let by_code = |code| {
-            scrutiny
-                .rows()
+    /// Una respuesta del servicio con estas circunscripciones: (provincia, votantes, mesas, posibles,
+    /// completa).
+    fn update(
+        provinces: &[(&str, u64, u32, u32, bool)],
+        total: Stations,
+        complete: bool,
+    ) -> Update {
+        Update {
+            provinces: provinces
                 .iter()
-                .find(|row| row.district.code == code)
-                .map(|row| (row.tally.counted, row.tally.census))
+                .map(|&(code, voters, counted, possible, complete)| {
+                    let stations = Stations { counted, possible };
+                    (
+                        code.to_owned(),
+                        Progress {
+                            voters,
+                            stations,
+                            complete,
+                        },
+                    )
+                })
+                .collect(),
+            total,
+            complete,
+        }
+    }
+
+    fn row<'a>(scrutiny: &'a Scrutiny, code: &str) -> Option<&'a Row> {
+        scrutiny.rows().iter().find(|row| row.district.code == code)
+    }
+
+    #[test]
+    fn takes_what_the_service_says_for_each_district_and_the_total() {
+        let total = Stations {
+            counted: 10,
+            possible: 20,
         };
-        assert_eq!(by_code("28").map(|(counted, _)| counted), Some(1_000));
-        // Nunca pasa del censo (RN-05), y lo que no llega queda a 0.
+        let scrutiny = scrutiny().with_update(&update(
+            &[("28", 1_000, 7, 9, false), ("51", 10_000_000, 3, 3, true)],
+            total,
+            false,
+        ));
         assert_eq!(
-            by_code("51").map(|(counted, census)| counted == census),
+            row(&scrutiny, "28").map(|row| (row.tally.counted, row.stations)),
+            Some((
+                1_000,
+                Some(Stations {
+                    counted: 7,
+                    possible: 9
+                })
+            ))
+        );
+        // Nunca pasa del censo (RN-05), y lo que no llega queda sin votos ni mesas.
+        assert_eq!(
+            row(&scrutiny, "51").map(|row| row.tally.counted == row.tally.census),
             Some(true)
         );
-        assert_eq!(by_code("02").map(|(counted, _)| counted), Some(0));
+        assert_eq!(
+            row(&scrutiny, "02").map(|row| (row.tally.counted, row.stations)),
+            Some((0, None))
+        );
+        assert_eq!(scrutiny.stations(), Some(total));
+        assert!(!scrutiny.finished());
+        // La maqueta no tiene mesas.
+        assert_eq!(super::fixtures::scrutiny().stations(), None);
     }
 
     #[test]
     fn pulses_follow_the_changes_of_each_update() {
-        let pulse_of = |scrutiny: &Scrutiny, code| {
-            scrutiny
-                .rows()
-                .iter()
-                .find(|row| row.district.code == code)
-                .map(|row| row.pulse)
-        };
+        let total = Stations::default();
+        let pulse_of = |scrutiny: &Scrutiny, code| row(scrutiny, code).map(|row| row.pulse);
         assert_eq!(scrutiny().pulse(), Pulse::NoData);
-        let first = scrutiny().with_counted(
-            &[(
-                "28".to_owned(),
-                Progress {
-                    voters: 1_000,
-                    stations: 1,
-                },
-            )]
-            .into(),
-        );
+        let first = scrutiny().with_update(&update(&[("28", 1_000, 1, 2, false)], total, false));
         assert_eq!(pulse_of(&first, "28"), Some(Pulse::Updated));
         assert_eq!(pulse_of(&first, "51"), Some(Pulse::NoData));
         assert_eq!(first.pulse(), Pulse::Updated);
-        let same = first.clone().with_counted(
-            &[(
-                "28".to_owned(),
-                Progress {
-                    voters: 1_000,
-                    stations: 1,
-                },
-            )]
-            .into(),
-        );
+        let same = first
+            .clone()
+            .with_update(&update(&[("28", 1_000, 1, 2, false)], total, false));
         assert_eq!(pulse_of(&same, "28"), Some(Pulse::Steady));
         assert_eq!(same.pulse(), Pulse::Steady);
+        // Que esté completa lo dice el servicio, aunque no haya cambiado nada.
+        let complete = same.with_update(&update(&[("28", 1_000, 2, 2, true)], total, false));
+        assert_eq!(pulse_of(&complete, "28"), Some(Pulse::Complete));
+        assert_eq!(complete.pulse(), Pulse::Steady);
+        let all = complete.with_update(&update(&[("28", 1_000, 2, 2, true)], total, true));
+        assert_eq!(all.pulse(), Pulse::Complete);
+        assert!(all.finished());
+    }
+
+    #[test]
+    fn the_mock_pulses_follow_its_steps_and_end_complete() {
         let one_step = advanced(1);
         assert!(
             one_step
@@ -316,6 +383,7 @@ mod tests {
                 .iter()
                 .all(|row| row.pulse == Pulse::Updated)
         );
+        assert_eq!(one_step.pulse(), Pulse::Updated);
         let finished = advanced(200);
         assert!(
             finished
@@ -324,17 +392,6 @@ mod tests {
                 .all(|row| row.pulse == Pulse::Complete)
         );
         assert_eq!(finished.pulse(), Pulse::Complete);
-        let all_stations = first.with_counted(
-            &[(
-                "28".to_owned(),
-                Progress {
-                    voters: 2_000,
-                    stations: 7_608,
-                },
-            )]
-            .into(),
-        );
-        assert_eq!(pulse_of(&all_stations, "28"), Some(Pulse::Complete));
     }
 
     #[test]

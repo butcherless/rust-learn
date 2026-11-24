@@ -3,7 +3,7 @@
 Librería compartida por las apps del escrutinio
 ([escrutinio-simulador](../../apps/escrutinio-simulador), [escrutinio-servicio](../../apps/escrutinio-servicio)
 y la TUI [escrutinio](../../apps/escrutinio)): los mensajes de Kafka (la mesa y el dead
-letter), la validación de una mesa y el snapshot de `GET /snapshots`.
+letter), la validación de una mesa y lo que sirve `GET /snapshots` (`Snapshots`, con las 52 circunscripciones y el total).
 
 Es pura, sin E/S: tipos con serde y reglas. El JSON de cada tipo está fijado en sus tests, y el diseño
 en los [requisitos de escrutinio](../../apps/escrutinio/docs/requisitos-escrutinio.html), sección

@@ -58,6 +58,8 @@ impl StationMessage {
 pub enum Rejection {
     /// Más votantes que censo de escrutinio (4 mesas de León en 2023).
     VotersOverCensus { voters: u32, census: u32 },
+    /// De una provincia que no está entre las 52 circunscripciones.
+    UnknownProvince { province: String },
     /// El mensaje no es una mesa válida en JSON.
     Malformed { detail: String },
 }
@@ -67,6 +69,7 @@ impl Rejection {
     pub fn code(&self) -> &'static str {
         match self {
             Rejection::VotersOverCensus { .. } => "voters_over_census",
+            Rejection::UnknownProvince { .. } => "unknown_province",
             Rejection::Malformed { .. } => "malformed",
         }
     }
@@ -78,6 +81,9 @@ impl fmt::Display for Rejection {
             Rejection::VotersOverCensus { voters, census } => f.pad(&format!(
                 "{voters} votantes y {census} de censo de escrutinio"
             )),
+            Rejection::UnknownProvince { province } => {
+                f.pad(&format!("la provincia {province} no existe"))
+            }
             Rejection::Malformed { detail } => f.pad(&format!("mensaje no válido: {detail}")),
         }
     }
@@ -132,12 +138,42 @@ impl DeadLetterMessage {
     }
 }
 
-/// El acumulado de una circunscripción, tal como lo sirve `GET /snapshots`.
+/// Lo que sirve `GET /snapshots`: las 52 circunscripciones y el total de España. Todo está
+/// calculado: quien lo pinta no suma ni compara nada.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Snapshots {
+    /// Por código de provincia.
+    pub provinces: Vec<ProvinceSnapshot>,
+    pub total: Total,
+}
+
+/// Las mesas del total de España. `stations` de `possible` es el N'/N' que se pinta.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Total {
+    /// Mesas escrutadas, válidas.
+    pub stations: u32,
+    /// Las que se pueden escrutar: todas menos las rechazadas.
+    pub possible: u32,
+    /// Las rechazadas, que van al dead letter.
+    pub rejected: u32,
+    /// Se escrutaron todas las posibles.
+    pub complete: bool,
+    /// Votantes de las mesas escrutadas.
+    pub voters: u64,
+}
+
+/// El acumulado de una circunscripción: siempre están las 52, también sin mesas.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvinceSnapshot {
     pub province: String,
-    /// Mesas escrutadas.
+    /// Mesas escrutadas, válidas.
     pub stations: u32,
+    /// Las que se pueden escrutar: todas las de la circunscripción menos las rechazadas.
+    pub possible: u32,
+    /// Las rechazadas, que van al dead letter.
+    pub rejected: u32,
+    /// Se escrutaron todas las posibles.
+    pub complete: bool,
     /// Censo de las mesas escrutadas.
     pub census: u64,
     pub voters: u64,
@@ -238,6 +274,13 @@ mod tests {
                 "53 votantes y 52 de censo de escrutinio",
             ),
             (
+                Rejection::UnknownProvince {
+                    province: "99".to_owned(),
+                },
+                "unknown_province",
+                "la provincia 99 no existe",
+            ),
+            (
                 Rejection::Malformed {
                     detail: "EOF".to_owned(),
                 },
@@ -280,10 +323,13 @@ mod tests {
     }
 
     #[test]
-    fn the_snapshot_is_this_json() {
-        let snapshot = ProvinceSnapshot {
+    fn the_snapshots_are_this_json() {
+        let province = ProvinceSnapshot {
             province: "51".to_owned(),
             stations: 2,
+            possible: 3,
+            rejected: 1,
+            complete: false,
             census: 200,
             voters: 106,
             blank: 2,
@@ -294,11 +340,24 @@ mod tests {
                 votes: 60,
             }],
         };
-        let json = r#"{"province":"51","stations":2,"census":200,"voters":106,"blank":2,"invalid":4,"votes":[{"candidacy":1,"acronym":"AAA","votes":60}]}"#;
-        assert_eq!(serde_json::to_string(&snapshot).ok().as_deref(), Some(json));
+        let snapshots = Snapshots {
+            total: Total {
+                stations: 2,
+                possible: 3,
+                rejected: 1,
+                complete: false,
+                voters: 106,
+            },
+            provinces: vec![province],
+        };
+        let json = r#"{"provinces":[{"province":"51","stations":2,"possible":3,"rejected":1,"complete":false,"census":200,"voters":106,"blank":2,"invalid":4,"votes":[{"candidacy":1,"acronym":"AAA","votes":60}]}],"total":{"stations":2,"possible":3,"rejected":1,"complete":false,"voters":106}}"#;
         assert_eq!(
-            serde_json::from_str::<ProvinceSnapshot>(json).ok(),
-            Some(snapshot)
+            serde_json::to_string(&snapshots).ok().as_deref(),
+            Some(json)
+        );
+        assert_eq!(
+            serde_json::from_str::<Snapshots>(json).ok(),
+            Some(snapshots)
         );
     }
 }

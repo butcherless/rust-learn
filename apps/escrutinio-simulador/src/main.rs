@@ -33,11 +33,10 @@ fn run(args: Args) -> anyhow::Result<()> {
         return Ok(());
     }
     let plan = schedule(dataset.stations, args.duracion, args.semilla);
-    let mut publisher = KafkaPublisher::connect(&args.kafka, &args.topic, &args.topic_dlq)?;
+    let mut publisher = KafkaPublisher::connect(&args.kafka, &args.topic)?;
     println!(
-        "Publicando en {} y {} ({}) durante {}…",
+        "Publicando en {} ({}) durante {}…",
         args.topic,
-        args.topic_dlq,
         args.kafka,
         cli::clock(args.duracion)
     );
@@ -54,9 +53,6 @@ fn run(args: Args) -> anyhow::Result<()> {
             }
         },
     )?;
-    println!(
-        "{}",
-        cli::published(published.valid, published.rejected, pacer.elapsed())
-    );
+    println!("{}", cli::published(published, pacer.elapsed()));
     Ok(())
 }

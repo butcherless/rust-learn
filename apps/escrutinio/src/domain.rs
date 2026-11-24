@@ -5,6 +5,8 @@
 //! - `sort_key` ordena los nombres sin tildes ni mayúsculas, con la `ñ` detrás de la `n` (RN-03).
 //! - `thousands` y `percent` dan los números en formato español (RN-08).
 //! - `Pulse` es el piloto de cada fila: si su escrutado cambió en la última actualización (RN-12).
+//! - `Stations`, `Progress` y `Update` son lo que llega del servicio, ya calculado: la TUI lo pinta
+//!   sin sumar ni comparar mesas (RN-13).
 
 /// La participación estimada por defecto, en % del censo (RN-04).
 pub const DEFAULT_TURNOUT: u8 = 70;
@@ -53,11 +55,29 @@ impl Tally {
     }
 }
 
-/// Lo escrutado de una circunscripción según el servicio: votantes y mesas (RN-11, RN-12).
+/// Las mesas escrutadas, N', de las posibles, N (RN-13). N' ≤ N: las rechazadas no cuentan en N.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Stations {
+    pub counted: u32,
+    pub possible: u32,
+}
+
+/// Lo escrutado de una circunscripción según el servicio (RN-11, RN-13): votantes, mesas y si están
+/// todas las posibles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Progress {
     pub voters: u64,
-    pub stations: u32,
+    pub stations: Stations,
+    pub complete: bool,
+}
+
+/// Una respuesta del servicio, ya calculada: lo de cada circunscripción por código de provincia y
+/// las mesas del total de España con su «completo».
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Update {
+    pub provinces: std::collections::BTreeMap<String, Progress>,
+    pub total: Stations,
+    pub complete: bool,
 }
 
 /// El piloto de una fila (RN-12): qué pasó con su escrutado en la última actualización.
@@ -88,14 +108,13 @@ impl Pulse {
         }
     }
 
-    /// El piloto del total: completo si todas las filas lo están; si no, actualizado si alguna lo
-    /// está, sin datos si ninguna tiene votos y sin cambios en el resto de casos.
+    /// El piloto del total mientras no esté completo: actualizado si alguna fila lo está, sin datos
+    /// si ninguna tiene votos y sin cambios en el resto de casos. Que esté completo lo dice el
+    /// servicio, no se deduce de las filas.
     pub fn total(pulses: impl IntoIterator<Item = Pulse>) -> Self {
         let pulses: Vec<Pulse> = pulses.into_iter().collect();
         let any = |wanted: Pulse| pulses.contains(&wanted);
-        if !pulses.is_empty() && pulses.iter().all(|&pulse| pulse == Self::Complete) {
-            Self::Complete
-        } else if any(Self::Updated) {
+        if any(Self::Updated) {
             Self::Updated
         } else if any(Self::Steady) || any(Self::Complete) {
             Self::Steady
@@ -252,14 +271,14 @@ mod tests {
     }
 
     #[test]
-    fn the_total_pulse_is_complete_only_when_every_row_is() {
+    fn the_total_pulse_never_decides_that_it_is_complete() {
         use Pulse::{Complete, NoData, Steady, Updated};
         [
             (vec![], NoData),
             (vec![NoData, NoData], NoData),
             (vec![NoData, Steady], Steady),
             (vec![Steady, Updated, NoData], Updated),
-            (vec![Complete, Complete], Complete),
+            (vec![Complete, Complete], Steady),
             (vec![Complete, NoData], Steady),
             (vec![Complete, Updated], Updated),
         ]

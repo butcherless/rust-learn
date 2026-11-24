@@ -23,10 +23,6 @@ pub struct Args {
     #[arg(long, default_value = "escrutinio.mesas")]
     pub topic: String,
 
-    /// Topic del dead letter, donde van las mesas que no pasan la validación.
-    #[arg(long, default_value = "escrutinio.mesas.dlq")]
-    pub topic_dlq: String,
-
     /// Cuánto dura el escrutinio: un número con h, m o s (2h, 90m, 30s).
     #[arg(long, value_name = "DURACIÓN", default_value = "2h", value_parser = parse_duration)]
     pub duracion: Duration,
@@ -94,20 +90,19 @@ pub fn checked(summary: &Summary) -> String {
         format!("{turnout:.2} %").replace('.', ",")
     ) + &match summary.rejected {
         0 => String::new(),
-        1 => " 1 no es válida e irá al dead letter.".to_owned(),
+        1 => " 1 la rechazará el servicio, que la enviará al dead letter.".to_owned(),
         n => format!(
-            " {} no son válidas e irán al dead letter.",
+            " {} las rechazará el servicio, que las enviará al dead letter.",
             thousands(n as u64)
         ),
     }
 }
 
 /// La línea final.
-pub fn published(valid: usize, rejected: usize, elapsed: Duration) -> String {
+pub fn published(stations: usize, elapsed: Duration) -> String {
     format!(
-        "Publicadas {} mesas y {} en el dead letter en {}.",
-        thousands(valid as u64),
-        thousands(rejected as u64),
+        "Publicadas {} mesas en {}.",
+        thousands(stations as u64),
         clock(elapsed)
     )
 }
@@ -182,11 +177,11 @@ mod tests {
             (0, "votantes (50,00 %)."),
             (
                 1,
-                "votantes (50,00 %). 1 no es válida e irá al dead letter.",
+                "votantes (50,00 %). 1 la rechazará el servicio, que la enviará al dead letter.",
             ),
             (
                 4,
-                "votantes (50,00 %). 4 no son válidas e irán al dead letter.",
+                "votantes (50,00 %). 4 las rechazará el servicio, que las enviará al dead letter.",
             ),
         ]
         .into_iter()
@@ -194,8 +189,8 @@ mod tests {
             assert!(checked(&summary(rejected)).ends_with(end), "{rejected}")
         });
         assert_eq!(
-            published(60_310, 4, Duration::from_secs(300)),
-            "Publicadas 60.310 mesas y 4 en el dead letter en 0:05:00."
+            published(60_314, Duration::from_secs(300)),
+            "Publicadas 60.314 mesas en 0:05:00."
         );
     }
 }

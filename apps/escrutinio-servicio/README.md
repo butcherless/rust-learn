@@ -2,7 +2,9 @@
 
 Consume las mesas que publica [escrutinio-simulador](../escrutinio-simulador) en Kafka, las guarda en
 PostgreSQL y sirve el acumulado de cada circunscripción en `GET /snapshots`, para la TUI. Cada mesa
-se cuenta una sola vez, aunque llegue repetida, y lo que no es una mesa válida va al dead letter.
+se cuenta una sola vez, aunque llegue repetida, y lo que no es una mesa válida (más votantes que
+censo, una provincia que no existe, un mensaje ilegible) va al dead letter. Es quien calcula: cuántas
+mesas se han escrutado de las posibles y si cada provincia, y España, está completa.
 
 El diseño (tablas, transacción, offsets y API) está en los
 [requisitos de escrutinio](../escrutinio/docs/requisitos-escrutinio.html), sección «Backend».
@@ -46,15 +48,23 @@ opciones de Kafka, topics y PostgreSQL que el servicio (`cargo esc-borrar --topi
 
 ## API
 
-`GET /snapshots` devuelve las circunscripciones con alguna mesa escrutada, por código de provincia:
+`GET /snapshots` devuelve siempre las 52 circunscripciones por código de provincia (con ceros las
+que aún no tienen mesas) y el total de España, con todo calculado:
 
 ```json
-[{"province":"28","stations":7118,"census":4848057,"voters":3594693,"blank":28700,"invalid":30244,
-  "votes":[{"candidacy":5,"acronym":"PP","votes":1444177}, …]}]
+{"provinces":[{"province":"24","stations":718,"possible":718,"rejected":4,"complete":true,
+               "census":373582,"voters":271986,"blank":1533,"invalid":2415,
+               "votes":[{"candidacy":5,"acronym":"PP","votes":99688}, …]}, …],
+ "total":{"stations":60310,"possible":60310,"rejected":4,"complete":true,"voters":24742466}}
 ```
 
-`stations` son las mesas escrutadas y `census`, su censo. Los votos van de más a menos. Si
-PostgreSQL no responde, contesta 503.
+- `stations` son las mesas válidas escrutadas, N', y `possible`, las que se pueden escrutar, N: todas
+  las de la circunscripción menos las `rejected`. Se pinta `N'/N`, como `718/718`.
+- `complete` es que se han escrutado todas las posibles. Mientras llegan las rechazadas, `possible`
+  baja: León empieza en 722 y acaba en 718.
+- `census` es el de las mesas escrutadas, y los `votes` van de más a menos.
+
+Si PostgreSQL no responde, contesta 503.
 
 ## Opciones
 

@@ -2,8 +2,9 @@
 
 Dispara el escrutinio: publica en Kafka, una a una, las 60.314 mesas del Congreso del 23 de julio
 de 2023, cada una en su momento, a lo largo de 2 horas. Las mesas son las reales de Interior; solo el
-orden y la hora de llegada son simulados. Antes de publicar comprueba que los ficheros cuadran, y
-manda al dead letter las mesas que no pasan la validación (en 2023, 4 con más votantes que censo).
+orden y la hora de llegada son simulados. Antes de publicar comprueba que los ficheros cuadran.
+Publica todas las mesas: validarlas y apartar al dead letter las que no valen (en 2023, 4 con más
+votantes que censo) es cosa del [servicio](../escrutinio-servicio/README.md).
 
 Las reglas, el formato de los ficheros y el mensaje están en los
 [requisitos de escrutinio](../escrutinio/docs/requisitos-escrutinio.html) (secciones «Resultados de
@@ -71,11 +72,11 @@ docker compose -f compose/escrutinio.yaml --profile visor up -d   # Kafka, Postg
 La primera vez recrea el contenedor de Kafka (que publica el puerto del visor) y se pierden sus
 mensajes: hazlo antes de lanzar la carga, no durante. Después, abre **http://localhost:8081**:
 
-- **Topics → `escrutinio.mesas` → Messages:** las mesas publicadas, con su clave (el código de
+- **Topics → `escrutinio.mesas` → Messages:** las mesas publicadas, las 60.314, con su clave (el código de
   provincia) y el JSON. Puedes empezar por las más antiguas o las más nuevas, seguirlas en directo
   mientras corre el simulador y filtrar por clave, por ejemplo `28` para Madrid.
-- **Topics → `escrutinio.mesas.dlq` → Messages:** las mesas rechazadas, con su motivo (`reason`) y
-  su texto (`detail`). En 2023 son 4, de León.
+- **Topics → `escrutinio.mesas.dlq` → Messages:** las mesas que el servicio rechaza, con su motivo
+  (`reason`) y su texto (`detail`). En 2023 son 4, de León.
 - **Consumers → `escrutinio-servicio`:** el retraso (*lag*) del servicio en cada partición, es decir,
   las mesas publicadas que aún no ha registrado. Con el servicio al día, 0.
 
@@ -95,13 +96,12 @@ comparte.
 | `--datos <CARPETA>` | `apps/escrutinio-simulador/datos` con `cargo esc-sim` | Carpeta con los ficheros `09`, `10`, `03` y `07` |
 | `--kafka <SERVIDORES>` | `localhost:9092` | Servidores de Kafka |
 | `--topic <TOPIC>` | `escrutinio.mesas` | Topic donde se publican las mesas; tiene que existir |
-| `--topic-dlq <TOPIC_DLQ>` | `escrutinio.mesas.dlq` | Dead letter: las mesas que no pasan la validación; tiene que existir |
 | `--duracion <DURACIÓN>` | `2h` | Cuánto dura el escrutinio: un número con `h`, `m` o `s` |
 | `--semilla <N>` | 2023 | La misma semilla da el mismo orden y los mismos tiempos de llegada |
 | `--solo-comprobar` | | Solo comprueba los ficheros, sin publicar |
 
-Muestra lo comprobado, el avance cada 10 % y, al terminar, las mesas publicadas, las del dead letter
-y el tiempo. No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya
+Muestra lo comprobado (y cuántas mesas rechazará el servicio), el avance cada 10 % y, al terminar,
+las mesas publicadas y el tiempo. No guarda estado: si se relanza, publica todo otra vez y el servicio descarta lo ya
 contado.
 
 ## Códigos de salida

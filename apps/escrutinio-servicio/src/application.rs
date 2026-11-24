@@ -1,13 +1,14 @@
-//! Los casos de uso (requisitos de escrutinio, «Servicio»): *registrar una mesa* y *consultar los
-//! snapshots*. PostgreSQL y el dead letter de Kafka son puertos: traits genéricos, sin `dyn`, con
-//! fakes en memoria en los tests.
+//! Los casos de uso (requisitos de escrutinio, «Servicio»): *registrar una mesa*, que también
+//! anota las rechazadas, y *consultar los snapshots*, ya calculados. PostgreSQL y el dead letter de
+//! Kafka son puertos: traits genéricos, sin `dyn`, con fakes en memoria en los tests.
 
 use std::error::Error;
 use std::future::Future;
 
-use escrutinio_contrato::{DeadLetterMessage, ProvinceSnapshot, StationMessage};
+use escrutinio_contrato::{DeadLetterMessage, Snapshots, StationMessage};
 use thiserror::Error;
 
+use crate::domain::snapshot::{ProvinceTotals, snapshots as build_snapshots};
 use crate::domain::{Incoming, classify};
 
 /// Si una mesa se ha contado ahora o ya estaba contada.
@@ -25,6 +26,14 @@ pub trait StationStore {
         &mut self,
         station: &StationMessage,
     ) -> impl Future<Output = Result<Recorded, Self::Error>> + Send;
+
+    /// Anota una mesa rechazada y su motivo, una sola vez: cuenta para saber cuántas mesas posibles
+    /// le quedan a su provincia.
+    fn reject(
+        &mut self,
+        station: &StationMessage,
+        reason: &str,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 /// El dead letter.
@@ -42,7 +51,14 @@ pub trait DeadLetters {
 pub trait SnapshotSource {
     type Error: Error + Send + Sync + 'static;
 
-    fn snapshots(&self) -> impl Future<Output = Result<Vec<ProvinceSnapshot>, Self::Error>> + Send;
+    /// Lo acumulado de las provincias que tienen alguna mesa, válida o rechazada.
+    fn totals(&self) -> impl Future<Output = Result<Vec<ProvinceTotals>, Self::Error>> + Send;
+}
+
+/// Consultar los snapshots: las 52 circunscripciones y el total, con todo calculado, para que quien
+/// los pinte no sume ni compare nada.
+pub async fn snapshots<S: SnapshotSource>(source: &S) -> Result<Snapshots, S::Error> {
+    source.totals().await.map(build_snapshots)
 }
 
 /// Qué ha pasado con un mensaje.
@@ -73,11 +89,19 @@ pub async fn handle<S: StationStore, D: DeadLetters>(
             Ok(Recorded::Duplicate) => Ok(Outcome::Duplicate),
             Err(error) => Err(HandleError::Store(station.id(), error)),
         },
-        Incoming::DeadLetter { key, message } => dead_letters
-            .send(key.as_deref(), &message)
-            .await
-            .map(|()| Outcome::DeadLetter)
-            .map_err(HandleError::DeadLetter),
+        Incoming::DeadLetter { key, message } => {
+            if let Some(station) = &message.station {
+                store
+                    .reject(station, &message.reason)
+                    .await
+                    .map_err(|error| HandleError::Store(station.id(), error))?;
+            }
+            dead_letters
+                .send(key.as_deref(), &message)
+                .await
+                .map(|()| Outcome::DeadLetter)
+                .map_err(HandleError::DeadLetter)
+        }
     }
 }
 
@@ -147,7 +171,7 @@ pub async fn wipe<K: Wipe, P: Wipe>(
 
 #[cfg(test)]
 pub(crate) mod fakes {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::fmt;
 
     use super::*;
@@ -163,10 +187,11 @@ pub(crate) mod fakes {
 
     impl Error for Down {}
 
-    /// Guarda las mesas registradas; con `down`, falla.
+    /// Guarda las mesas registradas y las rechazadas con su motivo; con `down`, falla.
     #[derive(Default)]
     pub struct FakeStore {
         pub ids: BTreeSet<String>,
+        pub rejected: BTreeMap<String, String>,
         pub down: bool,
     }
 
@@ -179,6 +204,14 @@ pub(crate) mod fakes {
                 (false, true) => Ok(Recorded::New),
                 (false, false) => Ok(Recorded::Duplicate),
             }
+        }
+
+        async fn reject(&mut self, station: &StationMessage, reason: &str) -> Result<(), Down> {
+            if self.down {
+                return Err(Down);
+            }
+            self.rejected.insert(station.id(), reason.to_owned());
+            Ok(())
         }
     }
 
@@ -224,13 +257,13 @@ pub(crate) mod fakes {
         }
     }
 
-    /// Devuelve siempre los mismos snapshots, o falla.
-    pub struct FakeSnapshots(pub Result<Vec<ProvinceSnapshot>, ()>);
+    /// Devuelve siempre los mismos totales, o falla.
+    pub struct FakeSnapshots(pub Result<Vec<ProvinceTotals>, ()>);
 
     impl SnapshotSource for FakeSnapshots {
         type Error = Down;
 
-        async fn snapshots(&self) -> Result<Vec<ProvinceSnapshot>, Down> {
+        async fn totals(&self) -> Result<Vec<ProvinceTotals>, Down> {
             self.0.clone().map_err(|()| Down)
         }
     }
@@ -279,6 +312,49 @@ mod tests {
                 .collect::<Vec<_>>(),
             [(Some("51"), "voters_over_census"), (None, "malformed")]
         );
+    }
+
+    #[tokio::test]
+    async fn notes_each_rejected_station_before_sending_it_to_the_dead_letter() {
+        let (mut store, mut dead) = (FakeStore::default(), FakeDeadLetters::default());
+        let invalid = json(&StationMessage {
+            census: 10,
+            ..station("A")
+        });
+        // Dos veces: la anota una vez y la manda las dos, para no perderla si falló el envío.
+        for _ in 0..2 {
+            handle(&invalid, &mut store, &mut dead).await.ok();
+        }
+        // Un mensaje ilegible no es de ninguna provincia: no se anota.
+        handle(b"x", &mut store, &mut dead).await.ok();
+        assert_eq!(
+            store.rejected.into_iter().collect::<Vec<_>>(),
+            [(
+                "51-001-01-001-A".to_owned(),
+                "voters_over_census".to_owned()
+            )]
+        );
+        assert_eq!(dead.sent.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn serves_the_snapshots_calculated_and_fails_with_postgres() {
+        use crate::domain::snapshot::fixtures::totals;
+        let snapshots = snapshots(&FakeSnapshots(Ok(vec![totals("51", 96, 0)]))).await;
+        let ceuta = snapshots
+            .as_ref()
+            .ok()
+            .and_then(|s| s.provinces.iter().find(|p| p.province == "51"));
+        assert_eq!(
+            ceuta.map(|p| (p.stations, p.possible, p.complete)),
+            Some((96, 96, true))
+        );
+        assert_eq!(snapshots.map(|s| s.provinces.len()).ok(), Some(52));
+        assert_eq!(snapshots_error().await, Some(Down));
+    }
+
+    async fn snapshots_error() -> Option<Down> {
+        snapshots(&FakeSnapshots(Err(()))).await.err()
     }
 
     #[tokio::test]

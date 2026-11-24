@@ -1,8 +1,12 @@
 //! Puro, sin E/S: qué hacer con un mensaje de `escrutinio.mesas` (requisitos de escrutinio,
-//! «Servicio»). Se lee como mesa y se valida con el contrato; lo que no se puede leer o no pasa la
-//! validación va al dead letter.
+//! «Servicio»). Se lee como mesa y se valida con el contrato; lo que no se puede leer, es de una
+//! provincia que no existe o no pasa la validación va al dead letter. `reference` tiene las mesas de
+//! cada provincia y `snapshot` calcula lo que sirve la API.
 
-use escrutinio_contrato::{DeadLetterMessage, StationMessage, validate};
+pub mod reference;
+pub mod snapshot;
+
+use escrutinio_contrato::{DeadLetterMessage, Rejection, StationMessage, validate};
 
 /// Lo que se hace con un mensaje.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,13 +26,24 @@ pub fn classify(payload: &[u8]) -> Incoming {
             key: None,
             message: DeadLetterMessage::malformed(payload, error.to_string()),
         },
-        Ok(station) => match validate(&station) {
+        Ok(station) => match known_province(&station).and_then(|()| validate(&station)) {
             Ok(()) => Incoming::Station(station),
             Err(rejection) => Incoming::DeadLetter {
                 key: Some(station.province.clone()),
                 message: DeadLetterMessage::rejected(station, &rejection),
             },
         },
+    }
+}
+
+/// La provincia de la mesa tiene que ser una de las 52 circunscripciones.
+fn known_province(station: &StationMessage) -> Result<(), Rejection> {
+    if reference::expected(&station.province).is_some() {
+        Ok(())
+    } else {
+        Err(Rejection::UnknownProvince {
+            province: station.province.clone(),
+        })
     }
 }
 
@@ -91,6 +106,22 @@ mod tests {
                 assert_eq!(key.as_deref(), Some("51"));
                 assert_eq!(message.reason, "voters_over_census");
                 assert_eq!(message.station, Some(invalid));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_station_of_an_unknown_province_goes_to_the_dead_letter() {
+        let unknown = StationMessage {
+            province: "99".to_owned(),
+            ..station("A")
+        };
+        match classify(&json(&unknown)) {
+            Incoming::DeadLetter { key, message } => {
+                assert_eq!(key.as_deref(), Some("99"));
+                assert_eq!(message.reason, "unknown_province");
+                assert_eq!(message.station, Some(unknown));
             }
             other => panic!("{other:?}"),
         }

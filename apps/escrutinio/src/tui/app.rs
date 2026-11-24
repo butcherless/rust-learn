@@ -5,11 +5,11 @@
 //! servicio (`Source::Service`, RN-11), que llega con `Snapshots` cada 10 s. Con el servicio no hay
 //! pausa ni reinicio, y el censo es el de 2023 (RN-10).
 
-use escrutinio_contrato::ProvinceSnapshot;
+use escrutinio_contrato::Snapshots;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::census::Election;
-use crate::feed::counted;
+use crate::feed::update;
 use crate::mock::Scrutiny;
 
 /// Las filas que salta `PageUp`/`PageDown`.
@@ -68,7 +68,7 @@ pub enum Message {
     /// Toca avanzar la simulación.
     Tick,
     /// La respuesta del servicio, o el texto de su error.
-    Snapshots(Result<Vec<ProvinceSnapshot>, String>),
+    Snapshots(Result<Snapshots, String>),
     TogglePause,
     Restart,
     ToggleScale,
@@ -178,12 +178,13 @@ impl App {
         Self { offset, ..self }
     }
 
-    /// Con los snapshots, el escrutado de cada fila; con un error, lo mismo que había.
-    fn received(self, result: Result<Vec<ProvinceSnapshot>, String>) -> Self {
+    /// Con los snapshots, lo que dice el servicio para cada fila y el total; con un error, lo mismo
+    /// que había.
+    fn received(self, result: Result<Snapshots, String>) -> Self {
         match (self.source.clone(), result) {
             (Source::Mock, _) => self,
             (Source::Service { url, .. }, Ok(snapshots)) => Self {
-                scrutiny: self.scrutiny.with_counted(&counted(&snapshots)),
+                scrutiny: self.scrutiny.with_update(&update(&snapshots)),
                 source: Source::Service { url, error: None },
                 ..self
             },
@@ -338,7 +339,7 @@ mod tests {
 
     #[test]
     fn follows_the_snapshots_of_the_service() {
-        use crate::feed::fixtures::snapshot;
+        use crate::feed::fixtures::{snapshot, snapshots};
         let app = following();
         assert_eq!(
             (app.status(), app.election()),
@@ -347,10 +348,10 @@ mod tests {
         let counted = |app: &App| app.scrutiny().total().counted;
         let received = apply(
             app,
-            &[Message::Snapshots(Ok(vec![
+            &[Message::Snapshots(Ok(snapshots(vec![
                 snapshot("28", 1_000),
                 snapshot("51", 7),
-            ]))],
+            ])))],
         );
         assert_eq!(counted(&received), 1_007);
         // Los ticks, la pausa y el reinicio no cambian nada con el servicio.
@@ -363,8 +364,8 @@ mod tests {
 
     #[test]
     fn keeps_the_last_data_when_the_service_fails_and_recovers() {
-        use crate::feed::fixtures::snapshot;
-        let ok = Message::Snapshots(Ok(vec![snapshot("28", 1_000)]));
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("28", 1_000)])));
         let failed = apply(
             following(),
             &[ok.clone(), Message::Snapshots(Err("caído".to_owned()))],
@@ -383,7 +384,12 @@ mod tests {
 
     #[test]
     fn the_mock_ignores_snapshots() {
-        let ignored = apply(app(), &[Message::Snapshots(Ok(vec![]))]);
+        let ignored = apply(
+            app(),
+            &[Message::Snapshots(Ok(crate::feed::fixtures::snapshots(
+                vec![],
+            )))],
+        );
         assert_eq!(ignored, app());
     }
 

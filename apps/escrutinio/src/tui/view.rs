@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Row as TableRow, Table};
 
 use crate::census::Election;
-use crate::domain::{Pulse, Tally, percent, ratio, thousands};
+use crate::domain::{Pulse, Stations, Tally, percent, ratio, thousands};
 use crate::mock::Row;
 use crate::tui::app::{App, Scale, Source, Status};
 
@@ -43,17 +43,14 @@ const LIGHT_BLUE: Color = Color::Rgb(100, 170, 255);
 const NAME_WIDTH: u16 = 22;
 const NUMBER_WIDTH: u16 = 10;
 const PERCENT_WIDTH: u16 = 7;
+/// «60.310/60.310», lo más ancho que tiene la columna de las mesas.
+const STATIONS_WIDTH: u16 = 13;
 const PILOT_WIDTH: u16 = 1;
 const SPACING: u16 = 1;
-const HEADERS: [&str; 7] = [
-    "Provincia",
-    "Censo",
-    "Estimado",
-    "Escrutado",
-    "Partic.",
-    "",
-    "",
-];
+/// Los títulos antes y después de la columna de las mesas, que solo está al seguir al servicio.
+const HEADERS_BEFORE: [&str; 4] = ["Provincia", "Censo", "Estimado", "Escrutado"];
+const HEADERS_AFTER: [&str; 3] = ["Partic.", "", ""];
+const STATIONS_HEADER: &str = "Mesas";
 
 /// Dibuja `app` en todo el marco.
 pub fn draw(app: &App, frame: &mut Frame) {
@@ -121,9 +118,17 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
     ])
     .areas(inner);
 
-    let bar_width = inner
-        .width
-        .saturating_sub(NAME_WIDTH + 3 * NUMBER_WIDTH + PERCENT_WIDTH + PILOT_WIDTH + 6 * SPACING);
+    // La columna de las mesas N'/N' solo la hay con el servicio (RN-13): la maqueta no tiene mesas.
+    let with_stations = matches!(app.source(), Source::Service { .. });
+    let columns = 7 + u16::from(with_stations);
+    let bar_width = inner.width.saturating_sub(
+        NAME_WIDTH
+            + 3 * NUMBER_WIDTH
+            + PERCENT_WIDTH
+            + PILOT_WIDTH
+            + if with_stations { STATIONS_WIDTH } else { 0 }
+            + (columns - 1) * SPACING,
+    );
     let rows = app.scrutiny().rows();
     let visible = usize::from(rows_area.height);
     let offset = app.offset().min(rows.len().saturating_sub(visible));
@@ -133,26 +138,39 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
         Scale::Shared => largest,
     };
 
-    let headers = HEADERS.iter().enumerate().map(|(column, &text)| {
+    let titles: Vec<&str> = HEADERS_BEFORE
+        .into_iter()
+        .chain(with_stations.then_some(STATIONS_HEADER))
+        .chain(HEADERS_AFTER)
+        .collect();
+    let numeric_columns = 1..=3 + usize::from(with_stations) + 1;
+    let headers = titles.iter().enumerate().map(|(column, &text)| {
         let line = Line::from(text);
         // Las cifras van alineadas a la derecha, como sus títulos.
-        if (1..=4).contains(&column) {
+        if numeric_columns.contains(&column) {
             line.right_aligned()
         } else {
             line
         }
     });
-    frame.render_widget(table([TableRow::new(headers).bold().dark_gray()]), header);
     frame.render_widget(
-        table(rows.iter().skip(offset).take(visible).map(|row: &Row| {
-            tally_row(
-                row.district.name,
-                &row.tally,
-                row.pulse,
-                base(&row.tally),
-                bar_width,
-            )
-        })),
+        table([TableRow::new(headers).bold().dark_gray()], with_stations),
+        header,
+    );
+    frame.render_widget(
+        table(
+            rows.iter().skip(offset).take(visible).map(|row: &Row| {
+                tally_row(
+                    row.district.name,
+                    &row.tally,
+                    with_stations.then(|| stations_text(row.stations)),
+                    row.pulse,
+                    base(&row.tally),
+                    bar_width,
+                )
+            }),
+            with_stations,
+        ),
         rows_area,
     );
     frame.render_widget(
@@ -162,51 +180,74 @@ fn draw_table(app: &App, frame: &mut Frame, area: Rect) {
     let total = app.scrutiny().total();
     // El total se dibuja siempre contra su censo: con la escala absoluta no cabría.
     frame.render_widget(
-        table([tally_row(
-            TOTAL,
-            &total,
-            app.scrutiny().pulse(),
-            total.census,
-            bar_width,
-        )
-        .bold()]),
+        table(
+            [tally_row(
+                TOTAL,
+                &total,
+                with_stations.then(|| stations_text(app.scrutiny().stations())),
+                app.scrutiny().pulse(),
+                total.census,
+                bar_width,
+            )
+            .bold()],
+            with_stations,
+        ),
         total_area,
     );
 }
 
-fn table<'a>(rows: impl IntoIterator<Item = TableRow<'a>>) -> Table<'a> {
-    Table::new(
-        rows,
-        [
-            Constraint::Length(NAME_WIDTH),
-            Constraint::Length(NUMBER_WIDTH),
-            Constraint::Length(NUMBER_WIDTH),
-            Constraint::Length(NUMBER_WIDTH),
-            Constraint::Length(PERCENT_WIDTH),
-            Constraint::Length(PILOT_WIDTH),
-            Constraint::Fill(1),
-        ],
-    )
-    .column_spacing(SPACING)
+fn table<'a>(rows: impl IntoIterator<Item = TableRow<'a>>, with_stations: bool) -> Table<'a> {
+    let widths = [
+        Constraint::Length(NAME_WIDTH),
+        Constraint::Length(NUMBER_WIDTH),
+        Constraint::Length(NUMBER_WIDTH),
+        Constraint::Length(NUMBER_WIDTH),
+    ]
+    .into_iter()
+    .chain(with_stations.then_some(Constraint::Length(STATIONS_WIDTH)))
+    .chain([
+        Constraint::Length(PERCENT_WIDTH),
+        Constraint::Length(PILOT_WIDTH),
+        Constraint::Fill(1),
+    ]);
+    Table::new(rows, widths).column_spacing(SPACING)
 }
 
+/// Las mesas N'/N' tal como llegan del servicio (RN-13), o nada si aún no ha dicho nada de la fila.
+fn stations_text(stations: Option<Stations>) -> String {
+    stations.map_or_else(String::new, |stations| {
+        format!(
+            "{}/{}",
+            thousands(u64::from(stations.counted)),
+            thousands(u64::from(stations.possible))
+        )
+    })
+}
+
+/// Una fila de la tabla; `stations` es el texto de las mesas, si esa columna se muestra.
 fn tally_row(
     name: &str,
     tally: &Tally,
+    stations: Option<String>,
     pulse: Pulse,
     base: u64,
     bar_width: u16,
 ) -> TableRow<'static> {
     let right = |text: String| Line::from(text).right_aligned();
-    TableRow::new([
+    let cells = [
         Line::from(name.to_owned()),
         right(thousands(tally.census)),
         right(thousands(tally.estimated)).fg(OCHRE),
         right(thousands(tally.counted)).green(),
+    ]
+    .into_iter()
+    .chain(stations.map(right))
+    .chain([
         right(percent(tally.turnout())),
         Line::from(Span::styled(PILOT, pulse_color(pulse))),
         bar(tally, base, bar_width),
-    ])
+    ]);
+    TableRow::new(cells)
 }
 
 /// Naranja si cambió en la última actualización, azul claro si no, gris sin datos y verde si está
@@ -481,8 +522,8 @@ mod tests {
 
     #[test]
     fn the_pilots_show_which_districts_changed_in_the_last_update() {
-        use crate::feed::fixtures::snapshot;
-        let coruna = |counted| Message::Snapshots(Ok(vec![snapshot("15", counted)]));
+        use crate::feed::fixtures::{snapshot, snapshots, with_stations};
+        let coruna = |counted| Message::Snapshots(Ok(snapshots(vec![snapshot("15", counted)])));
         let failed = Message::Snapshots(Err("sin red".to_owned()));
         let gray = Some(Color::DarkGray);
         [
@@ -509,23 +550,46 @@ mod tests {
             let app = apply(following(), &messages);
             assert_eq!(pilot_color(&app, "A Coruña"), color, "{case}");
         });
-        // A Coruña tenía 1.544 mesas en 2023: con todas, completa.
-        let complete = Message::Snapshots(Ok(vec![crate::feed::fixtures::with_stations(
-            "15", 900, 1_544,
-        )]));
-        assert_eq!(
-            pilot_color(&apply(following(), &[complete]), "A Coruña"),
-            Some(Color::Green)
-        );
+        // Completa lo dice el servicio: aquí, con todas sus mesas posibles.
+        let complete = Message::Snapshots(Ok(snapshots(vec![with_stations("15", 900, 718, 718)])));
+        let complete = apply(following(), &[complete]);
+        assert_eq!(pilot_color(&complete, "A Coruña"), Some(Color::Green));
+        // Y el total, completo solo si el servicio dice que lo está.
+        assert_eq!(pilot_color(&complete, TOTAL), Some(Color::Green));
         let one = apply(following(), &[coruna(500)]);
         assert_eq!(pilot_color(&one, "Albacete"), gray);
         assert_eq!(pilot_color(&one, TOTAL), Some(ORANGE));
     }
 
     #[test]
+    fn the_stations_column_shows_what_the_service_calculated() {
+        use crate::feed::fixtures::{snapshots, with_stations};
+        assert_eq!(STATIONS_HEADER, "Mesas");
+        // La maqueta no tiene mesas: sin columna.
+        assert!(!screen(&app(), 120, 20).contains(STATIONS_HEADER));
+        // León (24) y A Coruña (15) con mesas N'/N' distintas, y la suma que hace el servicio.
+        let update = Message::Snapshots(Ok(snapshots(vec![
+            with_stations("15", 500_000, 700, 718),
+            with_stations("24", 400_000, 718, 718),
+        ])));
+        let screen = screen(&apply(following(), &[update]), 150, 70);
+        assert_shows(
+            &screen,
+            &[STATIONS_HEADER, "700/718", "718/718", "1.418/1.436"],
+        );
+        // Una fila de la que el servicio no ha dicho nada no inventa mesas.
+        let lines: Vec<_> = screen.lines().collect();
+        let albacete = lines.iter().find(|line| line.contains("Albacete"));
+        assert!(
+            albacete.is_some_and(|line| !line.contains('/')),
+            "{albacete:?}"
+        );
+    }
+
+    #[test]
     fn following_the_service_shows_2023_and_its_errors() {
-        use crate::feed::fixtures::snapshot;
-        let ok = Message::Snapshots(Ok(vec![snapshot("15", 500_000)]));
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("15", 500_000)])));
         assert_shows(
             &screen(&apply(following(), std::slice::from_ref(&ok)), 120, 20),
             &[
