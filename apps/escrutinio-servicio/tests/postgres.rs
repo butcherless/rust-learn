@@ -76,6 +76,7 @@ async fn records_each_station_once_and_adds_it_to_its_province() {
             },
         ]
     );
+    common::drop_schema(&url).await;
 }
 
 #[tokio::test]
@@ -110,4 +111,5 @@ async fn wipes_the_stations_and_the_snapshots() {
             .expect("again"),
         Recorded::New
     );
+    common::drop_schema(&url).await;
 }

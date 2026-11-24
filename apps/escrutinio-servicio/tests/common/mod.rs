@@ -1,6 +1,8 @@
 //! Lo compartido por los tests de integración. Usan el Kafka y el PostgreSQL de
 //! `compose/escrutinio.yaml` y solo se ejecutan con `ESCRUTINIO_INTEGRACION=1`; sin ella se saltan.
-//! Cada test crea sus propios topics, grupo y esquema, así que pueden ir en paralelo y repetirse.
+//! Cada test crea sus propios topics, grupo y esquema, así que pueden ir en paralelo y repetirse,
+//! y los borra al terminar con `drop_topics` y `drop_schema`. Si un test falla antes, quedan: se
+//! reconocen por el prefijo `it_`.
 
 #![allow(dead_code)]
 
@@ -49,12 +51,43 @@ pub async fn schema(name: &str) -> String {
     format!("{POSTGRES}?options=-c%20search_path%3D{schema}")
 }
 
-/// Crea topics nuevos de una partición.
-pub async fn topics(names: &[&str]) {
-    let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
+/// Borra el esquema de `url`, el que creó `schema`, con todas sus tablas.
+pub async fn drop_schema(url: &str) {
+    let schema = url.rsplit("%3D").next().expect("schema in the url");
+    let (client, connection) = tokio_postgres::connect(POSTGRES, tokio_postgres::NoTls)
+        .await
+        .expect("PostgreSQL del compose");
+    tokio::spawn(connection);
+    client
+        .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+        .await
+        .expect("drop schema");
+}
+
+/// Borra los topics de un test. Sus grupos de consumidores se quedan: no se pueden borrar con los
+/// consumidores abiertos, y cerrarlos a mano dentro del runtime deja `rd_kafka_destroy` esperando.
+/// Kafka borra solo los grupos vacíos pasados 7 días (`offsets.retention.minutes`).
+pub async fn drop_topics(topics: &[&str]) {
+    admin()
+        .delete_topics(topics, &AdminOptions::new())
+        .await
+        .expect("delete topics")
+        .into_iter()
+        .for_each(|result| {
+            result.expect("topic deleted");
+        });
+}
+
+fn admin() -> AdminClient<DefaultClientContext> {
+    ClientConfig::new()
         .set("bootstrap.servers", KAFKA)
         .create()
-        .expect("admin client");
+        .expect("admin client")
+}
+
+/// Crea topics nuevos de una partición.
+pub async fn topics(names: &[&str]) {
+    let admin = admin();
     let topics: Vec<NewTopic> = names
         .iter()
         .map(|name| NewTopic::new(name, 1, TopicReplication::Fixed(1)))

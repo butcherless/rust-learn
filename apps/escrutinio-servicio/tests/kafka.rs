@@ -87,6 +87,8 @@ async fn consumes_stations_duplicates_and_garbage() {
         ("malformed", Some("basura"))
     );
     assert_eq!(message.key(), None);
+    common::drop_topics(&[&topic, &dlq]).await;
+    common::drop_schema(&url).await;
 }
 
 #[tokio::test]
@@ -111,4 +113,5 @@ async fn wipes_every_message_of_the_topics() {
         missing.map_err(|e| e.to_string()).err().as_deref(),
         Some("el topic no-existe no existe en Kafka")
     );
+    common::drop_topics(&[&topic, &dlq]).await;
 }

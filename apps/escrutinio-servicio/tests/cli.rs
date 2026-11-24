@@ -136,6 +136,8 @@ async fn consumes_a_station_and_serves_it_until_ctrl_c() {
         stdout.starts_with(&format!("Consumiendo {topic} de localhost:9092")),
         "{stdout}"
     );
+    common::drop_topics(&[&topic, &dlq]).await;
+    common::drop_schema(&url).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -161,4 +163,6 @@ async fn borrar_empties_the_topics_and_the_tables() {
         String::from_utf8_lossy(&output.stdout),
         "Escrutinio borrado: 1 mensajes en Kafka y 0 mesas en PostgreSQL.\n"
     );
+    common::drop_topics(&[&topic, &dlq]).await;
+    common::drop_schema(&url).await;
 }
