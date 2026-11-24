@@ -38,6 +38,14 @@
 - Review the GitHub Actions workflows for efficiency and security, following the official GitHub
   Actions documentation; `zizmor .github/` must report no findings.
 
+## Documentation and cleanup
+
+- Update the documents with the current state of the work done in the session.
+- Simplify the texts where possible.
+- Check every external link in each document, so none points nowhere.
+- Reorganize the sections of a document when its order no longer fits.
+- Clean up what is no longer needed: local documents, test leftovers, objects, files and artifacts.
+
 ## Pending issues
 
 - **TOOL-1: move from Rust 1.99.1 to stable.** `rust-toolchain.toml` pins 1.99.1 because the
