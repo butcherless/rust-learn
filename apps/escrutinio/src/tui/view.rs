@@ -37,6 +37,8 @@ const TITLE_BAR: Style = Style::new().fg(Color::White).bg(Color::Blue);
 /// El piloto (RN-12), como el de pr-checker.
 const PILOT: &str = "●";
 const ORANGE: Color = Color::Rgb(255, 165, 0);
+/// Azul claro: el `Color::Blue` de la terminal es tan oscuro que apenas se lee sobre el fondo.
+const LIGHT_BLUE: Color = Color::Rgb(100, 170, 255);
 
 const NAME_WIDTH: u16 = 22;
 const NUMBER_WIDTH: u16 = 10;
@@ -207,14 +209,14 @@ fn tally_row(
     ])
 }
 
-/// Naranja si cambió en la última actualización, verde si no, gris sin datos y azul completa
-/// (RN-12).
+/// Naranja si cambió en la última actualización, azul claro si no, gris sin datos y verde si está
+/// completa, sin nada más que esperar (RN-12).
 pub fn pulse_color(pulse: Pulse) -> Color {
     match pulse {
         Pulse::NoData => Color::DarkGray,
         Pulse::Updated => ORANGE,
-        Pulse::Steady => Color::Green,
-        Pulse::Complete => Color::Blue,
+        Pulse::Steady => LIGHT_BLUE,
+        Pulse::Complete => Color::Green,
     }
 }
 
@@ -391,9 +393,9 @@ mod tests {
     #[test]
     fn the_pilot_is_orange_green_or_gray() {
         assert_eq!(pulse_color(Pulse::Updated), Color::Rgb(255, 165, 0));
-        assert_eq!(pulse_color(Pulse::Steady), Color::Green);
+        assert_eq!(pulse_color(Pulse::Steady), Color::Rgb(100, 170, 255));
         assert_eq!(pulse_color(Pulse::NoData), Color::DarkGray);
-        assert_eq!(pulse_color(Pulse::Complete), Color::Blue);
+        assert_eq!(pulse_color(Pulse::Complete), Color::Green);
     }
 
     #[test]
@@ -489,7 +491,7 @@ mod tests {
             (
                 "no change",
                 vec![coruna(500), coruna(500)],
-                Some(Color::Green),
+                Some(LIGHT_BLUE),
             ),
             (
                 "more votes",
@@ -513,7 +515,7 @@ mod tests {
         )]));
         assert_eq!(
             pilot_color(&apply(following(), &[complete]), "A Coruña"),
-            Some(Color::Blue)
+            Some(Color::Green)
         );
         let one = apply(following(), &[coruna(500)]);
         assert_eq!(pilot_color(&one, "Albacete"), gray);

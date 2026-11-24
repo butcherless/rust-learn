@@ -49,11 +49,11 @@ de lo estimado.
 ## Piloto
 
 El `●` a la derecha de la participación dice qué provincias han cambiado en la última actualización
-(cada 10 s con el servicio, cada paso en la maqueta): azul si está completa (todas sus mesas
-escrutadas; en la maqueta, en su resultado final), naranja si su escrutado ha cambiado, verde si
-sigue igual y gris si aún no tiene votos. El del total es azul cuando todas lo son y, si no, naranja
+(cada 10 s con el servicio, cada paso en la maqueta): verde si está completa (todas sus mesas
+escrutadas; en la maqueta, en su resultado final), naranja si su escrutado ha cambiado, azul claro si
+sigue igual y gris si aún no tiene votos. El del total es verde cuando todas lo son y, si no, naranja
 si alguna provincia lo es. Si una petición al servicio falla, los pilotos se quedan como estaban.
-En 2023, León no llega a azul: 4 de sus mesas van al dead letter.
+En 2023, León no llega a verde: 4 de sus mesas van al dead letter.
 
 ## Códigos de salida
 
