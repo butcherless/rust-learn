@@ -27,6 +27,9 @@ Each project's README explains its usage.
   `brew install cargo-llvm-cov` or `cargo install cargo-llvm-cov --locked`.
 - Dependency checks only: [cargo-deny](https://github.com/EmbarkStudios/cargo-deny),
   `brew install cargo-deny` or `cargo install cargo-deny --locked`.
+- The escrutinio backend only (simulator and service): Docker, for the Kafka and PostgreSQL of
+  `compose/escrutinio.yaml`. Both apps build librdkafka from C sources, which the C toolchain below
+  covers.
 
 ### Installing Rust (macOS and Linux)
 
@@ -96,7 +99,7 @@ With the Rust plugin (or RustRover), **File → Open** this folder (the workspac
   environment).
 - **Tests:** the gutter icons run a test or module; **Run with Coverage** shows coverage in the
   editor.
-- **Terminal UIs:** `cargo pr --tui`, `cargo sev`, `cargo esc` and `cargo cal` `month`, `year` and `summary`
+- **Terminal UIs:** `cargo pr --tui`, `cargo sev`, `cargo esc`, `cargo esc-seguir` and `cargo cal` `month`, `year` and `summary`
   need a real terminal: use the built-in **Terminal**, not the Run console.
 
 ## Layout
@@ -105,7 +108,8 @@ With the Rust plugin (or RustRover), **File → Open** this folder (the workspac
 Cargo.toml          workspace manifest: members, shared package fields, dependency versions
 .cargo/config.toml  run aliases
 apps/<project>/     one binary package per project
-libs/<library>/     shared libraries, once two projects need the same code
+libs/<library>/     shared libraries, once two projects need the same code (escrutinio-contrato)
+compose/            Docker Compose files for local services (Kafka and PostgreSQL for escrutinio)
 docs/               workspace documents, such as the recurring reviews
 ```
 

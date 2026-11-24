@@ -126,7 +126,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 <header>
   <span class="eyebrow">apps/escrutinio · requisitos</span>
   <h1>Escrutinio de las Elecciones generales España 2026</h1>
-  <p class="lead">Una vista de terminal con los votos de cada provincia y ciudad autónoma. Hoy el escrutado se simula dentro de la TUI; el diseño del <a href="#backend">backend</a> lo sustituye por el escrutinio real de 2023, mesa a mesa.</p>
+  <p class="lead">Una vista de terminal con los votos de cada provincia y ciudad autónoma. Sin opciones es una maqueta de 2026 con el escrutado simulado; con <code>--servicio</code> sigue al <a href="#backend">backend</a>, que reproduce el escrutinio real de 2023, mesa a mesa.</p>
 </header>
 
 <section aria-labelledby="conceptos">
@@ -197,7 +197,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 
 <section aria-labelledby="mesas">
   <h2 id="mesas">Mesas y urnas de 2026</h2>
-  <p>Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí). La TUI todavía no las usa.</p>
+  <p>Cada cifra dice si es <span class="tag real">real</span> (publicada) o <span class="tag est">estimada</span> (calculada aquí). La TUI usa las mesas de cada circunscripción para el piloto «completa» (RN-12).</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Dato</th><th class="num">2026</th><th class="num">2023</th><th>Origen</th></tr></thead>

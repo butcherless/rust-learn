@@ -30,9 +30,9 @@ cargo llvm-cov -p escrutinio               # cobertura de este proyecto; --open 
 
 Las dependencias apuntan hacia dentro: `main → cli, tui, feed → mock → census → domain`.
 
-- **`domain`**: `Tally` (censo, estimado, escrutado), `Tally::total`, `Pulse` (el piloto de RN-12: `between` y `total`), `sort_key`, `thousands`, `percent` y `ratio`. Sin E/S.
+- **`domain`**: `Tally` (censo, estimado, escrutado), `Tally::total`, `Progress` (votantes y mesas de una circunscripción según el servicio), `Pulse` (el piloto de RN-12, con sus cuatro estados: `between` y `total`), `sort_key`, `thousands`, `percent` y `ratio`. Sin E/S.
 - **`census`**: `District`, `Territory`, `DISTRICTS` y `ordered` (RN-03).
 - **`mock`**: `Rng` (xorshift, sin dependencias) y `Scrutiny`, que `start`, `advance` (la maqueta) y `with_counted` (el servicio) por valor; los dos últimos fijan el `pulse` de cada `Row` comparando su escrutado con el anterior.
-- **`feed`** (RN-11): el cliente bloqueante de reqwest, `fetch` de `GET /snapshots` y `counted` (votantes por código de provincia). Los tipos son de `libs/escrutinio-contrato`. Se prueba con wiremock dentro de `spawn_blocking`, como el `feed` de calendario-laboral.
+- **`feed`** (RN-11): el cliente bloqueante de reqwest, `fetch` de `GET /snapshots` y `counted` (votantes y mesas escrutadas, `Progress`, por código de provincia). Los tipos son de `libs/escrutinio-contrato`. Se prueba con wiremock dentro de `spawn_blocking`, como el `feed` de calendario-laboral.
 - **`tui::app`**: The Elm Architecture: `message(key)` y `App::update(self, Message) -> (App, Effect)`. `Source` dice si la app sigue la maqueta o el servicio. Cada `interval`, el bucle de `tui::run` envía el mensaje de su `on_tick`: `Message::Tick` con la maqueta, cada `--intervalo`, o `Message::Snapshots` con el servicio, cada 10 s.
 - **`tui::view`**: el dibujo; solo lee `App`. `bar` es pura y se prueba sola. Los textos que comprueban varios tests (`title`, `TOTAL`, `HELP`, `HELP_SERVICE`, `status_text`) son públicos.
