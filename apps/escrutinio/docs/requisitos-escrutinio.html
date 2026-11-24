@@ -96,6 +96,21 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--fg); }
 h3 { font: 600 1rem/1.2 var(--font-display); margin: .5rem 0 0; }
 section ul, section ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
 
+/* Diagramas: SVG en línea con los colores del documento, así que siguen el modo claro y oscuro. */
+.diagram { margin: 0; display: grid; gap: .5rem; }
+.diagram figcaption { font-size: .9rem; color: var(--muted); }
+.diagram figcaption strong { color: var(--fg); }
+.diagram svg { width: 100%; height: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.diagram text { font: 12px var(--font-mono); fill: var(--fg); }
+.diagram .d-title { font-weight: 600; font-family: var(--font-body); font-size: 13px; }
+.diagram .d-muted, .diagram .d-label { fill: var(--muted); font-size: 11px; }
+.diagram .d-mark { fill: var(--accent); font-weight: 500; font-size: 11px; }
+.diagram .d-box { fill: var(--bg); stroke: var(--fg); stroke-width: 1; }
+.diagram .d-topic { fill: color-mix(in srgb, var(--accent) 12%, var(--bg)); stroke: var(--accent); stroke-width: 1.5; }
+.diagram .d-head { fill: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
+.diagram .d-arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.diagram .d-tipfill { fill: var(--muted); }
+
 .pending { border-left: 3px solid var(--estimated); padding: .25rem 0 .25rem 1rem; display: grid; gap: .5rem; }
 .pending ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
 footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; }
@@ -335,6 +350,45 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     </table>
   </div>
 
+  <figure class="diagram" aria-labelledby="d-flujo">
+    <figcaption id="d-flujo"><strong>Flujo y topics.</strong> Las mesas viajan por Kafka del simulador al servicio; lo que no se puede contar va al dead letter.</figcaption>
+    <svg viewBox="0 0 740 236" role="img" aria-labelledby="d-flujo">
+<defs><marker id="d-flujo-tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-tipfill" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="d-box" x="10" y="90" width="120" height="50" rx="8"/>
+<text class="d-title" x="70.0" y="111.0" text-anchor="middle" dominant-baseline="middle">Simulador</text>
+<text class="d-muted" x="70.0" y="127.0" text-anchor="middle" dominant-baseline="middle">mesas de 2023</text>
+<rect class="d-topic" x="190" y="30" width="190" height="64" rx="8"/>
+<text class="d-title" x="285.0" y="58.0" text-anchor="middle" dominant-baseline="middle">escrutinio.mesas</text>
+<text class="d-muted" x="285.0" y="74.0" text-anchor="middle" dominant-baseline="middle">topic · 6 particiones</text>
+<text class="d-muted" x="285.0" y="88.0" text-anchor="middle" dominant-baseline="middle">clave: provincia</text>
+<rect class="d-topic" x="190" y="156" width="190" height="64" rx="8"/>
+<text class="d-title" x="285.0" y="184.0" text-anchor="middle" dominant-baseline="middle">escrutinio.mesas.dlq</text>
+<text class="d-muted" x="285.0" y="200.0" text-anchor="middle" dominant-baseline="middle">topic · 1 partición</text>
+<text class="d-muted" x="285.0" y="214.0" text-anchor="middle" dominant-baseline="middle">dead letter</text>
+<rect class="d-box" x="430" y="90" width="140" height="50" rx="8"/>
+<text class="d-title" x="500.0" y="111.0" text-anchor="middle" dominant-baseline="middle">Servicio</text>
+<text class="d-muted" x="500.0" y="127.0" text-anchor="middle" dominant-baseline="middle">valida y registra</text>
+<rect class="d-box" x="610" y="20" width="120" height="50" rx="8"/>
+<text class="d-title" x="670.0" y="41.0" text-anchor="middle" dominant-baseline="middle">PostgreSQL</text>
+<text class="d-muted" x="670.0" y="57.0" text-anchor="middle" dominant-baseline="middle">3 tablas</text>
+<rect class="d-box" x="610" y="160" width="120" height="50" rx="8"/>
+<text class="d-title" x="670.0" y="181.0" text-anchor="middle" dominant-baseline="middle">TUI</text>
+<text class="d-muted" x="670.0" y="197.0" text-anchor="middle" dominant-baseline="middle">escrutinio</text>
+<path class="d-arrow" d="M130 105 L188 70" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="150" y="78" text-anchor="end">mesa válida</text>
+<path class="d-arrow" d="M130 125 L188 180" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="150" y="168" text-anchor="end">rechazada</text>
+<path class="d-arrow" d="M380 62 L428 100" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="410" y="74" text-anchor="start">consume</text>
+<path class="d-arrow" d="M430 130 L382 182" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="412" y="172" text-anchor="start">no legible</text>
+<path class="d-arrow" d="M570 100 L608 56" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="584" y="70" text-anchor="end">1 transacción</text>
+<path class="d-arrow" d="M610 182 L572 132" marker-end="url(#d-flujo-tip)"/>
+<text class="d-label" x="734" y="146" text-anchor="end">GET /snapshots · 10 s</text>
+    </svg>
+  </figure>
+
   <h3>Simulador</h3>
   <ul>
     <li>Recibe la carpeta con <code>09</code>, <code>10</code>, <code>03</code> y <code>07</code>, la dirección de Kafka, la duración (2 horas por defecto) y una semilla.</li>
@@ -352,6 +406,49 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li>El productor usa <code>acks=all</code>. El consumidor (grupo <code>escrutinio-servicio</code>, desde el principio si es nuevo) usa el autocommit de Kafka cada 5 s, pero solo de los offsets que guarda tras el <code>COMMIT</code> en PostgreSQL (<code>enable.auto.offset.store=false</code>). Confirmar cada mensaje a mano dejaba el consumidor parado tras unas 50.000 mesas.</li>
   </ul>
 
+  <figure class="diagram" aria-labelledby="d-mensajes">
+    <figcaption id="d-mensajes"><strong>Mensajes.</strong> Lo que viaja en cada topic: una mesa en escrutinio.mesas y, en el dead letter, el motivo con la mesa o el mensaje original.</figcaption>
+    <svg viewBox="0 0 730 250" role="img" aria-labelledby="d-mensajes">
+<defs><marker id="d-mensajes-tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-tipfill" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="d-box" x="10" y="20" width="220" height="106" rx="6"/>
+<rect class="d-head" x="10" y="20" width="220" height="26" rx="6"/>
+<rect class="d-head" x="10" y="40" width="220" height="6"/>
+<text class="d-title" x="20" y="37">DeadLetterMessage</text>
+<text class="d-text" x="48" y="61">reason: texto</text>
+<text class="d-text" x="48" y="79">detail: texto</text>
+<text class="d-mark" x="20" y="97">?</text>
+<text class="d-text" x="48" y="97">station: StationMessage</text>
+<text class="d-mark" x="20" y="115">?</text>
+<text class="d-text" x="48" y="115">raw: texto</text>
+<rect class="d-box" x="280" y="20" width="230" height="196" rx="6"/>
+<rect class="d-head" x="280" y="20" width="230" height="26" rx="6"/>
+<rect class="d-head" x="280" y="40" width="230" height="6"/>
+<text class="d-title" x="290" y="37">StationMessage</text>
+<text class="d-mark" x="290" y="61">K</text>
+<text class="d-text" x="318" y="61">province: texto</text>
+<text class="d-text" x="318" y="79">municipality: texto</text>
+<text class="d-text" x="318" y="97">district: texto</text>
+<text class="d-text" x="318" y="115">section: texto</text>
+<text class="d-text" x="318" y="133">table: texto</text>
+<text class="d-text" x="318" y="151">census: entero</text>
+<text class="d-text" x="318" y="169">blank: entero</text>
+<text class="d-text" x="318" y="187">invalid: entero</text>
+<text class="d-text" x="318" y="205">votes: [VoteMessage]</text>
+<rect class="d-box" x="540" y="20" width="180" height="88" rx="6"/>
+<rect class="d-head" x="540" y="20" width="180" height="26" rx="6"/>
+<rect class="d-head" x="540" y="40" width="180" height="6"/>
+<text class="d-title" x="550" y="37">VoteMessage</text>
+<text class="d-text" x="578" y="61">candidacy: entero</text>
+<text class="d-text" x="578" y="79">acronym: texto</text>
+<text class="d-text" x="578" y="97">votes: entero</text>
+<path class="d-arrow" d="M230 92 L278 92" marker-end="url(#d-mensajes-tip)"/>
+<text class="d-label" x="254" y="86" text-anchor="middle">0..1</text>
+<path class="d-arrow" d="M510 200 C525 200 525 56 538 56" marker-end="url(#d-mensajes-tip)"/>
+<text class="d-label" x="532" y="182" text-anchor="middle">1..*</text>
+<text class="d-muted" x="10" y="238">K: clave del mensaje en Kafka · ?: opcional · en JSON, con estos nombres</text>
+    </svg>
+  </figure>
+
   <h3>Servicio</h3>
   <p>Hexagonal ligera, con los módulos en inglés y las dependencias hacia dentro: <code>adapters → application → domain</code>.</p>
   <dl>
@@ -367,6 +464,56 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
     <li><code>provincia_snapshot</code>: una fila por circunscripción, creada con su primera mesa.</li>
     <li><code>votos_provincia</code>: votos por provincia y candidatura.</li>
   </ul>
+  <figure class="diagram" aria-labelledby="d-tablas">
+    <figcaption id="d-tablas"><strong>Modelo relacional.</strong> Las tres tablas de PostgreSQL; las de provincia son acumulados que se suman con cada mesa.</figcaption>
+    <svg viewBox="0 0 730 232" role="img" aria-labelledby="d-tablas">
+<defs><marker id="d-tablas-tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-tipfill" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="d-box" x="10" y="20" width="220" height="178" rx="6"/>
+<rect class="d-head" x="10" y="20" width="220" height="26" rx="6"/>
+<rect class="d-head" x="10" y="40" width="220" height="6"/>
+<text class="d-title" x="20" y="37">mesa_escrutada</text>
+<text class="d-mark" x="20" y="61">PK</text>
+<text class="d-text" x="48" y="61">provincia</text>
+<text class="d-mark" x="20" y="79">PK</text>
+<text class="d-text" x="48" y="79">municipio</text>
+<text class="d-mark" x="20" y="97">PK</text>
+<text class="d-text" x="48" y="97">distrito</text>
+<text class="d-mark" x="20" y="115">PK</text>
+<text class="d-text" x="48" y="115">seccion</text>
+<text class="d-mark" x="20" y="133">PK</text>
+<text class="d-text" x="48" y="133">mesa</text>
+<text class="d-text" x="48" y="151">censo</text>
+<text class="d-text" x="48" y="169">votantes</text>
+<text class="d-text" x="48" y="187">recibida</text>
+<rect class="d-box" x="280" y="20" width="180" height="142" rx="6"/>
+<rect class="d-head" x="280" y="20" width="180" height="26" rx="6"/>
+<rect class="d-head" x="280" y="40" width="180" height="6"/>
+<text class="d-title" x="290" y="37">provincia_snapshot</text>
+<text class="d-mark" x="290" y="61">PK</text>
+<text class="d-text" x="318" y="61">provincia</text>
+<text class="d-text" x="318" y="79">mesas</text>
+<text class="d-text" x="318" y="97">censo</text>
+<text class="d-text" x="318" y="115">votantes</text>
+<text class="d-text" x="318" y="133">blancos</text>
+<text class="d-text" x="318" y="151">nulos</text>
+<rect class="d-box" x="510" y="20" width="210" height="106" rx="6"/>
+<rect class="d-head" x="510" y="20" width="210" height="26" rx="6"/>
+<rect class="d-head" x="510" y="40" width="210" height="6"/>
+<text class="d-title" x="520" y="37">votos_provincia</text>
+<text class="d-mark" x="520" y="61">PK</text>
+<text class="d-text" x="548" y="61">provincia</text>
+<text class="d-mark" x="520" y="79">PK</text>
+<text class="d-text" x="548" y="79">candidatura</text>
+<text class="d-text" x="548" y="97">siglas</text>
+<text class="d-text" x="548" y="115">votos</text>
+<path class="d-arrow" d="M230 56 L278 56" marker-end="url(#d-tablas-tip)"/>
+<text class="d-label" x="254" y="49" text-anchor="middle">N : 1</text>
+<path class="d-arrow" d="M510 56 L462 56" marker-end="url(#d-tablas-tip)"/>
+<text class="d-label" x="486" y="49" text-anchor="middle">N : 1</text>
+<text class="d-muted" x="10" y="220">PK: clave primaria · las relaciones son por provincia, sin clave foránea</text>
+    </svg>
+  </figure>
+
   <p>Cada mesa, en una transacción:</p>
   <ol>
     <li><code>INSERT INTO mesa_escrutada … ON CONFLICT DO NOTHING</code>. Si no inserta, la mesa ya estaba contada y termina.</li>
