@@ -48,7 +48,19 @@ cargo esc-sim                            # 2. publica las 60.314 mesas durante 2
 cargo esc-sim --duracion 5m              #    o en 5 minutos, para probar
 ```
 
-Para ver lo publicado, con las herramientas de Kafka del propio contenedor:
+Para ver lo publicado en el navegador, el compose trae un visor opcional,
+[Kafbat UI](https://github.com/kafbat/kafka-ui), en http://localhost:8081: topics, mensajes y el
+retraso del grupo del servicio.
+
+```bash
+docker compose -f compose/escrutinio.yaml --profile visor up -d   # Kafka, PostgreSQL y el visor
+docker compose -f compose/escrutinio.yaml --profile visor down    # lo para todo, también el visor
+```
+
+La primera vez recrea el contenedor de Kafka, que publica el puerto del visor, y se pierden sus
+mensajes: hazlo sin una carga en marcha.
+
+O desde la terminal, con las herramientas de Kafka del propio contenedor:
 
 ```bash
 k() { docker compose -f compose/escrutinio.yaml exec -T kafka /opt/kafka/bin/"$@"; }

@@ -1,5 +1,6 @@
 # Kafka y PostgreSQL locales para el simulador y el servicio de escrutinio.
 #   docker compose -f compose/escrutinio.yaml up -d
+#   docker compose -f compose/escrutinio.yaml --profile visor up -d   # también el visor web de Kafka
 # Un solo nodo KRaft en localhost:9092 con la configuración por defecto de la imagen, el topic
 # escrutinio.mesas con 6 particiones y su dead letter, escrutinio.mesas.dlq, con una
 # (requisitos de escrutinio, «Kafka»).
@@ -8,6 +9,8 @@ services:
     image: apache/kafka:4.1.0
     ports:
       - "9092:9092"
+      # La web del visor (servicio kafka-ui), que comparte la red del broker.
+      - "8081:8080"
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
       interval: 5s
@@ -44,3 +47,19 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+
+  # Visor web de Kafka (Kafbat UI, la continuación de provectus/kafka-ui) en http://localhost:8081:
+  # topics, mensajes y grupos de consumidores. Opcional: solo arranca con --profile visor. Comparte
+  # la red del broker, así que lo ve en localhost:9092 como los demás clientes, y su puerto se
+  # publica en el servicio kafka.
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    profiles: ["visor"]
+    network_mode: service:kafka
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: escrutinio
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: localhost:9092
+      DYNAMIC_CONFIG_ENABLED: "false"
