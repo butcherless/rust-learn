@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::iter;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -22,13 +20,13 @@ async fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("error: {}", chain(error.as_ref()));
+            eprintln!("error: {error:#}");
             ExitCode::FAILURE
         }
     }
 }
 
-async fn run(args: Args) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn run(args: Args) -> anyhow::Result<()> {
     let mut store = PgStore::connect(&args.postgres).await?;
     let snapshots = Arc::new(PgSnapshots::connect(&args.postgres).await?);
     let consumer = kafka::consumer(&args.kafka, &args.grupo, &args.topic)?;
@@ -45,25 +43,17 @@ async fn run(args: Args) -> Result<(), Box<dyn Error + Send + Sync>> {
     });
     let serving = axum::serve(listener, http::router(snapshots)).into_future();
     tokio::select! {
-        result = consuming => result.map_err(|error| error.into()),
-        result = serving => result.map_err(|error| error.into()),
-        result = tokio::signal::ctrl_c() => result.map_err(|error| error.into()),
+        result = consuming => Ok(result?),
+        result = serving => Ok(result?),
+        result = tokio::signal::ctrl_c() => Ok(result?),
     }
 }
 
 /// Borra los mensajes de los dos topics y las mesas de PostgreSQL.
-async fn delete(args: Args) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn delete(args: Args) -> anyhow::Result<()> {
     let mut topics = KafkaTopics::new(&args.kafka, &[&args.topic, &args.topic_dlq])?;
     let mut store = PgStore::connect(&args.postgres).await?;
     let wiped = wipe(&mut topics, &mut store).await?;
     println!("{}", cli::wiped(&wiped));
     Ok(())
-}
-
-/// El error y sus causas: `a: b: c`.
-fn chain(error: &(dyn Error + 'static)) -> String {
-    iter::successors(Some(error), |&e| e.source())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(": ")
 }

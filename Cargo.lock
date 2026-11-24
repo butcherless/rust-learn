@@ -763,6 +763,7 @@ dependencies = [
 name = "escrutinio"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "escrutinio-contrato",
  "ratatui",
@@ -785,6 +786,7 @@ dependencies = [
 name = "escrutinio-servicio"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "clap",
  "escrutinio-contrato",
@@ -801,6 +803,7 @@ dependencies = [
 name = "escrutinio-simulador"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "escrutinio-contrato",
  "rdkafka",

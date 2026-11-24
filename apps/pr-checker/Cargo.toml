@@ -5,7 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow = "1.0.104"
+anyhow.workspace = true
 clap.workspace = true
 comfy-table = "8.0.1"
 crossterm = { workspace = true, features = ["event-stream"] }

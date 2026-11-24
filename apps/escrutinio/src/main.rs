@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::iter;
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -18,14 +16,14 @@ use escrutinio::tui::{
 fn main() -> ExitCode {
     run(Args::parse()).map_or_else(
         |error| {
-            eprintln!("error: {}", chain(error.as_ref()));
+            eprintln!("error: {error:#}");
             ExitCode::FAILURE
         },
         |()| ExitCode::SUCCESS,
     )
 }
 
-fn run(args: Args) -> Result<(), Box<dyn Error>> {
+fn run(args: Args) -> anyhow::Result<()> {
     match args.servicio {
         None => {
             let districts = ordered(Election::Generales2026);
@@ -35,8 +33,12 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         }
         Some(url) => {
             let client = feed::client()?;
-            let fetch =
-                || Message::Snapshots(feed::fetch(&client, &url).map_err(|error| chain(&error)));
+            let fetch = || {
+                Message::Snapshots(
+                    feed::fetch(&client, &url)
+                        .map_err(|error| format!("{:#}", anyhow::Error::new(error))),
+                )
+            };
             let districts = ordered(Election::Generales2023);
             let scrutiny = Scrutiny::start(&districts, args.participacion, args.semilla);
             let (app, _) = App::following(scrutiny, &url).update(fetch());
@@ -44,12 +46,4 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
-}
-
-/// El error y sus causas: `a: b: c`.
-fn chain(error: &(dyn Error + 'static)) -> String {
-    iter::successors(Some(error), |&e| e.source())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(": ")
 }

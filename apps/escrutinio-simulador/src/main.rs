@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::iter;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -15,14 +13,14 @@ use escrutinio_simulador::domain::station::build;
 fn main() -> ExitCode {
     run(Args::parse()).map_or_else(
         |error| {
-            eprintln!("error: {}", chain(error.as_ref()));
+            eprintln!("error: {error:#}");
             ExitCode::FAILURE
         },
         |()| ExitCode::SUCCESS,
     )
 }
 
-fn run(args: Args) -> Result<(), Box<dyn Error>> {
+fn run(args: Args) -> anyhow::Result<()> {
     let files = interior::read(&args.datos)?;
     let dataset = build(
         files.stations,
@@ -61,12 +59,4 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
         cli::published(published.valid, published.rejected, pacer.elapsed())
     );
     Ok(())
-}
-
-/// El error y sus causas: `a: b: c`.
-fn chain<'a>(error: &'a (dyn Error + 'static)) -> String {
-    iter::successors(Some(error), |&e| e.source())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(": ")
 }
