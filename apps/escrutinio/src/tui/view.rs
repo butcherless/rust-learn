@@ -12,7 +12,7 @@ use ratatui::widgets::{Block, BorderType, Row as TableRow, Table};
 use crate::census::Election;
 use crate::domain::{Pulse, Stations, Tally, percent, ratio, thousands};
 use crate::mock::Row;
-use crate::tui::app::{App, Scale, Source, Status};
+use crate::tui::app::{App, Lamp, Scale, Source, Status};
 
 pub const HELP: &str =
     "↑/↓ desplazar · RePág/AvPág página · espacio pausa · r reiniciar · e escala · q salir";
@@ -39,6 +39,9 @@ const PILOT: &str = "●";
 const ORANGE: Color = Color::Rgb(255, 165, 0);
 /// Azul claro: el `Color::Blue` de la terminal es tan oscuro que apenas se lee sobre el fondo.
 const LIGHT_BLUE: Color = Color::Rgb(100, 170, 255);
+/// La luz roja del destello de una consulta (RN-14): un rojo vivo, porque el `Color::Red` de la
+/// terminal se pierde sobre el azul de la barra del título.
+const LAMP_RED: Color = Color::Rgb(255, 70, 70);
 
 const NAME_WIDTH: u16 = 22;
 const NUMBER_WIDTH: u16 = 10;
@@ -85,10 +88,29 @@ fn draw_title(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(format!(" {}", title(app.election()))).bold(),
         area,
     );
-    frame.render_widget(
-        Line::from(format!("{} ", status_text(app.status()))).right_aligned(),
-        area,
-    );
+    frame.render_widget(status_line(app), area);
+}
+
+/// El estado a la derecha de la barra. Con el servicio, su `●` es la luz que hace el doble destello
+/// rojo al llegar cada respuesta, y el resto del tiempo está apagada (RN-14).
+fn status_line(app: &App) -> Line<'static> {
+    let text = status_text(app.status());
+    match text.split_once(' ') {
+        Some((glyph, words)) if app.status() == Status::Following => Line::from(vec![
+            Span::styled(glyph.to_owned(), lamp_color(app.lamp())),
+            Span::raw(format!(" {words} ")),
+        ]),
+        _ => Line::from(format!("{text} ")),
+    }
+    .right_aligned()
+}
+
+/// Rojo vivo con la luz encendida y gris oscuro apagada (RN-14).
+pub fn lamp_color(lamp: Lamp) -> Color {
+    match lamp {
+        Lamp::Red => LAMP_RED,
+        Lamp::Off => Color::DarkGray,
+    }
 }
 
 pub fn status_text(status: Status) -> &'static str {
@@ -559,6 +581,57 @@ mod tests {
         let one = apply(following(), &[coruna(500)]);
         assert_eq!(pilot_color(&one, "Albacete"), gray);
         assert_eq!(pilot_color(&one, TOTAL), Some(ORANGE));
+    }
+
+    /// El color del `●` del estado, en la primera línea de la pantalla.
+    fn lamp_cell(app: &App) -> Option<Color> {
+        let mut terminal = Terminal::new(TestBackend::new(120, 20)).expect("test backend");
+        terminal.draw(|frame| draw(app, frame)).expect("draw");
+        let buffer = terminal.backend().buffer();
+        buffer
+            .content()
+            .iter()
+            .take(usize::from(buffer.area.width))
+            .find(|cell| cell.symbol() == PILOT)
+            .map(|cell| cell.fg)
+    }
+
+    #[test]
+    fn the_status_light_flashes_red_twice_after_each_response() {
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("28", 1_000)])));
+        let after = |flashes: usize| {
+            let messages: Vec<Message> = [ok.clone()]
+                .into_iter()
+                .chain(vec![Message::Flash; flashes])
+                .collect();
+            lamp_cell(&apply(following(), &messages))
+        };
+        let (red, off) = (Some(LAMP_RED), Some(Color::DarkGray));
+        assert_eq!(
+            [after(0), after(1), after(2), after(3), after(4)],
+            [red, off, red, off, off]
+        );
+        // Antes de la primera respuesta, apagada.
+        assert_eq!(lamp_cell(&following()), off);
+        assert_eq!(lamp_color(Lamp::Red), Color::Rgb(255, 70, 70));
+        assert_eq!(lamp_color(Lamp::Off), Color::DarkGray);
+        // Con la maqueta no hay luz de estado: su primera línea no tiene ningún `●`.
+        assert_eq!(lamp_cell(&app()), None);
+    }
+
+    #[test]
+    fn the_status_text_stays_whole_while_the_light_flashes() {
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("28", 1_000)])));
+        let first_line = |app: &App| screen(app, 120, 20).lines().next().unwrap_or("").to_owned();
+        let lit = first_line(&apply(following(), std::slice::from_ref(&ok)));
+        let off = first_line(&apply(following(), &[ok, Message::Flash]));
+        assert_eq!(lit, off);
+        assert!(
+            lit.trim_end().ends_with(status_text(Status::Following)),
+            "{lit}"
+        );
     }
 
     #[test]

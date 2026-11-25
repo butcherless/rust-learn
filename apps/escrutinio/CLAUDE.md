@@ -20,7 +20,7 @@ cargo test -p escrutinio                   # tests unitarios y tests/cli.rs, que
 cargo llvm-cov -p escrutinio               # cobertura de este proyecto; --open para el HTML
 ```
 
-`tui/mod.rs` y `main.rs` no tienen tests porque usan la terminal real: la lógica no va ahí.
+`tui/mod.rs` y `main.rs` no tienen tests porque usan la terminal real: la lógica no va ahí (de `tui/mod.rs` solo se prueban sus funciones puras, como `due`).
 
 ## Datos
 
@@ -34,5 +34,5 @@ Las dependencias apuntan hacia dentro: `main → cli, tui, feed → mock → cen
 - **`census`**: `District`, `Territory`, `DISTRICTS` y `ordered` (RN-03).
 - **`mock`**: `Rng` (xorshift, sin dependencias) y `Scrutiny`, que `start`, `advance` (la maqueta) y `with_update` (el servicio) por valor; los dos últimos fijan el `pulse` de cada `Row` comparando su escrutado con el anterior. Con el servicio, cada `Row` lleva sus mesas y `Scrutiny` las del total y si está completo: lo que dice el servicio, sin calcular nada (RN-13). Que una fila esté completa lo decide el servicio; la maqueta lo decide en `advance`, como si fuera su backend.
 - **`feed`** (RN-11): el cliente bloqueante de reqwest, `fetch` de `GET /snapshots` y `update`, que lo copia a un `Update` sin sumar ni comparar nada. Los tipos son de `libs/escrutinio-contrato`. Se prueba con wiremock dentro de `spawn_blocking`, como el `feed` de calendario-laboral.
-- **`tui::app`**: The Elm Architecture: `message(key)` y `App::update(self, Message) -> (App, Effect)`. `Source` dice si la app sigue la maqueta o el servicio. Cada `interval`, el bucle de `tui::run` envía el mensaje de su `on_tick`: `Message::Tick` con la maqueta, cada `--intervalo`, o `Message::Snapshots` con el servicio, cada 10 s.
+- **`tui::app`**: The Elm Architecture: `message(key)` y `App::update(self, Message) -> (App, Effect)`. `Source` dice si la app sigue la maqueta o el servicio. Cada `interval`, el bucle de `tui::run` envía el mensaje de su `on_tick`: `Message::Tick` con la maqueta, cada `--intervalo`, o `Message::Snapshots` con el servicio, cada 10 s. Una respuesta del servicio arranca el destello de RN-14: `App` cuenta `FLASH_STEPS` pasos (`lamp`, `flashing`) y, mientras dura, el bucle envía `Message::Flash` cada `FLASH_STEP`. El bucle decide qué vence antes con `due`, que es pura y se prueba.
 - **`tui::view`**: el dibujo; solo lee `App`. La columna *Mesas* solo se dibuja con el servicio. `bar` es pura y se prueba sola. Los textos que comprueban varios tests (`title`, `TOTAL`, `HELP`, `HELP_SERVICE`, `status_text`) son públicos.

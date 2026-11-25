@@ -15,6 +15,17 @@ use crate::mock::Scrutiny;
 /// Las filas que salta `PageUp`/`PageDown`.
 pub const PAGE: usize = 10;
 
+/// Los pasos del destello de una consulta al servicio (RN-14): rojo, apagado, rojo, apagado. Con
+/// 250 ms cada uno (`tui::FLASH_STEP`), un segundo en total.
+pub const FLASH_STEPS: u8 = 4;
+
+/// La luz del estado «Siguiendo el servicio» (RN-14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lamp {
+    Red,
+    Off,
+}
+
 /// Contra qué se dibuja cada barra (RN-09).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scale {
@@ -69,6 +80,8 @@ pub enum Message {
     Tick,
     /// La respuesta del servicio, o el texto de su error.
     Snapshots(Result<Snapshots, String>),
+    /// Pasa un paso del destello de la consulta (RN-14).
+    Flash,
     TogglePause,
     Restart,
     ToggleScale,
@@ -111,6 +124,8 @@ pub struct App {
     scale: Scale,
     /// La primera fila que se ve. La vista la limita a lo que cabe.
     offset: usize,
+    /// Los pasos que le quedan al destello de la última consulta (RN-14).
+    flash: u8,
 }
 
 impl App {
@@ -124,6 +139,7 @@ impl App {
             paused: false,
             scale: Scale::Own,
             offset: 0,
+            flash: 0,
         }
     }
 
@@ -152,6 +168,10 @@ impl App {
             },
             Message::Tick => self,
             Message::Snapshots(result) => self.received(result),
+            Message::Flash => Self {
+                flash: self.flash.saturating_sub(1),
+                ..self
+            },
             Message::TogglePause if mock => Self {
                 paused: !self.paused,
                 ..self
@@ -186,6 +206,7 @@ impl App {
             (Source::Service { url, .. }, Ok(snapshots)) => Self {
                 scrutiny: self.scrutiny.with_update(&update(&snapshots)),
                 source: Source::Service { url, error: None },
+                flash: FLASH_STEPS,
                 ..self
             },
             (Source::Service { url, .. }, Err(error)) => Self {
@@ -200,6 +221,21 @@ impl App {
 
     pub fn source(&self) -> &Source {
         &self.source
+    }
+
+    /// La luz del estado: roja en los pasos 1.º y 3.º del destello y apagada el resto (RN-14).
+    pub fn lamp(&self) -> Lamp {
+        let step = FLASH_STEPS.saturating_sub(self.flash);
+        if self.flash > 0 && step.is_multiple_of(2) {
+            Lamp::Red
+        } else {
+            Lamp::Off
+        }
+    }
+
+    /// Si el destello sigue en marcha y el bucle tiene que avisar del siguiente paso.
+    pub fn flashing(&self) -> bool {
+        self.flash > 0
     }
 
     pub fn election(&self) -> Election {
@@ -380,6 +416,51 @@ mod tests {
             }
         );
         assert_eq!(apply(failed, &[ok]).status(), Status::Following);
+    }
+
+    #[test]
+    fn a_response_starts_a_double_flash_red_off_red_off() {
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("28", 1_000)])));
+        let flashes = |messages: Vec<Message>| {
+            let app = apply(following(), &messages);
+            (app.lamp(), app.flashing())
+        };
+        let steps = |n: usize| {
+            [ok.clone()]
+                .into_iter()
+                .chain(vec![Message::Flash; n])
+                .collect::<Vec<_>>()
+        };
+        [
+            ("before any response", vec![], Lamp::Off, false),
+            ("the response", steps(0), Lamp::Red, true),
+            ("a quarter of a second later", steps(1), Lamp::Off, true),
+            ("half a second later", steps(2), Lamp::Red, true),
+            ("three quarters later", steps(3), Lamp::Off, true),
+            ("a second later it ends", steps(4), Lamp::Off, false),
+            ("and stays ended", steps(9), Lamp::Off, false),
+        ]
+        .into_iter()
+        .for_each(|(case, messages, lamp, flashing)| {
+            assert_eq!(flashes(messages), (lamp, flashing), "{case}");
+        });
+        assert_eq!(FLASH_STEPS, 4);
+    }
+
+    #[test]
+    fn a_new_response_restarts_the_flash_and_a_failure_does_not_start_one() {
+        use crate::feed::fixtures::{snapshot, snapshots};
+        let ok = Message::Snapshots(Ok(snapshots(vec![snapshot("28", 1_000)])));
+        let mid = apply(following(), &[ok.clone(), Message::Flash, Message::Flash]);
+        assert_eq!(mid.lamp(), Lamp::Red);
+        let again = apply(mid, &[ok]);
+        assert_eq!((again.lamp(), again.flashing()), (Lamp::Red, true));
+        let failed = apply(following(), &[Message::Snapshots(Err("caído".to_owned()))]);
+        assert!(!failed.flashing());
+        // La maqueta no consulta a nadie: ni destello ni luz.
+        let mock = apply(app(), &[Message::Flash]);
+        assert_eq!((mock.lamp(), mock.flashing()), (Lamp::Off, false));
     }
 
     #[test]

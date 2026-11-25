@@ -59,6 +59,12 @@ Con el servicio, la columna **Mesas** muestra las mesas escrutadas de las posibl
 provincia y en el total. Las rechazadas (en 2023, 4 de León, que van al dead letter) no cuentan como
 posibles, así que León también se completa. Lo calcula el servicio: la TUI solo lo pinta.
 
+## Luz de consulta
+
+Con el servicio, el `●` de «Siguiendo el servicio», arriba a la derecha, hace un doble destello rojo
+cada vez que llega una respuesta (cada 10 s): rojo, apagado, rojo y apagado en un segundo. Así ves
+cuándo se ha consultado. El resto del tiempo está apagado.
+
 ## Códigos de salida
 
 0 al salir, 1 si falla la terminal y 2 si los argumentos no son válidos. Que el servicio no responda
