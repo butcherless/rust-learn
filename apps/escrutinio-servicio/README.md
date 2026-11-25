@@ -22,7 +22,7 @@ cargo esc-srv                                            # el servicio, en http:
 En otra terminal, la carga y la consulta:
 
 ```bash
-cargo esc-seguir                                         # la TUI, que sigue al servicio cada 10 s
+cargo esc-seguir                                         # la TUI: consulta cada 10 s y su luz parpadea en rojo
 cargo esc-sim --duracion 5m                              # publica las mesas en 5 minutos
 curl -s localhost:8080/snapshots                         # el acumulado por circunscripción, en JSON
 ```

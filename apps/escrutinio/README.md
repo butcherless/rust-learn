@@ -25,8 +25,9 @@ cargo esc-seguir                            # sigue a escrutinio-servicio en htt
 Con el servicio arrancado ([escrutinio-servicio](../escrutinio-servicio/README.md#arrancar)), `cargo
 esc-seguir` (o `cargo esc --servicio <URL>`) pide el acumulado cada 10 s. El título pasa a 2023 y
 el censo es el de 2023: la suma de las mesas de Interior. Lanza la carga con `cargo esc-sim` y verás
-crecer el escrutado. Sin servicio, el estado dice «Sin conexión con el servicio», el pie muestra el
-error y la ventana sigue con lo último que llegó.
+crecer el escrutado. Cada consulta se ve en la [luz de consulta](#luz-de-consulta). Sin servicio, el
+estado dice «Sin conexión con el servicio», el pie muestra el error y la ventana sigue con lo último
+que llegó.
 
 | Opción | Por defecto | Qué hace |
 |---|---|---|

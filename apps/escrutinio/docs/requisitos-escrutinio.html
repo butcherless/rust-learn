@@ -181,7 +181,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
 
 <section aria-labelledby="pantalla">
   <h2 id="pantalla">Pantalla y teclas</h2>
-  <p>Arriba, el título <em>Elecciones generales España 2026</em> (o 2023, con el servicio) y el estado: escrutando, en pausa, completo, siguiendo el servicio o sin conexión. Debajo, la tabla (provincia, censo, estimado, escrutado, participación, piloto y barra) y el total. Al pie, la leyenda y la ayuda.</p>
+  <p>Arriba, el título <em>Elecciones generales España 2026</em> (o 2023, con el servicio) y el estado: escrutando, en pausa, completo, siguiendo el servicio (con su luz de consulta, RN-14) o sin conexión. Debajo, la tabla (provincia, censo, estimado, escrutado, participación, piloto y barra) y el total. Al pie, la leyenda y la ayuda.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
@@ -549,7 +549,7 @@ footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line
   <p><code>escrutinio-servicio borrar</code> vacía los dos topics (<code>delete_records</code> hasta el final de cada partición) y las cuatro tablas (<code>TRUNCATE</code> en una transacción), para que los escrutinios sucesivos no se acumulen. Primero Kafka, para que nada borrado vuelva a contarse. Se lanza con el simulador parado y muestra cuántos mensajes y mesas ha borrado.</p>
 
   <h3>TUI</h3>
-  <p><code>escrutinio --servicio http://localhost:8080</code> (<code>cargo esc-seguir</code>) sigue al servicio con el censo de 2023 (RN-10, RN-11); sin la opción, es la maqueta de 2026 (RN-06). Pinta lo que trae el servicio (RN-13); solo suma el censo, el estimado y el escrutado del total (RN-07).</p>
+  <p><code>escrutinio --servicio http://localhost:8080</code> (<code>cargo esc-seguir</code>) sigue al servicio con el censo de 2023 (RN-10, RN-11), y su luz de estado avisa de cada consulta (RN-14); sin la opción, es la maqueta de 2026 (RN-06). Pinta lo que trae el servicio (RN-13); solo suma el censo, el estimado y el escrutado del total (RN-07).</p>
 
   <h3 id="carga">Carga</h3>
   <p>Un mensaje por mesa: 60.314 en 7.200 s. La curva es una estimación.</p>
