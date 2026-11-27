@@ -1,7 +1,7 @@
 # escrutinio-servicio
 
 Consume las mesas que publica [escrutinio-simulador](../escrutinio-simulador) en Kafka, las guarda en
-PostgreSQL y sirve el acumulado de cada circunscripción en `GET /snapshots`, para la TUI. Cada mesa
+PostgreSQL y sirve el acumulado de cada circunscripción en `GET /snapshots`, para la TUI y la web. Cada mesa
 se cuenta una sola vez, aunque llegue repetida, y lo que no es una mesa válida (más votantes que
 censo, una provincia que no existe, un mensaje ilegible) va al dead letter. Es quien calcula: cuántas
 mesas se han escrutado de las posibles y si cada provincia, y España, está completa.
@@ -27,6 +27,10 @@ cargo esc-sim --duracion 5m                              # publica las mesas en 
 curl -s localhost:8080/snapshots                         # el acumulado por circunscripción, en JSON
 ```
 
+Y en el navegador, **http://localhost:8080**: la web, con la misma tabla que la TUI. Pide el JSON
+cada 10 s (`http://localhost:8080/?cada=5` lo cambia, de 1 a 60 s) y su luz hace el mismo doble
+destello rojo en cada consulta.
+
 `Ctrl+C` para el servicio; al volver a arrancarlo, sigue donde lo dejó.
 
 Para ver en el navegador los mensajes que consume y su retraso, arranca el compose con el
@@ -48,21 +52,26 @@ opciones de Kafka, topics y PostgreSQL que el servicio (`cargo esc-borrar --topi
 
 ## API
 
-`GET /snapshots` devuelve siempre las 52 circunscripciones por código de provincia (con ceros las
-que aún no tienen mesas) y el total de España, con todo calculado:
+`GET /snapshots` devuelve siempre las 52 circunscripciones en el orden de la tabla, con su código y
+su nombre (con ceros las que aún no tienen mesas), y el total de España, con todo calculado:
 
 ```json
-{"provinces":[{"province":"24","stations":718,"possible":718,"rejected":4,"complete":true,
-               "census":373582,"voters":271986,"blank":1533,"invalid":2415,
+{"provinces":[{"province":"24","name":"León","stations":718,"possible":718,"rejected":4,
+               "complete":true,"census":373582,"electorate":374272,"estimated":261990,
+               "voters":271986,"blank":1533,"invalid":2415,"pulse":"complete",
                "votes":[{"candidacy":5,"acronym":"PP","votes":99688}, …]}, …],
- "total":{"stations":60310,"possible":60310,"rejected":4,"complete":true,"voters":24742466}}
+ "total":{"stations":60310,"possible":60310,"rejected":4,"complete":true,"voters":24742466,
+          "electorate":35141198,"estimated":24598816,"pulse":"complete"}}
 ```
 
 - `stations` son las mesas válidas escrutadas, N', y `possible`, las que se pueden escrutar, N: todas
   las de la circunscripción menos las `rejected`. Se pinta `N'/N`, como `718/718`.
 - `complete` es que se han escrutado todas las posibles. Mientras llegan las rechazadas, `possible`
   baja: León empieza en 722 y acaba en 718.
-- `census` es el de las mesas escrutadas, y los `votes` van de más a menos.
+- `census` es el de las mesas escrutadas; `electorate`, el de toda la circunscripción (2023), y
+  `estimated`, la participación estimada al 70 % de ese censo. Los `votes` van de más a menos.
+- `pulse` es el piloto: `complete`, `updated` (recibió una mesa en los últimos 15 s), `steady` (con
+  mesas, ninguna reciente) o `no_data`. El del total sigue a sus circunscripciones.
 
 Si PostgreSQL no responde, contesta 503.
 

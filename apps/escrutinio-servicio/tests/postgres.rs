@@ -2,7 +2,7 @@
 
 mod common;
 
-use escrutinio_contrato::{CandidacyTotal, StationMessage, VoteMessage};
+use escrutinio_contrato::{CandidacyTotal, Pulse, StationMessage, VoteMessage};
 use escrutinio_servicio::adapters::postgres::{PgSnapshots, PgStore};
 use escrutinio_servicio::application::{Recorded, SnapshotSource, StationStore, Wipe, snapshots};
 use escrutinio_servicio::domain::snapshot::ProvinceTotals;
@@ -54,8 +54,17 @@ async fn records_each_station_once_and_adds_it_to_its_province() {
         acronym: acronym.to_owned(),
         votes,
     };
+    let mut totals = snapshots.totals().await.expect("totals");
+    // Acaban de llegar: la última mesa de cada provincia es de hace unos segundos.
+    assert!(
+        totals
+            .iter()
+            .all(|t| t.seconds_since_last.is_some_and(|seconds| seconds < 5)),
+        "{totals:?}"
+    );
+    totals.iter_mut().for_each(|t| t.seconds_since_last = None);
     assert_eq!(
-        snapshots.totals().await.expect("totals"),
+        totals,
         vec![
             ProvinceTotals {
                 province: "28".to_owned(),
@@ -65,6 +74,7 @@ async fn records_each_station_once_and_adds_it_to_its_province() {
                 voters: 53,
                 blank: 1,
                 invalid: 2,
+                seconds_since_last: None,
                 votes: vec![total(1, "AAA", 30), total(2, "BBB", 20)],
             },
             ProvinceTotals {
@@ -75,6 +85,7 @@ async fn records_each_station_once_and_adds_it_to_its_province() {
                 voters: 106,
                 blank: 2,
                 invalid: 4,
+                seconds_since_last: None,
                 votes: vec![total(2, "BBB", 60), total(1, "AAA", 40)],
             },
         ]
@@ -127,6 +138,10 @@ async fn notes_rejected_stations_once_and_calculates_the_snapshot() {
         province("52").map(|p| (p.stations, p.possible, p.rejected)),
         Some((0, 86, 1))
     );
+    // Ceuta acaba de recibir una mesa; Melilla solo tiene rechazadas.
+    assert_eq!(province("51").map(|p| p.pulse), Some(Pulse::Updated));
+    assert_eq!(province("52").map(|p| p.pulse), Some(Pulse::NoData));
+    assert_eq!(snapshots.total.pulse, Pulse::Updated);
     assert_eq!(province("01").map(|p| p.possible), Some(427));
     assert_eq!((snapshots.total.stations, snapshots.total.rejected), (1, 3));
     common::drop_schema(&url).await;

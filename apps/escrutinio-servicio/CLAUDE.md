@@ -2,10 +2,10 @@
 
 Este fichero orienta a Claude Code cuando trabaja en el proyecto `escrutinio-servicio` de este workspace. Los comandos comunes, la CI y las convenciones están en el `CLAUDE.md` raíz (en inglés).
 
-Servicio que consume las mesas de Kafka, las guarda en PostgreSQL y sirve los snapshots por provincia en `GET /snapshots`. Es la segunda de las tres apps del backend del escrutinio (simulador, servicio y la TUI `apps/escrutinio`).
+Servicio que consume las mesas de Kafka, las guarda en PostgreSQL y sirve los snapshots por provincia en `GET /snapshots` y la web en `GET /`. Es la segunda de las tres apps del backend del escrutinio (simulador, servicio y la TUI `apps/escrutinio`).
 - `README.md` es la guía de uso.
 - La fuente de verdad es `apps/escrutinio/docs/requisitos-escrutinio.html`, sección «Backend»: tablas, transacción, offsets, dead letter y API. Cada cambio de comportamiento se anota allí primero.
-- Los mensajes, la validación y el snapshot son de `libs/escrutinio-contrato`, compartido con el simulador y la TUI.
+- Los mensajes, la validación, el snapshot y las 52 circunscripciones de 2023 (nombre, mesas y censo, módulo `districts`) son de `libs/escrutinio-contrato`, compartido con el simulador y la TUI.
 
 **Idiomas**, como en escrutinio: en español la documentación, el rustdoc, los comentarios, lo que ve el usuario y las tablas de PostgreSQL (como en los requisitos); en inglés los identificadores, los nombres de los tests y los campos del JSON.
 
@@ -33,9 +33,9 @@ Tras tocar `postgres.rs`, `kafka.rs` o `main.rs`, prueba además la carga comple
 
 Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → application → domain`. Cada módulo explica en su `//!` qué hace y qué regla cumple.
 
-- **`domain`**, puro: `classify` decide si un mensaje se registra o va al dead letter (también si su provincia no es una de las 52); `reference` tiene las mesas de cada circunscripción en 2023, el N del que depende todo; y `snapshot` calcula lo que sirve la API (`snapshots`, `province_snapshot`, `total`): `possible`, `complete` y los totales. La TUI no calcula nada de esto (RN-13).
+- **`domain`**, puro: `classify` decide si un mensaje se registra o va al dead letter (también si su provincia no es una de las 52); `snapshot` calcula lo que sirve la API (`snapshots`, `province_snapshot`, `total`) sobre las circunscripciones del contrato: `possible`, `complete`, `estimated`, los totales y el piloto (`pulse`, RN-12, con `RECENT_SECS`). La TUI y la web no calculan nada de esto (RN-12, RN-13).
 - **`application`**: `handle` (registrar una mesa; si es rechazada, anotarla con `reject` y enviarla al dead letter), `snapshots` (consultar: junta los totales de PostgreSQL con las 52 circunscripciones), `wipe` (borrar el escrutinio: Kafka primero, después PostgreSQL), `Tally` y los puertos `StationStore`, `DeadLetters`, `SnapshotSource` y `Wipe`. Son traits genéricos con métodos que devuelven `impl Future + Send`, sin `dyn` ni `async-trait`; las implementaciones usan `async fn`. Los fakes están en `application::fakes`.
-- **`adapters`**: `postgres` (las cuatro tablas, la transacción, el registro de rechazadas y la lectura de totales en una sola sentencia; `TotalsRow` convierte las filas y se prueba sola), `kafka` (el consumidor, el productor del dead letter, el bucle `consume` y `KafkaTopics`, que vacía los topics con `delete_records`), `http` (axum, probado con `tower::ServiceExt::oneshot`) y `cli`.
+- **`adapters`**: `postgres` (las cuatro tablas, la transacción, el registro de rechazadas y la lectura de totales en una sola sentencia; `TotalsRow` convierte las filas y se prueba sola), `kafka` (el consumidor, el productor del dead letter, el bucle `consume` y `KafkaTopics`, que vacía los topics con `delete_records`), `http` (axum, probado con `tower::ServiceExt::oneshot`: `/snapshots` y `/`, que sirve `web/index.html` con `include_str!`) y `cli`. La web (RN-15) es HTML y JavaScript sin dependencias ni build; el JS no se mide en la cobertura, así que no le pongas lógica: solo pinta el JSON. Para verla sin PostgreSQL, sirve el HTML con un `/snapshots` falso y ábrelo en el navegador.
 - **`main.rs`**: la raíz de composición; sin subcomando sirve y con `borrar` vacía el escrutinio. Dos conexiones a PostgreSQL (una escribe, otra lee para la API), el bucle de Kafka y la API en el mismo runtime, con `tokio::select!`.
 
 `postgres.rs`, `kafka.rs` y `main.rs` solo se prueban con los tests de integración: no les pongas lógica que se pueda sacar a una función pura.

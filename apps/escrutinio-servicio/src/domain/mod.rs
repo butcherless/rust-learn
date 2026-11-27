@@ -1,11 +1,11 @@
 //! Puro, sin E/S: qué hacer con un mensaje de `escrutinio.mesas` (requisitos de escrutinio,
 //! «Servicio»). Se lee como mesa y se valida con el contrato; lo que no se puede leer, es de una
-//! provincia que no existe o no pasa la validación va al dead letter. `reference` tiene las mesas de
-//! cada provincia y `snapshot` calcula lo que sirve la API.
+//! provincia que no existe o no pasa la validación va al dead letter. `snapshot` calcula lo que sirve
+//! la API, con las 52 circunscripciones del contrato.
 
-pub mod reference;
 pub mod snapshot;
 
+use escrutinio_contrato::districts;
 use escrutinio_contrato::{DeadLetterMessage, Rejection, StationMessage, validate};
 
 /// Lo que se hace con un mensaje.
@@ -38,7 +38,7 @@ pub fn classify(payload: &[u8]) -> Incoming {
 
 /// La provincia de la mesa tiene que ser una de las 52 circunscripciones.
 fn known_province(station: &StationMessage) -> Result<(), Rejection> {
-    if reference::expected(&station.province).is_some() {
+    if districts::find(&station.province).is_some() {
         Ok(())
     } else {
         Err(Rejection::UnknownProvince {

@@ -1,5 +1,6 @@
-//! La API para la TUI (requisitos de escrutinio, «Servicio»): `GET /snapshots` devuelve en JSON las
-//! 52 circunscripciones, por código de provincia, y el total de España, con todo calculado.
+//! La API para la TUI y la web (requisitos de escrutinio, «Servicio»): `GET /snapshots` devuelve en
+//! JSON las 52 circunscripciones, en el orden de la tabla, y el total de España, con todo calculado.
+//! `GET /` sirve la web (RN-15): una página estática que pide ese JSON cada 10 s.
 
 use std::sync::Arc;
 
@@ -7,7 +8,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 
 use crate::application::{SnapshotSource, snapshots as consult};
@@ -15,8 +16,12 @@ use crate::application::{SnapshotSource, snapshots as consult};
 /// El texto de la respuesta 503 cuando no se pueden leer los snapshots.
 pub const UNAVAILABLE: &str = "no se pueden leer los snapshots";
 
+/// La web: una sola página con su JavaScript, sin dependencias.
+pub const PAGE: &str = include_str!("../../web/index.html");
+
 pub fn router<S: SnapshotSource + Send + Sync + 'static>(source: Arc<S>) -> Router {
     Router::new()
+        .route("/", get(|| async { Html(PAGE) }))
         .route("/snapshots", get(snapshots::<S>))
         .with_state(source)
 }
@@ -77,10 +82,12 @@ mod tests {
         );
         // Los nombres de los campos son el contrato con la TUI.
         assert!(
-            body.starts_with(r#"{"provinces":[{"province":"01","stations":0,"possible":"#),
+            body.starts_with(
+                r#"{"provinces":[{"province":"15","name":"A Coruña","stations":0,"possible":"#
+            ),
             "{body}"
         );
-        assert!(body.ends_with(r#""total":{"stations":96,"possible":60314,"rejected":0,"complete":false,"voters":5088}}"#), "{body}");
+        assert!(body.ends_with(r#""total":{"stations":96,"possible":60314,"rejected":0,"complete":false,"voters":5088,"electorate":35141198,"estimated":24598816,"pulse":"steady"}}"#), "{body}");
     }
 
     #[tokio::test]
@@ -95,6 +102,17 @@ mod tests {
                 .iter()
                 .all(|p| p.stations == 0 && !p.complete)
         );
+    }
+
+    #[tokio::test]
+    async fn serves_the_web_page_that_polls_the_snapshots() {
+        let (status, body) = get(FakeSnapshots(Ok(vec![])), "/").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, PAGE);
+        assert!(body.starts_with("<!doctype html>"));
+        // Pide el contrato y lo repite cada `cada` segundos (10 por defecto).
+        assert!(body.contains(r#"fetch("/snapshots""#));
+        assert!(body.contains(r#"get("cada")) || 10"#));
     }
 
     #[tokio::test]

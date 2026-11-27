@@ -3,6 +3,8 @@
 //!
 //! Puro, sin E/S: solo tipos con serde y reglas. Los campos del JSON están en inglés, como el código.
 
+pub mod districts;
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -142,9 +144,25 @@ impl DeadLetterMessage {
 /// calculado: quien lo pinta no suma ni compara nada.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshots {
-    /// Por código de provincia.
+    /// En el orden de la tabla (RN-03).
     pub provinces: Vec<ProvinceSnapshot>,
     pub total: Total,
+}
+
+/// El piloto de una circunscripción o del total (RN-12): qué pasó con su escrutado hace poco. Lo
+/// decide el servicio, igual para todos los clientes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Pulse {
+    /// Aún sin mesas escrutadas.
+    #[default]
+    NoData,
+    /// Recibió una mesa en los últimos segundos.
+    Updated,
+    /// Con mesas, pero ninguna reciente.
+    Steady,
+    /// Con todas sus mesas posibles escrutadas.
+    Complete,
 }
 
 /// Las mesas del total de España. `stations` de `possible` es el N'/N' que se pinta.
@@ -160,12 +178,21 @@ pub struct Total {
     pub complete: bool,
     /// Votantes de las mesas escrutadas.
     pub voters: u64,
+    /// El censo de escrutinio de las 52 circunscripciones (RN-10).
+    pub electorate: u64,
+    /// Los votos que se estiman en España (RN-04).
+    pub estimated: u64,
+    pub pulse: Pulse,
 }
 
-/// El acumulado de una circunscripción: siempre están las 52, también sin mesas.
+/// El acumulado de una circunscripción: siempre están las 52, también sin mesas, en el orden de la
+/// tabla (RN-03).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvinceSnapshot {
+    /// El código de provincia del INE.
     pub province: String,
+    /// El nombre oficial: `A Coruña`.
+    pub name: String,
     /// Mesas escrutadas, válidas.
     pub stations: u32,
     /// Las que se pueden escrutar: todas las de la circunscripción menos las rechazadas.
@@ -176,9 +203,14 @@ pub struct ProvinceSnapshot {
     pub complete: bool,
     /// Censo de las mesas escrutadas.
     pub census: u64,
+    /// El censo de escrutinio de la circunscripción entera (RN-10).
+    pub electorate: u64,
+    /// Los votos que se estiman en ella (RN-04).
+    pub estimated: u64,
     pub voters: u64,
     pub blank: u64,
     pub invalid: u64,
+    pub pulse: Pulse,
     /// De más a menos votos.
     pub votes: Vec<CandidacyTotal>,
 }
@@ -323,17 +355,36 @@ mod tests {
     }
 
     #[test]
+    fn the_pulse_is_written_in_snake_case() {
+        [
+            (Pulse::NoData, r#""no_data""#),
+            (Pulse::Updated, r#""updated""#),
+            (Pulse::Steady, r#""steady""#),
+            (Pulse::Complete, r#""complete""#),
+        ]
+        .into_iter()
+        .for_each(|(pulse, json)| {
+            assert_eq!(serde_json::to_string(&pulse).ok().as_deref(), Some(json));
+        });
+        assert_eq!(Pulse::default(), Pulse::NoData);
+    }
+
+    #[test]
     fn the_snapshots_are_this_json() {
         let province = ProvinceSnapshot {
             province: "51".to_owned(),
+            name: "Ceuta".to_owned(),
             stations: 2,
             possible: 3,
             rejected: 1,
             complete: false,
             census: 200,
+            electorate: 300,
+            estimated: 210,
             voters: 106,
             blank: 2,
             invalid: 4,
+            pulse: Pulse::Updated,
             votes: vec![CandidacyTotal {
                 candidacy: 1,
                 acronym: "AAA".to_owned(),
@@ -347,10 +398,13 @@ mod tests {
                 rejected: 1,
                 complete: false,
                 voters: 106,
+                electorate: 300,
+                estimated: 210,
+                pulse: Pulse::Steady,
             },
             provinces: vec![province],
         };
-        let json = r#"{"provinces":[{"province":"51","stations":2,"possible":3,"rejected":1,"complete":false,"census":200,"voters":106,"blank":2,"invalid":4,"votes":[{"candidacy":1,"acronym":"AAA","votes":60}]}],"total":{"stations":2,"possible":3,"rejected":1,"complete":false,"voters":106}}"#;
+        let json = r#"{"provinces":[{"province":"51","name":"Ceuta","stations":2,"possible":3,"rejected":1,"complete":false,"census":200,"electorate":300,"estimated":210,"voters":106,"blank":2,"invalid":4,"pulse":"updated","votes":[{"candidacy":1,"acronym":"AAA","votes":60}]}],"total":{"stations":2,"possible":3,"rejected":1,"complete":false,"voters":106,"electorate":300,"estimated":210,"pulse":"steady"}}"#;
         assert_eq!(
             serde_json::to_string(&snapshots).ok().as_deref(),
             Some(json)

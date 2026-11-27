@@ -42,8 +42,10 @@ CREATE TABLE IF NOT EXISTS provincia_snapshot (
     censo     bigint NOT NULL,
     votantes  bigint NOT NULL,
     blancos   bigint NOT NULL,
-    nulos     bigint NOT NULL
+    nulos     bigint NOT NULL,
+    actualizada timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE provincia_snapshot ADD COLUMN IF NOT EXISTS actualizada timestamptz NOT NULL DEFAULT now();
 CREATE TABLE IF NOT EXISTS votos_provincia (
     provincia   text NOT NULL,
     candidatura bigint NOT NULL,
@@ -78,7 +80,8 @@ ON CONFLICT (provincia) DO UPDATE SET
     censo    = provincia_snapshot.censo + EXCLUDED.censo,
     votantes = provincia_snapshot.votantes + EXCLUDED.votantes,
     blancos  = provincia_snapshot.blancos + EXCLUDED.blancos,
-    nulos    = provincia_snapshot.nulos + EXCLUDED.nulos";
+    nulos    = provincia_snapshot.nulos + EXCLUDED.nulos,
+    actualizada = now()";
 
 const UPSERT_VOTES: &str = "
 INSERT INTO votos_provincia (provincia, candidatura, siglas, votos)
@@ -90,18 +93,19 @@ ON CONFLICT (provincia, candidatura) DO UPDATE SET votos = votos_provincia.votos
 const SELECT_TOTALS: &str = "
 WITH valid AS (
     SELECT p.provincia, p.mesas, p.censo, p.votantes, p.blancos, p.nulos,
+           floor(extract(epoch FROM now() - p.actualizada))::bigint AS segundos,
            array_remove(array_agg(v.candidatura ORDER BY v.votos DESC, v.candidatura), NULL) AS candidaturas,
            array_remove(array_agg(v.siglas      ORDER BY v.votos DESC, v.candidatura), NULL) AS siglas,
            array_remove(array_agg(v.votos       ORDER BY v.votos DESC, v.candidatura), NULL) AS votos
     FROM provincia_snapshot p LEFT JOIN votos_provincia v USING (provincia)
-    GROUP BY p.provincia, p.mesas, p.censo, p.votantes, p.blancos, p.nulos
+    GROUP BY p.provincia, p.mesas, p.censo, p.votantes, p.blancos, p.nulos, p.actualizada
 ), rejected AS (
     SELECT provincia, count(*) AS rechazadas FROM mesa_rechazada GROUP BY provincia
 )
 SELECT COALESCE(valid.provincia, rejected.provincia),
        COALESCE(valid.mesas, 0), COALESCE(rejected.rechazadas, 0),
        COALESCE(valid.censo, 0), COALESCE(valid.votantes, 0),
-       COALESCE(valid.blancos, 0), COALESCE(valid.nulos, 0),
+       COALESCE(valid.blancos, 0), COALESCE(valid.nulos, 0), valid.segundos,
        COALESCE(valid.candidaturas, '{}'::bigint[]),
        COALESCE(valid.siglas, '{}'::text[]),
        COALESCE(valid.votos, '{}'::bigint[])
@@ -269,9 +273,10 @@ impl SnapshotSource for PgSnapshots {
                     voters: row.try_get(4)?,
                     blank: row.try_get(5)?,
                     invalid: row.try_get(6)?,
-                    candidacies: row.try_get(7)?,
-                    acronyms: row.try_get(8)?,
-                    votes: row.try_get(9)?,
+                    seconds_since_last: row.try_get(7)?,
+                    candidacies: row.try_get(8)?,
+                    acronyms: row.try_get(9)?,
+                    votes: row.try_get(10)?,
                 })
                 .and_then(ProvinceTotals::try_from)
             })
@@ -289,6 +294,8 @@ pub struct TotalsRow {
     pub voters: i64,
     pub blank: i64,
     pub invalid: i64,
+    /// Segundos desde la última mesa válida; `NULL` si la provincia solo tiene rechazadas.
+    pub seconds_since_last: Option<i64>,
     pub candidacies: Vec<i64>,
     pub acronyms: Vec<String>,
     pub votes: Vec<i64>,
@@ -320,6 +327,7 @@ impl TryFrom<TotalsRow> for ProvinceTotals {
             voters: unsigned(row.voters)?,
             blank: unsigned(row.blank)?,
             invalid: unsigned(row.invalid)?,
+            seconds_since_last: row.seconds_since_last.map(unsigned).transpose()?,
             votes,
             province: row.province,
         })
@@ -339,6 +347,7 @@ mod tests {
             voters: 106,
             blank: 2,
             invalid: 4,
+            seconds_since_last: Some(7),
             candidacies: vec![1, 2],
             acronyms: vec!["AAA".to_owned(), "BBB".to_owned()],
             votes: vec![60, 40],
@@ -358,6 +367,7 @@ mod tests {
                 voters: 106,
                 blank: 2,
                 invalid: 4,
+                seconds_since_last: Some(7),
                 votes: vec![
                     CandidacyTotal {
                         candidacy: 1,
@@ -372,6 +382,15 @@ mod tests {
                 ],
             })
         );
+    }
+
+    #[test]
+    fn a_province_with_only_rejected_stations_has_no_last_time() {
+        let totals = ProvinceTotals::try_from(TotalsRow {
+            seconds_since_last: None,
+            ..row()
+        });
+        assert_eq!(totals.ok().map(|t| t.seconds_since_last), Some(None));
     }
 
     #[test]
@@ -399,6 +418,10 @@ mod tests {
             },
             TotalsRow {
                 candidacies: vec![1, -2],
+                ..row()
+            },
+            TotalsRow {
+                seconds_since_last: Some(-1),
                 ..row()
             },
         ]

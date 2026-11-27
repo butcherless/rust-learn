@@ -204,6 +204,19 @@ mod tests {
     }
 
     #[test]
+    fn the_2023_data_is_the_one_the_service_serves_in_the_same_order() {
+        let ours: Vec<_> = ordered(Election::Generales2023)
+            .iter()
+            .map(|d| (d.code, d.name, d.census))
+            .collect();
+        let theirs: Vec<_> = escrutinio_contrato::districts::DISTRICTS
+            .iter()
+            .map(|d| (d.code, d.name, d.electorate))
+            .collect();
+        assert_eq!(ours, theirs);
+    }
+
+    #[test]
     fn there_are_50_provinces_and_2_autonomous_cities() {
         let count = |territory| {
             DISTRICTS

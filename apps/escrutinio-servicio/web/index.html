@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escrutinio por provincia</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5f6b7d; --line: #d9dee7; --head: #f2f4f8;
+    --bar: #cfd6e2; --counted: #2f9e44; --mark: #1d2330;
+    --nodata: #9aa4b2; --updated: #ff9f0a; --steady: #3b82f6; --complete: #2f9e44; --flash: #e5322d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c; --fg: #e6e9ef; --muted: #98a2b3; --line: #2a303c; --head: #1a1f29;
+      --bar: #2f3644; --counted: #3fb950; --mark: #e6e9ef;
+      --nodata: #6b7482; --updated: #ffa500; --steady: #64aaff; --complete: #3fb950; --flash: #ff4646;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c; --fg: #e6e9ef; --muted: #98a2b3; --line: #2a303c; --head: #1a1f29;
+    --bar: #2f3644; --counted: #3fb950; --mark: #e6e9ef;
+    --nodata: #6b7482; --updated: #ffa500; --steady: #64aaff; --complete: #3fb950; --flash: #ff4646;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-bottom: 12px; }
+  .lamp { width: 12px; height: 12px; border-radius: 50%; background: var(--nodata); flex: none; }
+  .lamp.following { background: var(--nodata); }
+  .lamp.flash { animation: flash 1s steps(1, end) 1; }
+  @keyframes flash {
+    0% { background: var(--flash); } 25% { background: var(--nodata); }
+    50% { background: var(--flash); } 75% { background: var(--nodata); }
+  }
+  .error { color: var(--updated); }
+  .wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; }
+  th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th { background: var(--head); position: sticky; top: 0; font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.total td { font-weight: 700; background: var(--head); }
+  .bar { position: relative; width: 200px; height: 10px; background: var(--bar); border-radius: 5px; display: inline-block; vertical-align: middle; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--counted); border-radius: 5px; }
+  .bar > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--mark); }
+  .pilot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--nodata); vertical-align: middle; }
+  .pilot.updated { background: var(--updated); } .pilot.steady { background: var(--steady); }
+  .pilot.complete { background: var(--complete); } .pilot.no_data { background: var(--nodata); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; color: var(--muted); font-size: .9rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  @media (max-width: 600px) { main { padding: 12px 16px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Escrutinio por provincia</h1>
+  <div class="status"><span id="lamp" class="lamp"></span><span id="status">Conectando con el servicio…</span></div>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Provincia</th><th>Censo</th><th>Estimado (70 %)</th><th>Escrutado</th>
+        <th>Escrutado sobre el censo</th><th>%</th><th></th><th>Mesas</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span><i class="pilot updated"></i> Actualizada</span>
+    <span><i class="pilot steady"></i> Sin cambios</span>
+    <span><i class="pilot no_data"></i> Sin datos</span>
+    <span><i class="pilot complete"></i> Completa</span>
+    <span>La marca de la barra es el estimado.</span>
+  </div>
+</main>
+<script>
+"use strict";
+// Pinta lo que sirve GET /snapshots (RN-15): todo viene calculado y aquí solo se muestra.
+const PERIOD = Math.min(60, Math.max(1, Number(new URLSearchParams(location.search).get("cada")) || 10));
+const number = new Intl.NumberFormat("es-ES", { useGrouping: "always" });
+const percent = (part, whole) => (whole === 0 ? 0 : (part / whole) * 100);
+const lamp = document.getElementById("lamp");
+const status = document.getElementById("status");
+const body = document.getElementById("rows");
+
+function cell(text, className) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (className) td.className = className;
+  return td;
+}
+
+function barCell(counted, estimated, electorate) {
+  const td = document.createElement("td");
+  const bar = document.createElement("span");
+  const fill = document.createElement("i");
+  const mark = document.createElement("b");
+  bar.className = "bar";
+  fill.style.width = percent(counted, electorate) + "%";
+  mark.style.left = percent(estimated, electorate) + "%";
+  bar.append(fill, mark);
+  td.append(bar);
+  return td;
+}
+
+function pilotCell(pulse) {
+  const td = document.createElement("td");
+  const dot = document.createElement("i");
+  dot.className = "pilot " + pulse;
+  td.append(dot);
+  return td;
+}
+
+function row(name, item, total) {
+  const tr = document.createElement("tr");
+  if (total) tr.className = "total";
+  const voters = item.voters;
+  tr.append(
+    cell(name),
+    cell(number.format(item.electorate)),
+    cell(number.format(item.estimated)),
+    cell(number.format(voters)),
+    barCell(voters, item.estimated, item.electorate),
+    cell(percent(voters, item.electorate).toFixed(1).replace(".", ",") + " %"),
+    pilotCell(item.pulse),
+    cell(number.format(item.stations) + "/" + number.format(item.possible)),
+  );
+  return tr;
+}
+
+function render(snapshots) {
+  const rows = snapshots.provinces.map((p) => row(p.name, p, false));
+  rows.push(row("Total España", snapshots.total, true));
+  body.replaceChildren(...rows);
+}
+
+function flash() {
+  lamp.classList.remove("flash");
+  void lamp.offsetWidth;
+  lamp.classList.add("flash");
+}
+
+async function poll() {
+  try {
+    const response = await fetch("/snapshots", { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    render(await response.json());
+    status.className = "";
+    status.textContent = "Siguiendo el servicio · cada " + PERIOD + " s";
+    flash();
+  } catch (error) {
+    status.className = "error";
+    status.textContent = "Sin respuesta del servicio: se mantiene lo último";
+  }
+}
+
+poll();
+setInterval(poll, PERIOD * 1000);
+</script>
+</body>
+</html>

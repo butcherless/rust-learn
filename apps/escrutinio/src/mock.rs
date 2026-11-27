@@ -36,7 +36,7 @@ impl Rng {
 pub struct Row {
     pub district: District,
     pub tally: Tally,
-    /// Si su escrutado cambió en la última actualización (RN-12).
+    /// Qué pasó con su escrutado hace poco (RN-12).
     pub pulse: Pulse,
     /// Las mesas N'/N' que dice el servicio (RN-13); la maqueta no tiene mesas.
     pub stations: Option<Stations>,
@@ -54,6 +54,8 @@ pub struct Scrutiny {
     stations: Option<Stations>,
     /// Si el escrutinio está completo: lo dice el servicio y, en la maqueta, `advance`.
     complete: bool,
+    /// El piloto del total que dice el servicio (RN-12); la maqueta lo deduce de sus filas.
+    total_pulse: Option<Pulse>,
 }
 
 impl Scrutiny {
@@ -88,6 +90,7 @@ impl Scrutiny {
             rng,
             stations: None,
             complete: false,
+            total_pulse: None,
         }
     }
 
@@ -131,13 +134,16 @@ impl Scrutiny {
         Tally::total(self.rows.iter().map(|row| &row.tally))
     }
 
-    /// El piloto del total (RN-12): verde si el escrutinio está completo, y si no, según sus filas.
+    /// El piloto del total (RN-12): el que dice el servicio; en la maqueta, verde si el escrutinio
+    /// está completo y, si no, según sus filas.
     pub fn pulse(&self) -> Pulse {
-        if self.complete {
-            Pulse::Complete
-        } else {
-            Pulse::total(self.rows.iter().map(|row| row.pulse))
-        }
+        self.total_pulse.unwrap_or_else(|| {
+            if self.complete {
+                Pulse::Complete
+            } else {
+                Pulse::total(self.rows.iter().map(|row| row.pulse))
+            }
+        })
     }
 
     /// Las mesas del total de España, N'/N', si las dice el servicio (RN-13).
@@ -145,10 +151,10 @@ impl Scrutiny {
         self.stations
     }
 
-    /// Las mismas filas con lo que dice el servicio (RN-11, RN-13): sus votantes, sus mesas y si
-    /// están completas, por código de provincia, y lo mismo del total. Las filas que no aparecen se
-    /// quedan sin votos. El servicio manda siempre el acumulado, y aquí no se calcula nada: solo se
-    /// compara el escrutado con el de antes para el piloto (RN-12).
+    /// Las mismas filas con lo que dice el servicio (RN-11, RN-12, RN-13): sus votantes, sus mesas,
+    /// si están completas y su piloto, por código de provincia, y lo mismo del total. Las filas que
+    /// no aparecen se quedan sin votos. El servicio manda siempre el acumulado y aquí no se calcula
+    /// ni se compara nada.
     pub fn with_update(self, update: &Update) -> Self {
         let rows = self
             .rows
@@ -158,9 +164,8 @@ impl Scrutiny {
                 let tally = row
                     .tally
                     .with_counted(progress.map_or(0, |progress| progress.voters));
-                let complete = progress.is_some_and(|progress| progress.complete);
                 Row {
-                    pulse: Pulse::between(row.tally.counted, tally.counted, complete),
+                    pulse: progress.map_or(Pulse::NoData, |progress| progress.pulse),
                     stations: progress.map(|progress| progress.stations),
                     tally,
                     ..row
@@ -171,6 +176,7 @@ impl Scrutiny {
             rows,
             stations: Some(update.total),
             complete: update.complete,
+            total_pulse: Some(update.pulse),
             ..self
         }
     }
@@ -285,16 +291,17 @@ mod tests {
     }
 
     /// Una respuesta del servicio con estas circunscripciones: (provincia, votantes, mesas, posibles,
-    /// completa).
+    /// completa, piloto), y el piloto del total.
     fn update(
-        provinces: &[(&str, u64, u32, u32, bool)],
+        provinces: &[(&str, u64, u32, u32, bool, Pulse)],
         total: Stations,
         complete: bool,
+        pulse: Pulse,
     ) -> Update {
         Update {
             provinces: provinces
                 .iter()
-                .map(|&(code, voters, counted, possible, complete)| {
+                .map(|&(code, voters, counted, possible, complete, pulse)| {
                     let stations = Stations { counted, possible };
                     (
                         code.to_owned(),
@@ -302,12 +309,14 @@ mod tests {
                             voters,
                             stations,
                             complete,
+                            pulse,
                         },
                     )
                 })
                 .collect(),
             total,
             complete,
+            pulse,
         }
     }
 
@@ -322,9 +331,13 @@ mod tests {
             possible: 20,
         };
         let scrutiny = scrutiny().with_update(&update(
-            &[("28", 1_000, 7, 9, false), ("51", 10_000_000, 3, 3, true)],
+            &[
+                ("28", 1_000, 7, 9, false, Pulse::Updated),
+                ("51", 10_000_000, 3, 3, true, Pulse::Complete),
+            ],
             total,
             false,
+            Pulse::Updated,
         ));
         assert_eq!(
             row(&scrutiny, "28").map(|row| (row.tally.counted, row.stations)),
@@ -352,24 +365,42 @@ mod tests {
     }
 
     #[test]
-    fn pulses_follow_the_changes_of_each_update() {
+    fn the_pulses_are_the_ones_the_service_says_without_comparing_anything() {
         let total = Stations::default();
         let pulse_of = |scrutiny: &Scrutiny, code| row(scrutiny, code).map(|row| row.pulse);
         assert_eq!(scrutiny().pulse(), Pulse::NoData);
-        let first = scrutiny().with_update(&update(&[("28", 1_000, 1, 2, false)], total, false));
+        let first = scrutiny().with_update(&update(
+            &[("28", 1_000, 1, 2, false, Pulse::Updated)],
+            total,
+            false,
+            Pulse::Updated,
+        ));
         assert_eq!(pulse_of(&first, "28"), Some(Pulse::Updated));
         assert_eq!(pulse_of(&first, "51"), Some(Pulse::NoData));
         assert_eq!(first.pulse(), Pulse::Updated);
-        let same = first
-            .clone()
-            .with_update(&update(&[("28", 1_000, 1, 2, false)], total, false));
-        assert_eq!(pulse_of(&same, "28"), Some(Pulse::Steady));
-        assert_eq!(same.pulse(), Pulse::Steady);
-        // Que esté completa lo dice el servicio, aunque no haya cambiado nada.
-        let complete = same.with_update(&update(&[("28", 1_000, 2, 2, true)], total, false));
-        assert_eq!(pulse_of(&complete, "28"), Some(Pulse::Complete));
-        assert_eq!(complete.pulse(), Pulse::Steady);
-        let all = complete.with_update(&update(&[("28", 1_000, 2, 2, true)], total, true));
+        // El mismo escrutado: el piloto es el que dice el servicio, no el que saldría al comparar.
+        let again = first.clone().with_update(&update(
+            &[("28", 1_000, 1, 2, false, Pulse::Steady)],
+            total,
+            false,
+            Pulse::Steady,
+        ));
+        assert_eq!(pulse_of(&again, "28"), Some(Pulse::Steady));
+        assert_eq!(again.pulse(), Pulse::Steady);
+        let also = first.with_update(&update(
+            &[("28", 2_000, 2, 2, true, Pulse::Complete)],
+            total,
+            false,
+            Pulse::Updated,
+        ));
+        assert_eq!(pulse_of(&also, "28"), Some(Pulse::Complete));
+        assert_eq!(also.pulse(), Pulse::Updated);
+        let all = also.with_update(&update(
+            &[("28", 2_000, 2, 2, true, Pulse::Complete)],
+            total,
+            true,
+            Pulse::Complete,
+        ));
         assert_eq!(all.pulse(), Pulse::Complete);
         assert!(all.finished());
     }

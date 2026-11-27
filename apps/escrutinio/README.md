@@ -49,12 +49,13 @@ de lo estimado.
 
 ## Piloto
 
-El `●` a la derecha de la participación dice qué provincias han cambiado en la última actualización
-(cada 10 s con el servicio, cada paso en la maqueta): verde si está completa (el servicio dice que
-se escrutaron todas sus mesas posibles; en la maqueta, que llegó a su resultado final), naranja si
-su escrutado ha cambiado, azul claro si sigue igual y gris si aún no tiene votos. El del total es
-verde cuando el servicio dice que está completo y, si no, naranja si alguna provincia lo es. Si una
-petición al servicio falla, los pilotos se quedan como estaban.
+El `●` a la derecha de la participación dice qué provincias han cambiado hace poco. Con el
+servicio, lo decide él (y es el mismo en la web): verde si está completa (se escrutaron todas sus
+mesas posibles), naranja si recibió una mesa en los últimos 15 s, azul claro si tiene mesas pero
+ninguna reciente y gris si aún no tiene ninguna. El del total es verde cuando está completo y, si no,
+naranja si alguna provincia lo es. En la maqueta, naranja es que su escrutado cambió en el último
+paso y verde, que llegó a su resultado final. Si una petición al servicio falla, los pilotos se
+quedan como estaban.
 
 Con el servicio, la columna **Mesas** muestra las mesas escrutadas de las posibles, `718/718`, por
 provincia y en el total. Las rechazadas (en 2023, 4 de León, que van al dead letter) no cuentan como

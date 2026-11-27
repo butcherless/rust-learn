@@ -272,7 +272,7 @@ fn tally_row(
     TableRow::new(cells)
 }
 
-/// Naranja si cambió en la última actualización, azul claro si no, gris sin datos y verde si está
+/// Naranja si cambió hace poco, azul claro si no, gris sin datos y verde si está
 /// completa, sin nada más que esperar (RN-12).
 pub fn pulse_color(pulse: Pulse) -> Color {
     match pulse {
@@ -543,27 +543,26 @@ mod tests {
     }
 
     #[test]
-    fn the_pilots_show_which_districts_changed_in_the_last_update() {
-        use crate::feed::fixtures::{snapshot, snapshots, with_stations};
-        let coruna = |counted| Message::Snapshots(Ok(snapshots(vec![snapshot("15", counted)])));
+    fn the_pilots_show_what_the_service_says_for_each_district() {
+        use crate::feed::fixtures::{snapshot, snapshots, with_pulse, with_stations};
+        use escrutinio_contrato::Pulse as Said;
+        let coruna =
+            |pulse| Message::Snapshots(Ok(snapshots(vec![with_pulse(snapshot("15", 500), pulse)])));
         let failed = Message::Snapshots(Err("sin red".to_owned()));
         let gray = Some(Color::DarkGray);
         [
             ("start", vec![], gray),
-            ("first data", vec![coruna(500)], Some(ORANGE)),
+            ("no data", vec![coruna(Said::NoData)], gray),
+            ("updated", vec![coruna(Said::Updated)], Some(ORANGE)),
+            ("steady", vec![coruna(Said::Steady)], Some(LIGHT_BLUE)),
             (
-                "no change",
-                vec![coruna(500), coruna(500)],
-                Some(LIGHT_BLUE),
-            ),
-            (
-                "more votes",
-                vec![coruna(500), coruna(500), coruna(900)],
+                "a failed request changes nothing",
+                vec![coruna(Said::Updated), failed],
                 Some(ORANGE),
             ),
             (
-                "a failed request changes nothing",
-                vec![coruna(500), failed],
+                "the same votes can be updated again: the service decides",
+                vec![coruna(Said::Steady), coruna(Said::Updated)],
                 Some(ORANGE),
             ),
         ]
@@ -578,7 +577,7 @@ mod tests {
         assert_eq!(pilot_color(&complete, "A Coruña"), Some(Color::Green));
         // Y el total, completo solo si el servicio dice que lo está.
         assert_eq!(pilot_color(&complete, TOTAL), Some(Color::Green));
-        let one = apply(following(), &[coruna(500)]);
+        let one = apply(following(), &[coruna(Said::Updated)]);
         assert_eq!(pilot_color(&one, "Albacete"), gray);
         assert_eq!(pilot_color(&one, TOTAL), Some(ORANGE));
     }

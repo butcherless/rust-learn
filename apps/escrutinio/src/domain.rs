@@ -4,9 +4,10 @@
 //!   `Tally::total` suma varios (RN-07).
 //! - `sort_key` ordena los nombres sin tildes ni mayúsculas, con la `ñ` detrás de la `n` (RN-03).
 //! - `thousands` y `percent` dan los números en formato español (RN-08).
-//! - `Pulse` es el piloto de cada fila: si su escrutado cambió en la última actualización (RN-12).
+//! - `Pulse` es el piloto de cada fila (RN-12): con el servicio lo dice él, y la maqueta lo decide
+//!   con `Pulse::between` y `Pulse::total`.
 //! - `Stations`, `Progress` y `Update` son lo que llega del servicio, ya calculado: la TUI lo pinta
-//!   sin sumar ni comparar mesas (RN-13).
+//!   sin sumar ni comparar mesas ni votos (RN-12, RN-13).
 
 /// La participación estimada por defecto, en % del censo (RN-04).
 pub const DEFAULT_TURNOUT: u8 = 70;
@@ -62,40 +63,44 @@ pub struct Stations {
     pub possible: u32,
 }
 
-/// Lo escrutado de una circunscripción según el servicio (RN-11, RN-13): votantes, mesas y si están
-/// todas las posibles.
+/// Lo escrutado de una circunscripción según el servicio (RN-11, RN-12, RN-13): votantes, mesas, si
+/// están todas las posibles y su piloto.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Progress {
     pub voters: u64,
     pub stations: Stations,
     pub complete: bool,
+    pub pulse: Pulse,
 }
 
 /// Una respuesta del servicio, ya calculada: lo de cada circunscripción por código de provincia y
-/// las mesas del total de España con su «completo».
+/// las mesas del total de España con su «completo» y su piloto.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Update {
     pub provinces: std::collections::BTreeMap<String, Progress>,
     pub total: Stations,
     pub complete: bool,
+    pub pulse: Pulse,
 }
 
-/// El piloto de una fila (RN-12): qué pasó con su escrutado en la última actualización.
+/// El piloto de una fila (RN-12): qué pasó con su escrutado hace poco.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Pulse {
     /// Aún sin votos escrutados.
     #[default]
     NoData,
-    /// Cambió respecto a la actualización anterior.
+    /// Cambió hace poco: con el servicio, recibió una mesa en los últimos segundos; en la maqueta,
+    /// cambió en el último paso.
     Updated,
-    /// Igual que en la actualización anterior.
+    /// Con votos, pero sin cambios recientes.
     Steady,
     /// Con todas sus mesas escrutadas (en la maqueta, en su resultado final).
     Complete,
 }
 
 impl Pulse {
-    /// El piloto de un escrutado que pasa de `before` a `after`; `complete` manda sobre todo.
+    /// El piloto de la maqueta, de un escrutado que pasa de `before` a `after`; `complete` manda
+    /// sobre todo.
     pub fn between(before: u64, after: u64, complete: bool) -> Self {
         if complete {
             Self::Complete
