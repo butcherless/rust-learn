@@ -30,6 +30,17 @@
     - Type inference, with annotations only where they help the reader or the compiler.
 - Use stable, maintained crates; `cargo deny check` and `cargo tree --workspace -d` show advisories
   and duplicates.
+- Keep the dependencies up to date. `cargo update --dry-run` shows what can move in `Cargo.lock` and
+  `cargo outdated --workspace` (`cargo install cargo-outdated`) what is behind the latest release:
+    - Apply the minor and patch bumps with `cargo update`, raise the minimum of each direct
+      dependency that moved, and build and test (with the integration tests of
+      escrutinio-servicio) before committing.
+    - Don't force a transitive dependency that another crate pins with `=`: leave it until that
+      crate releases a new version, and don't add it to a `Cargo.toml` or use `[patch]` to move it.
+      `cargo update -p <crate> --precise <version>` says which crate pins it. Today: `matchit`
+      (`axum` pins `=0.8.4`) and `generic-array` (`crypto-common` pins `=0.14.7`).
+    - A major bump, or a minor one of a 0.x crate, can break the API: it goes to Pending issues
+      (DEP-n), not in the same commit.
 - Avoid deprecated crates, APIs and attributes: the build must have no `deprecated` warnings.
 - Avoid code duplication, also between projects (see `libs/` in the root `CLAUDE.md`).
 
