@@ -11,9 +11,9 @@ publish = false
 # Versions shared by more than one member, which use `dep.workspace = true`.
 [workspace.dependencies]
 # Only in main.rs (root CLAUDE.md, Conventions).
-anyhow = "1.0.104"
-jiff = "1.0.1"
-clap = { version = "4.6.7", features = ["derive"] }
+anyhow = "1.0.105"
+jiff = "1.0.3"
+clap = { version = "4.6.10", features = ["derive"] }
 # Keep it on ratatui's crossterm, or two copies get compiled.
 crossterm = "0.29.0"
 # The contract shared by the escrutinio apps.

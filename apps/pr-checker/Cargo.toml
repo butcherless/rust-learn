@@ -16,7 +16,7 @@ reqwest.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
-toml = "1.2.1"
+toml = "1.2.3"
 
 [dev-dependencies]
 serde_json.workspace = true
