@@ -62,18 +62,25 @@
 
 - **TOOL-1: move from Rust 1.99.1 to stable.** `rust-toolchain.toml` pins 1.99.1 because the
   line coverage of 1.100.0 counts blank lines and test attributes as uncovered. Measured on
-  2026-11-15 with `cargo +<toolchain> llvm-cov -p <package> --summary-only`:
+  2026-11-28 with `cargo +<toolchain> llvm-cov -p <package> --summary-only` (escrutinio-servicio with
+  `ESCRUTINIO_INTEGRACION=1`):
 
-  | Package | 1.99.1 | 1.100.0 |
+  | Package | 1.99.1 | 1.100.1 |
   |---|---|---|
-  | pr-checker | 92.69 % (89/1218 missed) | 88.24 % (145/1233), below the 90 % minimum |
-  | severance-pay-calculator | 98.24 % (19/1079) | 93.51 % (71/1094) |
-  | calendario-laboral | 98.24 % (116/6580) | 93.17 % (466/6823) |
+  | pr-checker | 92.14 % (193/2455 missed) | 89.61 % (255/2455), below the 90 % minimum |
+  | severance-pay-calculator | 97.32 % (39/1454) | 92.92 % (103/1454) |
+  | calendario-laboral | 94.59 % (372/6873) | 93.19 % (468/6873) |
+  | escrutinio | 90.44 % (170/1778) | 90.66 % (166/1778) |
+  | escrutinio-simulador | 90.31 % (108/1114) | 86.45 % (151/1114), below the 90 % minimum |
+  | escrutinio-servicio | 93.51 % (78/1202) | 94.09 % (71/1202) |
+  | escrutinio-contrato | 91.30 % (24/276) | 93.84 % (17/276) |
 
-  On 2026-11-21 and 2026-11-24, 1.100.0 was still the latest stable, so nothing changed. On each new stable
-  release, repeat the comparison. When every package keeps its coverage, set
-  `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
-  this entry. Don't lower the minimum to get there.
+  1.100.0 (2026-11-15) and 1.100.1 (2026-11-28) still leave pr-checker and escrutinio-simulador below
+  the minimum, so nothing changed. Even with 1.99.1, escrutinio and escrutinio-simulador are just
+  above it: add tests there before the next measurement. On each new stable release, repeat the
+  comparison. When every package keeps its coverage, set `channel = "stable"`, update the toolchain
+  in the workflow and the root `CLAUDE.md`, and remove this entry. Don't lower the minimum to get
+  there.
 
 ## Last check
 
