@@ -30,8 +30,9 @@
     - Type inference, with annotations only where they help the reader or the compiler.
 - Use stable, maintained crates; `cargo deny check` and `cargo tree --workspace -d` show advisories
   and duplicates.
-- Keep the dependencies up to date. `cargo update --dry-run` shows what can move in `Cargo.lock` and
-  `cargo outdated --workspace` (`cargo install cargo-outdated`) what is behind the latest release:
+- Keep the dependencies up to date. `scripts/check-updates.sh` lists what can move, sorted as minor,
+  patch, held and breaking: it runs `cargo update --dry-run` (what can move in `Cargo.lock`) and
+  `cargo outdated` (`cargo install cargo-outdated`; what is behind the latest release).
     - Apply the minor and patch bumps with `cargo update`, raise the minimum of each direct
       dependency that moved, and build and test (with the integration tests of
       escrutinio-servicio) before committing.
