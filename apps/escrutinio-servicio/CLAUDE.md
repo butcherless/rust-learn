@@ -43,5 +43,5 @@ Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → appl
 ## Librerías
 
 - **tokio-postgres 0.7**, sin TLS (`NoTls`): PostgreSQL es local. Necesita PostgreSQL 17 o posterior por `transaction_timeout`.
-- **rdkafka 0.39**, la del workspace con la feature `tokio`: `StreamConsumer` y `FutureProducer`. Con autocommit, pero guardando el offset a mano tras el `COMMIT` (`enable.auto.offset.store=false` y `store_offset_from_message`). No uses `commit_message` por mensaje: con 60.000 confirmaciones asíncronas el `StreamConsumer` dejó de despertarse.
+- **rdkafka 0.40**, la del workspace con la feature `tokio`: `StreamConsumer` y `FutureProducer`. Con autocommit, pero guardando el offset a mano tras el `COMMIT` (`enable.auto.offset.store=false` y `store_offset_from_message`). No uses `commit_message` por mensaje: con 60.000 confirmaciones asíncronas el `StreamConsumer` dejó de despertarse.
 - **axum 0.8**: el router y `axum::serve`. **tower 0.5** solo en los tests.

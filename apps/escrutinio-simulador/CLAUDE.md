@@ -38,5 +38,5 @@ Hexagonal ligera, con las dependencias hacia dentro: `main → adapters → appl
 
 ## Librerías
 
-- **rdkafka 0.39**, la del workspace, sin las features por defecto (tokio) y con `libz`: el `BaseProducer` síncrono basta. Compila librdkafka desde C (make y un compilador C; sin CMake), unos 15 s la primera vez. La 0.40.0 salió el 21-11-2026: subir tras la espera de Dependabot. Al conectar pide los metadatos del topic con `allow.auto.create.topics=false`, para fallar pronto si Kafka o el topic no están.
+- **rdkafka 0.40**, la del workspace, sin las features por defecto (tokio) y con `libz`: el `BaseProducer` síncrono basta. Compila librdkafka desde C (make y un compilador C; sin CMake), unos 15 s la primera vez. Al conectar pide los metadatos del topic con `allow.auto.create.topics=false`, para fallar pronto si Kafka o el topic no están.
 - **serde_json**: el mensaje. **clap 4.6** y **thiserror**, como en el resto del workspace.

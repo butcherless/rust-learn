@@ -74,13 +74,6 @@
   `channel = "stable"`, update the toolchain in the workflow and the root `CLAUDE.md`, and remove
   this entry. Don't lower the minimum to get there.
 
-- **DEP-1: rdkafka 0.39 → 0.40** (librdkafka 2.12 → 2.16), used by escrutinio-simulador and
-  escrutinio-servicio. 0.40.0 came out on 2026-11-21, so Dependabot's 7-day cooldown ends on
-  2026-11-28. Being 0.x, a minor bump can break the API: read its changelog, update
-  `[workspace.dependencies]`, run the integration tests (`ESCRUTINIO_INTEGRACION=1`) and a full
-  load against the compose file, then fix the rdkafka notes in both projects' `CLAUDE.md` and
-  remove this entry.
-
 ## Last check
 
 2026-11-24
